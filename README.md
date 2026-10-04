@@ -14,6 +14,14 @@ Los datos se guardan en **IndexedDB** dentro del navegador, sin el límite de un
 
 Consejo: en **Personalizar → Copias de seguridad** puedes exportar o importar tus datos en JSON.
 
+## Funciones destacadas
+
+- **Inicio:** banner con lo último en curso (avanzar, valorar con estrellas, añadir a "Mi lista") y la fila "Hoy" (racha, reto anual y lo que se emite hoy).
+- **🔔 Avisos:** lo que se emite hoy, lo que estás a punto de terminar, lo que llevas tiempo sin avanzar y cómo va tu reto.
+- **🎲 ¿Qué veo hoy?:** propone una obra pendiente al azar (por tipo) y la empieza con un clic.
+- **Ctrl K (o 🔍 en la barra lateral):** busca obras, personas, colecciones y notas, ve a cualquier sección o ejecuta acciones.
+- **📊 Estadísticas:** calendario de actividad con rachas, reto anual, terminadas por mes y tipo, estado de la colección, tiempo por tipo, valoraciones, mapa de emociones (spicy × tristeza), etiquetas, países y plataformas. Cada gráfico tiene tooltip y una vista de tabla.
+
 ## Sincronizar entre dispositivos (Supabase, opcional)
 
 Sin configurar nada, todo se queda en tu navegador. Para tener tus datos en el móvil y en el ordenador, conéctala a tu propio proyecto gratuito de [Supabase](https://supabase.com):
@@ -48,6 +56,8 @@ Después, ábrela en el navegador y pulsa **Personalizar → 📲 Instalar Mi Mu
 | `index.html` | Estructura de la página |
 | `styles.css` | Estilos y temas (oscuro / claro) |
 | `utils.js` | Constantes y funciones puras, sin DOM; se prueban con tests unitarios |
+| `insights.js` | Cálculos de estadísticas, rachas, reto anual, avisos y “¿Qué veo hoy?” (sin DOM) |
+| `charts.js` | Gráficos en HTML/CSS con tooltip y tabla equivalente |
 | `storage.js` | Persistencia: IndexedDB (y `localStorage` como respaldo), imágenes y migración |
 | `sync.js` | Motor de sincronización (sin DOM; se prueba con tests unitarios) |
 | `cloud.js` | Conexión con Supabase, cuenta y panel de la nube |

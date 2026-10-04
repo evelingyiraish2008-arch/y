@@ -123,7 +123,7 @@ describe('filterWorks y sortWorks', () => {
 describe('tagCounts', () => {
     it('cuenta etiquetas sin distinguir mayúsculas', () => {
         const counts = u.tagCounts([{ tags: 'BL, Drama' }, { tags: 'bl' }, {}]);
-        assert.deepEqual(counts, [['bl', 2], ['drama', 1]]);
+        assert.deepEqual(counts, [['BL', 2], ['Drama', 1]]);
     });
 });
 

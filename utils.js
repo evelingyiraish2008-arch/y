@@ -7,11 +7,11 @@
 // ============================================================
 // 1. CONSTANTES
 // ============================================================
-const DEFAULT_SETTINGS = { themeColor: '#8b5cf6', fontSize: 14, imageFit: 'contain', darkMode: true, userName: 'Sara' };
+const DEFAULT_SETTINGS = { themeColor: '#8b5cf6', fontSize: 14, imageFit: 'contain', darkMode: true, userName: 'Sara', yearGoal: 0 };
 const TYPE_META = {
     book:   { label: 'Libro',  icon: '📚', color: '#8b5cf6', progressLabel: 'Página actual',   unit: 'págs', step: 10 },
     series: { label: 'Serie',  icon: '🎬', color: '#ec4899', progressLabel: 'Episodio actual', unit: 'ep',   step: 1 },
-    anime:  { label: 'Anime',  icon: '🎌', color: '#f59e0b', progressLabel: 'Episodio actual', unit: 'ep',   step: 1 },
+    anime:  { label: 'Anime',  icon: '🎌', color: '#d97706', progressLabel: 'Episodio actual', unit: 'ep',   step: 1 },
     manhwa: { label: 'Manhwa', icon: '📕', color: '#3b82f6', progressLabel: 'Capítulo actual', unit: 'cap',  step: 1 }
 };
 const READ_STATUSES = ['leyendo', 'terminado', 'quiero leer', 'abandonado'];
@@ -153,10 +153,16 @@ function getAirDay(w) {
 // ============================================================
 // 5. FILTROS Y ORDEN
 // ============================================================
+/** Etiquetas más usadas: [[etiqueta, veces]]. Sin distinguir mayúsculas; se muestra como se escribió la primera vez. */
 function tagCounts(works) {
-    const counts = {};
-    works.forEach(w => splitList(w.tags).forEach(t => { const k = t.toLowerCase(); counts[k] = (counts[k] || 0) + 1; }));
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const counts = new Map();
+    works.forEach(w => splitList(w.tags).forEach(t => {
+        const k = t.toLowerCase();
+        const cur = counts.get(k) || [t, 0];
+        cur[1]++;
+        counts.set(k, cur);
+    }));
+    return [...counts.values()].sort((a, b) => b[1] - a[1]);
 }
 
 function filterWorks(list, f) {
@@ -185,6 +191,7 @@ function sortWorks(list, key) {
         rating: (a, b) => (b.rating || 0) - (a.rating || 0),
         pages: (a, b) => (b.pages || 0) - (a.pages || 0),
         episodes: (a, b) => (b.totalEpisodes || 0) - (a.totalEpisodes || 0),
+        chapters: (a, b) => (b.totalChapters || 0) - (a.totalChapters || 0),
         year: (a, b) => (b.year || 0) - (a.year || 0),
         title: (a, b) => a.title.localeCompare(b.title, 'es'),
         progress: (a, b) => getProgress(b) - getProgress(a),

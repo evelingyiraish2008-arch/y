@@ -31,6 +31,7 @@
                     <p>Tu universo, organizado.</p>
                 </div>
             </div>
+            <button class="sidebar-search" data-palette title="Buscar o ir a… (Ctrl K)"><span aria-hidden="true">🔍</span><span class="label">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
             <nav class="nav-section">
                 <button class="nav-item active" data-nav="home"><span class="icon">🏠</span><span class="label">Inicio</span></button>
                 <button class="nav-item" data-nav="books"><span class="icon">📖</span><span class="label">Libros</span><span class="nav-count" data-count="book"></span></button>
@@ -77,9 +78,10 @@
                         <div class="search-box" id="globalSearchBox">
                             <span aria-hidden="true">🔍</span>
                             <input type="search" id="globalSearch" placeholder="Buscar en todo tu mundo…" autocomplete="off" aria-label="Búsqueda global">
-                            <kbd>Ctrl K</kbd>
                             <div class="search-results" id="globalSearchResults" role="listbox"></div>
                         </div>
+                        <button class="icon-btn" data-act="pick" title="¿Qué veo hoy?" aria-label="¿Qué veo hoy?">🎲</button>
+                        <button class="icon-btn bell-btn" data-act="notifications" title="Avisos" aria-label="Avisos">🔔<span class="bell-badge" id="bellBadge" hidden>0</span></button>
                         <button class="btn btn-primary" data-add="book">＋ Agregar obra</button>
                     </div>
                 </div>
@@ -88,6 +90,8 @@
                     <div class="hero-bg" id="heroBg"></div>
                     <div class="hero-content" id="heroContent"></div>
                 </div>
+
+                <div class="today-grid" id="todayGrid"></div>
 
                 <div class="stats-grid">
                     <button class="stat-card" data-nav="books"><div class="stat-icon">📚</div><div><div class="stat-value" id="statBooks">0</div><div class="stat-label">Libros</div></div></button>
@@ -126,7 +130,7 @@
 
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">🏷️ Etiquetas más populares</h3><button class="section-link" data-nav="stats">Más estadísticas →</button></div>
-                    <div class="chart-container"><div class="hbars" id="homeGenresChart"></div></div>
+                    <div class="viz-card"><div class="viz-body" id="homeGenresChart"></div></div>
                 </div>
             </section>
 
@@ -227,7 +231,7 @@
                 </div>
                 <div class="filter-bar" id="manhwaFilterBar">
                     <select class="filter-select" id="manhwaStatusFilter" data-render="manhwa"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
-                    <select class="filter-select" id="manhwaSort" data-render="manhwa"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="progress">Progreso</option></select>
+                    <select class="filter-select" id="manhwaSort" data-render="manhwa"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="chapters">Capítulos</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="manhwaSpicyFilter" data-render="manhwa"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="manhwaSadnessFilter" data-render="manhwa"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <span class="filter-sep"></span>
@@ -359,44 +363,51 @@
                 <div class="page-header">
                     <div><h1 class="page-title">📊 Estadísticas</h1><p class="page-subtitle">Descubre tu progreso y tus hábitos.</p></div>
                 </div>
-                <div class="stats-grid cols-4">
-                    <div class="stat-card"><div class="stat-icon">🗃️</div><div><div class="stat-value" id="statsTotal">0</div><div class="stat-label">Obras totales</div></div></div>
-                    <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-value" id="statsDone">0</div><div class="stat-label">Terminadas</div></div></div>
-                    <div class="stat-card"><div class="stat-icon pink">⏱️</div><div><div class="stat-value" id="statsHours">0h</div><div class="stat-label">Horas estimadas</div></div></div>
-                    <div class="stat-card"><div class="stat-icon orange">⭐</div><div><div class="stat-value" id="statsAvg">–</div><div class="stat-label">Valoración media</div></div></div>
-                </div>
-                <div class="two-column-layout">
-                    <div class="stack">
-                        <div class="chart-container">
-                            <div class="chart-title">📈 Actividad (últimos 6 meses)<span class="chart-legend"><span><i style="background:var(--accent)"></i>Agregadas</span><span><i style="background:var(--pink)"></i>Terminadas</span></span></div>
-                            <div class="vbars" id="statsChart"></div>
-                        </div>
-                        <div class="chart-container">
-                            <div class="chart-title">🌶️ Niveles de spicy</div>
-                            <div class="vbars" id="statsSpicyChart"></div>
-                        </div>
-                        <div class="chart-container">
-                            <div class="chart-title">💧 Niveles de tristeza</div>
-                            <div class="vbars" id="statsSadnessChart"></div>
-                        </div>
-                        <div class="chart-container">
-                            <div class="chart-title">🏷️ Etiquetas más frecuentes</div>
-                            <div class="hbars" id="statsGenresChart"></div>
-                        </div>
+                <div class="kpi-grid" id="statsKpis"></div>
+                <div class="stats-layout">
+                    <div class="viz-card span-8">
+                        <div class="viz-head"><div><div class="viz-title">🔥 Tu actividad</div><div class="viz-sub" id="statsStreakSub">Días en los que avanzaste, agregaste o terminaste algo (últimas 26 semanas)</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsCalendar"></div>
                     </div>
-                    <div class="right-panel">
-                        <div class="panel-card">
-                            <div class="panel-title">⏱️ Distribución de tiempo</div>
-                            <p class="panel-desc">Estimado a partir de tu progreso.</p>
-                            <div class="donut-container">
-                                <div class="donut" id="statsDonut"><div class="donut-center"><div class="donut-value" id="statsTotalHours">0h</div><div class="donut-label">en total</div></div></div>
-                                <div class="donut-legend" id="statsLegend"></div>
-                            </div>
-                        </div>
-                        <div class="panel-card">
-                            <div class="panel-title">🏆 Logros <span class="muted" id="achievementsCount"></span></div>
-                            <div id="achievementsList" style="max-height:440px;overflow-y:auto;padding-right:4px;"></div>
-                        </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">🎯 Reto anual</div><div class="viz-sub">Obras terminadas este año</div></div></div>
+                        <div id="statsGoal"></div>
+                    </div>
+                    <div class="viz-card span-8">
+                        <div class="viz-head"><div><div class="viz-title">✅ Terminadas por mes</div><div class="viz-sub">Últimos 12 meses, por tipo (según la fecha de fin)</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsMonthly"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">📦 Estado de tu colección</div><div class="viz-sub">Obras en cada estado</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsStatus"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">⏱️ Tiempo por tipo</div><div class="viz-sub">Horas estimadas a partir de tu progreso</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsTime"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">⭐ Tus valoraciones</div><div class="viz-sub" id="statsRatingSub">Cuántas obras tienen cada nota</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsRatings"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">💞 Mapa de emociones</div><div class="viz-sub">Spicy frente a tristeza · pulsa una casilla para ver esas obras</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsMood"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">🏷️ Etiquetas más frecuentes</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsGenresChart"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">🌍 Países</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsCountries"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">📺 Plataformas</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsPlatforms"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">🏆 Logros</div><div class="viz-sub" id="achievementsCount"></div></div></div>
+                        <div id="achievementsList" style="max-height:340px;overflow-y:auto;padding-right:4px;"></div>
                     </div>
                 </div>
             </section>
@@ -692,11 +703,22 @@
         </div>
     </div>
 
+    <!-- ===== PALETA DE COMANDOS (Ctrl K) ===== -->
+    <div class="modal-overlay palette-overlay" id="paletteModal" role="dialog" aria-modal="true" aria-label="Buscar o ir a">
+        <div class="palette">
+            <div class="palette-input"><span aria-hidden="true">🔍</span><input type="text" id="paletteInput" placeholder="Busca obras, personas… o escribe una acción" autocomplete="off" aria-controls="paletteList"><kbd>Esc</kbd></div>
+            <div class="palette-list" id="paletteList" role="listbox"></div>
+        </div>
+    </div>
+    <div class="viz-tip" id="vizTip" role="tooltip"><b></b><span></span></div>
+
     <datalist id="personNames"></datalist>
     <div class="toast-stack" id="toastStack" aria-live="polite"></div>
     <div class="offline-pill" id="offlinePill" role="status" hidden>📡 Sin conexión · tus datos siguen disponibles</div>
 
     <script src="utils.js"></script>
+    <script src="insights.js"></script>
+    <script src="charts.js"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
     <script src="cloud.js"></script>
