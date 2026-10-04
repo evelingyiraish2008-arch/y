@@ -10,10 +10,19 @@ const TYPES = {
     '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml'
 };
 
-/** Sirve el proyecto bajo /prefix/ (como GitHub Pages en /<repo>/). Devuelve { url, close }. */
-function startServer(prefix = '/mi-mundo/') {
+/**
+ * Sirve el proyecto bajo /prefix/ (como GitHub Pages en /<repo>/). Devuelve { url, origin, close }.
+ * Si se pasa un FakeSupabase, también atiende sus rutas bajo /sb/.
+ */
+function startServer(prefix = '/mi-mundo/', fakeSupabase = null) {
     const server = http.createServer((req, res) => {
         const { pathname } = new URL(req.url, 'http://localhost');
+        if (fakeSupabase && pathname.startsWith('/sb/')) {
+            const chunks = [];
+            req.on('data', c => chunks.push(c));
+            req.on('end', () => fakeSupabase.handle(req, res, pathname, Buffer.concat(chunks)));
+            return;
+        }
         if (!pathname.startsWith(prefix)) { res.writeHead(404).end(); return; }
         let rel = decodeURIComponent(pathname.slice(prefix.length)) || 'index.html';
         const file = path.normalize(path.join(ROOT, rel));
@@ -22,7 +31,8 @@ function startServer(prefix = '/mi-mundo/') {
         fs.createReadStream(file).pipe(res);
     });
     return new Promise(resolve => server.listen(0, '127.0.0.1', () => {
-        resolve({ url: `http://127.0.0.1:${server.address().port}${prefix}`, close: () => new Promise(r => server.close(r)) });
+        const origin = `http://127.0.0.1:${server.address().port}`;
+        resolve({ url: origin + prefix, origin, close: () => new Promise(r => { server.closeAllConnections(); server.close(r); }) });
     }));
 }
 

@@ -203,3 +203,11 @@ test('una imagen subida se reduce antes de guardarse', async ({ page }) => {
     expect(dims[0]).toBeLessThanOrEqual(480);
     expect(dims[1]).toBeLessThanOrEqual(720);
 });
+
+test('las notas de ejemplo no aparecen como editadas en 1970', async ({ page }) => {
+    await openApp(page);
+    await goTo(page, 'notes');
+    await expect(page.locator('#notesList .note-card')).toHaveCount(2);
+    await expect(page.locator('#notesList')).not.toContainText('1970');
+    await expect(page.locator('#notesList')).not.toContainText('Editada');
+});

@@ -6,9 +6,12 @@
   "scripts": {
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node --test \"tests/unit/*.test.js\"",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:sql": "psql \"$DATABASE_URL\" -q -X -v ON_ERROR_STOP=1 -f tests/sql/schema.test.sql",
+    "vendor": "node -e \"const fs=require('fs');const v=require('@supabase/supabase-js/package.json').version;fs.writeFileSync('vendor/supabase.js','/*! @supabase/supabase-js '+v+' (MIT) · https://github.com/supabase/supabase-js · copiado de dist/umd/supabase.js con: npm run vendor */\\n'+fs.readFileSync(require.resolve('@supabase/supabase-js/dist/umd/supabase.js'),'utf8'))\""
   },
   "devDependencies": {
-    "@playwright/test": "1.56.1"
+    "@playwright/test": "1.56.1",
+    "@supabase/supabase-js": "2.117.2"
   }
 }

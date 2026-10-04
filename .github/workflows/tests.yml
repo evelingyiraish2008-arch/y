@@ -33,3 +33,24 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests de supabase/schema.sql
+        run: psql "$DATABASE_URL" -q -X -v ON_ERROR_STOP=1 -f tests/sql/schema.test.sql

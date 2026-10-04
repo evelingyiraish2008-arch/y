@@ -904,6 +904,10 @@ input[type="range"].rating::-moz-range-thumb { background: var(--gold); }
 .toast.show { opacity: 1; transform: none; }
 .toast.toast-error { border-left-color: var(--red); }
 
+/* ===== NUBE ===== */
+.cloud-chip { font-size: 11px; vertical-align: middle; }
+#cloudPanel code { font-size: 11px; background: var(--bg-elevated); padding: 1px 5px; border-radius: 4px; }
+
 /* ===== SIN CONEXIÓN ===== */
 .offline-pill {
     position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 1500;

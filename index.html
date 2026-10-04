@@ -56,7 +56,7 @@
             <button class="user-profile" data-nav="settings" title="Personalizar">
                 <div class="user-avatar" id="userAvatar">S</div>
                 <div class="user-info">
-                    <h4 id="userName">Sara</h4>
+                    <h4><span id="userName">Sara</span> <span id="cloudChip" class="cloud-chip"></span></h4>
                     <div class="user-rank" id="userRank">🌱 Semilla · Nivel 1</div>
                     <div class="level-bar"><span id="userLevelBar" style="width:0%"></span></div>
                 </div>
@@ -470,6 +470,10 @@
                             <div class="panel-title">🌙 Tema</div>
                             <div class="setting-row"><span>Modo oscuro</span><button class="toggle-switch" id="themeToggle" role="switch" aria-checked="true" aria-label="Modo oscuro"></button></div>
                         </div>
+                        <div class="panel-card" id="cloudPanel">
+                            <div class="panel-title">☁️ Sincronización en la nube</div>
+                            <div id="cloudPanelBody"></div>
+                        </div>
                         <div class="panel-card" id="installPanel">
                             <div class="panel-title">📲 App</div>
                             <p class="panel-desc" id="installStatus" style="margin:-6px 0 0">Instala Mi Mundo para abrirla como una app, incluso sin conexión.</p>
@@ -694,6 +698,8 @@
 
     <script src="utils.js"></script>
     <script src="storage.js"></script>
+    <script src="sync.js"></script>
+    <script src="cloud.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

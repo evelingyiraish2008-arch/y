@@ -17,6 +17,7 @@ let appData = emptyData();
 let store = null;               // IdbBackend o LocalBackend (storage.js)
 let saveChain = Promise.resolve();
 let savePending = false;
+let onlySampleData = false;     // este dispositivo solo tiene los ejemplos iniciales, sin cambios del usuario
 const syncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('mi-mundo') : null;
 
 setImageResolver(src => (isImageRef(src) ? (store ? store.resolve(src) : '') : (src || '')));
@@ -29,6 +30,7 @@ async function loadData() {
     catch (e) { console.error('Datos corruptos, se cargan ejemplos', e); }
     if (data) {
         appData = normalizeData(data);
+        if (store.kind === 'indexeddb') onlySampleData = !!(await store.getMeta('onlySamples'));
         store.collectGarbage(appData).catch(err => console.warn('No se pudieron limpiar imágenes', err));
         return;
     }
@@ -43,6 +45,7 @@ async function loadData() {
         appData = emptyData();
         seedSampleData();
         await persistNow();
+        if (store.kind === 'indexeddb') { await store.setMeta('onlySamples', true); onlySampleData = true; }
     }
 }
 function isQuotaError(e) {
@@ -50,7 +53,9 @@ function isQuotaError(e) {
 }
 async function persistNow() {
     await store.save(appData);
+    if (onlySampleData) { onlySampleData = false; store.setMeta('onlySamples', null).catch(() => {}); }
     if (syncChannel) syncChannel.postMessage({ type: 'saved' });
+    cloud.onLocalSave();
 }
 /**
  * Programa el guardado de appData. Los cambios ya están en memoria y la interfaz se actualiza al momento;
@@ -78,6 +83,14 @@ function saveData() {
 }
 /** Promesa que se resuelve cuando no queda nada por guardar. */
 function whenSaved() { return saveChain; }
+/** Último momento en que se creó o cambió un registro (los ejemplos tienen updatedAt = 1). */
+function lastTouched(item) { return Math.max(Number(item.updatedAt) || 0, Number(item.createdAt) || 0); }
+/** Ejecuta una tarea de almacenamiento en orden con los guardados (sin bloquear los siguientes si falla). */
+function runAfterSaves(fn) {
+    const task = saveChain.then(fn);
+    saveChain = task.catch(() => {});
+    return task;
+}
 /** Aplica un cambio en memoria, lo guarda y actualiza la vista. */
 function mutate(fn, msg) {
     fn();
@@ -128,6 +141,8 @@ function seedSampleData() {
     ];
     appData.works.find(w => w.id === 'w3').note = appData.notes[0].content;
     appData.works.find(w => w.id === 'w8').note = appData.notes[1].content;
+    // Marca de "ejemplo": ver IdbBackend.save (nunca ganan a datos reales al sincronizar)
+    ['works', 'persons', 'couples', 'collections', 'notes'].forEach(k => appData[k].forEach(item => { item.sample = true; }));
 }
 
 // ============================================================
@@ -302,7 +317,7 @@ function renderHome() {
     const dateStr = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     $('home-date').textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
-    const inProgress = appData.works.filter(isActive).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    const inProgress = appData.works.filter(isActive).sort((a, b) => lastTouched(b) - lastTouched(a));
     $('homeContinueWatching').innerHTML = inProgress.length
         ? inProgress.slice(0, 12).map(w => workCard(w, { compact: true, showType: true })).join('')
         : emptyState('🍿', 'Nada en curso', 'Marca una obra como “Leyendo” o “Viendo” para seguirla desde aquí.');
@@ -321,7 +336,7 @@ function renderHome() {
 
 function renderHero(inProgress) {
     const bg = $('heroBg'), content = $('heroContent');
-    const w = inProgress.slice().sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))[0];
+    const w = inProgress.slice().sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || lastTouched(b) - lastTouched(a))[0];
     if (!w) {
         bg.style.backgroundImage = 'none';
         content.innerHTML = `
@@ -1252,7 +1267,7 @@ function renderAchievements() {
 function renderNotes() {
     const q = norm(val('notesSearch'));
     const notes = appData.notes.filter(n => !q || norm(n.content + ' ' + n.workTitle).includes(q))
-        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+        .sort((a, b) => lastTouched(b) - lastTouched(a));
     $('notesList').innerHTML = notes.length ? notes.map(n => {
         const w = getWorkById(n.workId);
         return `
@@ -1260,7 +1275,7 @@ function renderNotes() {
           <div class="thumb" ${w ? `data-open="${w.id}"` : ''}>${img(w && w.image, w ? w.type : 'book', n.workTitle)}</div>
           <div class="body">
             <h4>${esc(n.workTitle || (w && w.title) || 'Nota')}</h4>
-            <div class="date">${n.updatedAt ? 'Editada ' + fmtDate(n.updatedAt) : fmtDate(n.createdAt)}</div>
+            <div class="date">${lastTouched(n) > (n.createdAt || 0) + 60000 ? 'Editada ' + fmtDate(n.updatedAt) : fmtDate(n.createdAt)}</div>
             <div class="content">${esc(n.content)}</div>
             <div class="actions">
               ${w ? `<button class="btn btn-secondary btn-sm" data-open="${w.id}">✏️ Abrir</button>` : ''}
@@ -1349,7 +1364,8 @@ function importData(file) {
     reader.readAsText(file);
 }
 async function wipeData() {
-    if (!confirm('¿Borrar TODOS tus datos? Esta acción no se puede deshacer.\n\nConsejo: exporta una copia antes.')) return;
+    const inCloud = cloud.state === 'signedIn' ? '\n\nTambién se borrarán de la nube y de tus otros dispositivos.' : '';
+    if (!confirm('¿Borrar TODOS tus datos? Esta acción no se puede deshacer.\n\nConsejo: exporta una copia antes.' + inCloud)) return;
     if (!confirm('¿Seguro del todo?')) return;
     const settings = appData.settings;
     mutate(() => { appData = emptyData(); appData.settings = settings; }, '🗑️ Datos borrados');
@@ -1671,4 +1687,5 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
         openWorkModal('book');
     }
     document.documentElement.dataset.ready = 'true';
+    cloud.init();
 })();

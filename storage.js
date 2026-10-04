@@ -8,7 +8,7 @@
 'use strict';
 
 const DB_NAME = 'mi_mundo_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // 2: almacén 'outbox' con los cambios pendientes de subir a la nube
 const ENTITY_STORES = ['works', 'persons', 'couples', 'collections', 'notes'];
 const LEGACY_KEY = 'mi_mundo_data_v16';
 const LEGACY_BACKUP_KEY = 'mi_mundo_data_v16_respaldo';
@@ -65,10 +65,12 @@ function openDatabase() {
             ENTITY_STORES.forEach(name => { if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' }); });
             if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
             if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+            if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'key' });
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
-        request.onblocked = () => reject(new Error('La base de datos está bloqueada por otra pestaña'));
+        // Otra pestaña con una versión anterior tiene la base de datos abierta: se espera a que la cierre.
+        request.onblocked = () => console.warn('Esperando a que otra pestaña de Mi Mundo cierre la base de datos…');
     });
 }
 
@@ -118,9 +120,14 @@ class IdbBackend {
         return data;
     }
 
-    /** Guarda solo los registros que han cambiado desde la última vez, en una sola transacción. */
+    /**
+     * Guarda solo los registros que han cambiado desde la última vez, en una sola transacción.
+     * Cada registro cambiado recibe updatedAt y se apunta en la cola 'outbox' para subirlo a la nube.
+     */
     async save(data) {
-        const tx = this.db.transaction([...ENTITY_STORES, 'meta'], 'readwrite');
+        const tx = this.db.transaction([...ENTITY_STORES, 'meta', 'outbox'], 'readwrite');
+        const outbox = tx.objectStore('outbox');
+        const now = Date.now();
         const next = {};
         let changes = 0;
         ENTITY_STORES.forEach(name => {
@@ -128,15 +135,37 @@ class IdbBackend {
             const prev = this.persisted[name] || new Map();
             const current = new Map();
             (data[name] || []).forEach(item => {
-                const json = JSON.stringify(item);
+                let json = JSON.stringify(item);
+                if (prev.get(item.id) !== json) {
+                    if (item.sample && !prev.has(item.id)) {
+                        // Datos de ejemplo recién creados: fecha mínima para que nunca ganen a datos reales de la nube.
+                        item.updatedAt = 1;
+                    } else {
+                        delete item.sample; // al editar un ejemplo pasa a ser un dato propio
+                        item.updatedAt = Math.max(now, (Number(item.updatedAt) || 0) + 1);
+                    }
+                    json = JSON.stringify(item);
+                    store.put(JSON.parse(json));
+                    outbox.put({ key: `${name}/${item.id}`, kind: name, id: item.id, deleted: false, updatedAt: item.updatedAt });
+                    changes++;
+                }
                 current.set(item.id, json);
-                if (prev.get(item.id) !== json) { store.put(JSON.parse(json)); changes++; }
             });
-            prev.forEach((_, id) => { if (!current.has(id)) { store.delete(id); changes++; } });
+            prev.forEach((_, id) => {
+                if (current.has(id)) return;
+                store.delete(id);
+                outbox.put({ key: `${name}/${id}`, kind: name, id, deleted: true, updatedAt: now });
+                changes++;
+            });
             next[name] = current;
         });
         const settingsJson = JSON.stringify(data.settings || {});
-        if (settingsJson !== this.persistedSettings) { tx.objectStore('meta').put({ key: 'settings', value: JSON.parse(settingsJson) }); changes++; }
+        if (settingsJson !== this.persistedSettings) {
+            tx.objectStore('meta').put({ key: 'settings', value: JSON.parse(settingsJson) });
+            tx.objectStore('meta').put({ key: 'settingsUpdatedAt', value: now });
+            outbox.put({ key: 'settings/main', kind: 'settings', id: 'main', deleted: false, updatedAt: now });
+            changes++;
+        }
         if (!this.initialized) { tx.objectStore('meta').put({ key: 'initialized', value: Date.now() }); changes++; }
         await transactionDone(tx);
         this.persisted = next;
@@ -174,6 +203,89 @@ class IdbBackend {
     }
     resolve(ref) { return this.imageUrls.get(ref.slice(IMAGE_PREFIX.length)) || ''; }
     imageSize(ref) { return this.imageSizes.get(ref.slice(IMAGE_PREFIX.length)) || 0; }
+
+    // ---------- Sincronización (los usa sync.js a través de cloud.js) ----------
+    async getMeta(key) {
+        const tx = this.db.transaction('meta', 'readonly');
+        const row = await promisify(tx.objectStore('meta').get(key));
+        return row ? row.value : undefined;
+    }
+    async setMeta(key, value) {
+        const tx = this.db.transaction('meta', 'readwrite');
+        if (value === undefined || value === null) tx.objectStore('meta').delete(key);
+        else tx.objectStore('meta').put({ key, value });
+        await transactionDone(tx);
+    }
+    async getOutbox() {
+        const tx = this.db.transaction('outbox', 'readonly');
+        return promisify(tx.objectStore('outbox').getAll());
+    }
+    /** Quita de la cola lo que ya se subió, salvo que haya vuelto a cambiar mientras tanto. */
+    async removeOutbox(entries) {
+        const tx = this.db.transaction('outbox', 'readwrite');
+        const store = tx.objectStore('outbox');
+        entries.forEach(entry => {
+            const req = store.get(entry.key);
+            req.onsuccess = () => { if (req.result && req.result.updatedAt === entry.updatedAt) store.delete(entry.key); };
+        });
+        await transactionDone(tx);
+    }
+    /** Pone en la cola todos los registros (al conectar este dispositivo con una cuenta por primera vez). */
+    async enqueueAll(data) {
+        // Se lee antes de abrir la transacción: IndexedDB la cierra si se espera a otra cosa en medio.
+        const settingsUpdatedAt = (await this.getMeta('settingsUpdatedAt')) || 1;
+        const tx = this.db.transaction('outbox', 'readwrite');
+        const store = tx.objectStore('outbox');
+        ENTITY_STORES.forEach(name => (data[name] || []).forEach(item => {
+            store.put({ key: `${name}/${item.id}`, kind: name, id: item.id, deleted: false, updatedAt: Number(item.updatedAt) || Number(item.createdAt) || 1 });
+        }));
+        store.put({ key: 'settings/main', kind: 'settings', id: 'main', deleted: false, updatedAt: settingsUpdatedAt });
+        await transactionDone(tx);
+    }
+    /**
+     * Guarda cambios que vienen de la nube sin volver a ponerlos en la cola.
+     * Actualiza el registro de "lo guardado" al momento, para que el próximo save() no los vea como cambios locales.
+     */
+    async applyRemote(changes) {
+        changes.forEach(c => {
+            if (c.kind === 'settings') this.persistedSettings = JSON.stringify(c.data || {});
+            else if (c.deleted) (this.persisted[c.kind] || new Map()).delete(c.id);
+            else {
+                if (!this.persisted[c.kind]) this.persisted[c.kind] = new Map();
+                this.persisted[c.kind].set(c.id, JSON.stringify(c.data));
+            }
+        });
+        const tx = this.db.transaction([...ENTITY_STORES, 'meta', 'outbox'], 'readwrite');
+        const outbox = tx.objectStore('outbox');
+        changes.forEach(c => {
+            if (c.kind === 'settings') {
+                tx.objectStore('meta').put({ key: 'settings', value: c.data || {} });
+                tx.objectStore('meta').put({ key: 'settingsUpdatedAt', value: c.updatedAt });
+            } else if (c.deleted) {
+                tx.objectStore(c.kind).delete(c.id);
+            } else {
+                tx.objectStore(c.kind).put(c.data);
+            }
+            const key = `${c.kind}/${c.id}`;
+            const req = outbox.get(key);
+            req.onsuccess = () => { if (req.result && req.result.updatedAt <= c.updatedAt) outbox.delete(key); };
+        });
+        await transactionDone(tx);
+    }
+    /** Borra los datos de este dispositivo sin apuntar borrados para la nube (para usar solo los de la nube). */
+    async clearLocalData() {
+        const tx = this.db.transaction([...ENTITY_STORES, 'outbox'], 'readwrite');
+        [...ENTITY_STORES, 'outbox'].forEach(name => tx.objectStore(name).clear());
+        await transactionDone(tx);
+        ENTITY_STORES.forEach(name => { this.persisted[name] = new Map(); });
+    }
+    hasImage(id) { return this.imageUrls.has(id); }
+    async putImageWithId(id, blob) {
+        const tx = this.db.transaction('images', 'readwrite');
+        tx.objectStore('images').put({ id, blob, size: blob.size, type: blob.type, createdAt: Date.now() });
+        await transactionDone(tx);
+        this._addImage(id, blob);
+    }
 
     /** Borra las imágenes que ya no usa ninguna obra, persona o pareja. */
     async collectGarbage(data) {
