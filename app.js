@@ -1238,6 +1238,8 @@ function applySettings() {
     document.querySelector('.page-inner').style.zoom = (s.fontSize || 14) / 14;
     document.body.classList.toggle('fit-cover', s.imageFit === 'cover');
     document.querySelector('meta[name=color-scheme]').content = s.darkMode ? 'dark' : 'light';
+    // Color de la barra del sistema (móvil y app instalada)
+    document.querySelector('meta[name=theme-color]').content = s.darkMode ? '#0b0b13' : '#fbfbfe';
 }
 function updateSetting(key, value, msg) {
     appData.settings[key] = value;
@@ -1515,7 +1517,69 @@ document.addEventListener('error', e => {
 }, true);
 
 // ============================================================
-// 23. INICIO
+// 23. APP INSTALABLE (PWA)
+// ============================================================
+const isWebOrigin = location.protocol === 'http:' || location.protocol === 'https:';
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let deferredInstallPrompt = null;
+
+function renderInstallState() {
+    const btn = $('installAppBtn'), status = $('installStatus');
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    btn.hidden = !deferredInstallPrompt;
+    if (isStandalone()) status.textContent = '✅ Estás usando Mi Mundo como app instalada.';
+    else if (!isWebOrigin) status.textContent = 'Para instalarla, abre Mi Mundo desde su dirección web (no como archivo local).';
+    else if (deferredInstallPrompt) status.textContent = 'Instala Mi Mundo para abrirla como una app, incluso sin conexión.';
+    else if (isIOS) status.textContent = 'En iPhone o iPad: pulsa Compartir ⬆️ y luego “Añadir a pantalla de inicio”.';
+    else status.textContent = 'Si tu navegador lo permite, usa “Instalar app” en su menú. Ya funciona sin conexión.';
+}
+async function installApp() {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    renderInstallState();
+    if (outcome === 'accepted') showToast('📲 Instalando Mi Mundo…');
+}
+async function renderPersistState() {
+    const el = $('persistStatus');
+    if (!navigator.storage || !navigator.storage.persisted) { el.textContent = ''; return; }
+    const persisted = await navigator.storage.persisted();
+    el.textContent = persisted
+        ? '🔒 Almacenamiento protegido: el navegador no borrará tus datos para liberar espacio.'
+        : 'ℹ️ El navegador podría borrar los datos si se queda sin espacio. Instalar la app ayuda a protegerlos; exporta copias de vez en cuando.';
+}
+function updateOnlineState(notify) {
+    $('offlinePill').hidden = navigator.onLine;
+    if (notify && navigator.onLine) showToast('📶 Conexión recuperada');
+}
+
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    renderInstallState();
+});
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    renderInstallState();
+    showToast('✅ Mi Mundo está instalada');
+});
+window.addEventListener('online', () => updateOnlineState(true));
+window.addEventListener('offline', () => updateOnlineState(false));
+$('installAppBtn').addEventListener('click', installApp);
+
+if (isWebOrigin && 'serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.warn('No se pudo registrar el service worker', err));
+    });
+    // Pide al navegador que no borre los datos (se concede sin preguntar si la app está instalada)
+    if (navigator.storage && navigator.storage.persist && isStandalone()) {
+        navigator.storage.persist().then(renderPersistState).catch(() => {});
+    }
+}
+
+// ============================================================
+// 24. INICIO
 // ============================================================
 loadData();
 applySettings();
@@ -1526,4 +1590,13 @@ if (window.innerWidth <= 760) {
     });
 }
 renderSidebar();
+renderInstallState();
+renderPersistState();
+updateOnlineState(false);
 navigateTo(location.hash.slice(1) || 'home', { push: false });
+// Acceso directo “Agregar obra” del icono de la app
+const startParams = new URLSearchParams(location.search);
+if (startParams.get('accion') === 'agregar') {
+    history.replaceState(null, '', location.pathname + location.hash);
+    openWorkModal('book');
+}

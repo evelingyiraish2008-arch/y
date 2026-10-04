@@ -904,6 +904,14 @@ input[type="range"].rating::-moz-range-thumb { background: var(--gold); }
 .toast.show { opacity: 1; transform: none; }
 .toast.toast-error { border-left-color: var(--red); }
 
+/* ===== SIN CONEXIÓN ===== */
+.offline-pill {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 1500;
+    background: var(--bg-elevated); border: 1px solid var(--orange); color: var(--text-primary);
+    padding: 7px 16px; border-radius: var(--radius-full); font-size: 12.5px; font-weight: 600;
+    box-shadow: var(--shadow-lg); animation: pop .25s var(--ease-out); white-space: nowrap;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1400px) {
     .stats-grid { grid-template-columns: repeat(3, 1fr); }
@@ -927,6 +935,7 @@ input[type="range"].rating::-moz-range-thumb { background: var(--gold); }
         position: fixed; bottom: 0; left: 0; right: 0; top: auto; width: 100%; height: 64px;
         flex-direction: row; padding: 6px 8px; border-right: none; border-top: 1px solid var(--border-subtle);
         overflow-x: auto; overflow-y: hidden; z-index: 800; gap: 2px; scrollbar-width: none;
+        height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
         background: color-mix(in srgb, var(--bg-base) 92%, transparent);
     }
     .sidebar::-webkit-scrollbar { display: none; }
@@ -935,7 +944,7 @@ input[type="range"].rating::-moz-range-thumb { background: var(--gold); }
     .nav-item { flex-direction: column; gap: 2px; width: auto; min-width: 58px; padding: 6px 8px; margin: 0; }
     .nav-item .label { display: block; font-size: 9.5px; font-weight: 600; white-space: nowrap; max-width: 64px; overflow: hidden; text-overflow: ellipsis; }
     .nav-item.active::before { left: 50%; top: 0; transform: translateX(-50%); width: 50%; height: 3px; border-radius: 0 0 3px 3px; }
-    .main-content { overflow: visible; padding: 18px 16px 96px; }
+    .main-content { overflow: visible; padding: 18px 16px calc(96px + env(safe-area-inset-bottom)); }
     .page-title { font-size: 24px; }
     .page-header { align-items: stretch; }
     .header-actions { width: 100%; }
@@ -971,4 +980,13 @@ input[type="range"].rating::-moz-range-thumb { background: var(--gold); }
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ===== APP INSTALADA: respeta la muesca y la barra de inicio del móvil ===== */
+@media (display-mode: standalone) {
+    .main-content { padding-top: max(28px, calc(env(safe-area-inset-top) + 12px)); }
+    .offline-pill { top: calc(14px + env(safe-area-inset-top)); }
+}
+@media (display-mode: standalone) and (max-width: 760px) {
+    .main-content { padding-top: calc(18px + env(safe-area-inset-top)); }
 }

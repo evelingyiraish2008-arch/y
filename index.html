@@ -2,8 +2,18 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Organiza tus libros, series, anime, manhwas y BL en un solo lugar." />
+    <meta name="theme-color" content="#0b0b13" />
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Mi Mundo" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Mi Mundo · Tu universo, organizado</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -460,10 +470,16 @@
                             <div class="panel-title">🌙 Tema</div>
                             <div class="setting-row"><span>Modo oscuro</span><button class="toggle-switch" id="themeToggle" role="switch" aria-checked="true" aria-label="Modo oscuro"></button></div>
                         </div>
+                        <div class="panel-card" id="installPanel">
+                            <div class="panel-title">📲 App</div>
+                            <p class="panel-desc" id="installStatus" style="margin:-6px 0 0">Instala Mi Mundo para abrirla como una app, incluso sin conexión.</p>
+                            <button class="btn btn-primary btn-sm btn-block" id="installAppBtn" style="margin-top:12px" hidden>📲 Instalar Mi Mundo</button>
+                        </div>
                         <div class="panel-card">
                             <div class="panel-title">💽 Almacenamiento</div>
                             <div class="meter" id="storageMeter"><span style="width:0%"></span></div>
                             <div class="meter-text"><span id="storageUsed">0 KB</span><span>de ≈5 MB</span></div>
+                            <p class="hint" id="persistStatus" style="margin:8px 0 0;"></p>
                             <p class="hint" style="margin:10px 0 12px;">Las imágenes subidas se guardan en tu navegador. Si se llena, optimízalas o usa enlaces (URL) en vez de subir archivos.</p>
                             <button class="btn btn-secondary btn-sm btn-block" id="optimizeImagesBtn">🪄 Optimizar imágenes guardadas</button>
                         </div>
@@ -673,6 +689,7 @@
 
     <datalist id="personNames"></datalist>
     <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+    <div class="offline-pill" id="offlinePill" role="status" hidden>📡 Sin conexión · tus datos siguen disponibles</div>
 
     <script src="utils.js"></script>
     <script src="app.js"></script>

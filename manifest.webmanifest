@@ -1,0 +1,25 @@
+{
+    "name": "Mi Mundo · Tu universo, organizado",
+    "short_name": "Mi Mundo",
+    "description": "Organiza tus libros, series, anime, manhwas y BL en un solo lugar.",
+    "lang": "es",
+    "id": "./",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#07070c",
+    "theme_color": "#0b0b13",
+    "categories": ["entertainment", "lifestyle", "books"],
+    "icons": [
+        { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+        { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    ],
+    "shortcuts": [
+        { "name": "Agregar obra", "short_name": "Agregar", "url": "./?accion=agregar", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+        { "name": "Centro de Emisión", "short_name": "Emisión", "url": "./#emission", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+        { "name": "Estadísticas", "short_name": "Estadísticas", "url": "./#stats", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    ]
+}
