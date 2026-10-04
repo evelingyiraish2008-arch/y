@@ -1393,15 +1393,21 @@ function renderStats() {
 
     $('statsStreakSub').textContent = st.current
         ? `Llevas ${st.current} ${st.current === 1 ? 'día' : 'días'} seguidos · tu mejor racha: ${st.best}`
-        : 'Días en los que avanzaste, agregaste o terminaste algo (últimas 26 semanas)';
-    $('statsCalendar').innerHTML = activityCalendar(byDay, { weeks: 26, now, caption: 'Sesiones por día' });
+        : '';
+    // Tantas semanas como quepan (de 12 a 26) para que en el móvil no haga falta desplazarse
+    const calWidth = $('statsCalendar').clientWidth || 700;
+    const weeks = Math.max(12, Math.min(26, Math.floor((calWidth - 19) / 17)));
+    $('statsCalendar').innerHTML = activityCalendar(byDay, { weeks, now, caption: 'Sesiones por día' });
+    $('statsCalendarTitle').textContent = `Días en los que avanzaste, agregaste o terminaste algo (últimas ${weeks} semanas)`;
     const calWrap = document.querySelector('#statsCalendar .viz-calendar-wrap');
     if (calWrap) calWrap.scrollLeft = calWrap.scrollWidth;
 
     renderGoal(doneYear, year, now);
 
     const months = finishedByMonth(works, 12, now);
-    $('statsMonthly').innerHTML = columnChart({
+    $('statsMonthly').innerHTML = months.every(m => TYPE_ORDER.every(t => !m.byType[t]))
+        ? '<p class="viz-empty">Aún no has terminado nada en los últimos 12 meses. Cuando marques una obra como terminada, aparecerá aquí.</p>'
+        : columnChart({
         categories: months.map(m => m.label),
         series: TYPE_ORDER.map(t => ({ name: TYPE_PLURAL[t], color: TYPE_META[t].color })),
         values: months.map(m => TYPE_ORDER.map(t => m.byType[t])),
