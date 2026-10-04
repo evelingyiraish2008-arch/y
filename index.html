@@ -478,9 +478,10 @@
                         <div class="panel-card">
                             <div class="panel-title">💽 Almacenamiento</div>
                             <div class="meter" id="storageMeter"><span style="width:0%"></span></div>
-                            <div class="meter-text"><span id="storageUsed">0 KB</span><span>de ≈5 MB</span></div>
+                            <div class="meter-text"><span id="storageUsed">0 KB</span><span id="storageQuota"></span></div>
+                            <p class="hint" id="storageBackend" style="margin:6px 0 0;"></p>
                             <p class="hint" id="persistStatus" style="margin:8px 0 0;"></p>
-                            <p class="hint" style="margin:10px 0 12px;">Las imágenes subidas se guardan en tu navegador. Si se llena, optimízalas o usa enlaces (URL) en vez de subir archivos.</p>
+                            <p class="hint" style="margin:10px 0 12px;">Todo se guarda en este navegador. Exporta una copia de vez en cuando para no perder nada.</p>
                             <button class="btn btn-secondary btn-sm btn-block" id="optimizeImagesBtn">🪄 Optimizar imágenes guardadas</button>
                         </div>
                         <div class="panel-card">
@@ -692,6 +693,7 @@
     <div class="offline-pill" id="offlinePill" role="status" hidden>📡 Sin conexión · tus datos siguen disponibles</div>
 
     <script src="utils.js"></script>
+    <script src="storage.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

@@ -4,7 +4,13 @@ Tu universo, organizado: libros, series, películas, anime, manhwas, personas, p
 
 ## Usar la app
 
-Abre `index.html` en el navegador. No necesita instalación ni servidor. Los datos se guardan en el `localStorage` del navegador (clave `mi_mundo_data_v16`).
+Abre `index.html` en el navegador. No necesita instalación ni servidor.
+
+Los datos se guardan en **IndexedDB** dentro del navegador, sin el límite de unos 5 MB de `localStorage`. Las imágenes subidas se guardan como archivos (Blob) aparte, y solo se escriben los registros que cambian.
+
+- **Migración automática:** si tenías datos de la versión anterior (`localStorage`, clave `mi_mundo_data_v16`), se pasan solos a IndexedDB la primera vez. Los datos antiguos se conservan como respaldo con la clave `mi_mundo_data_v16_respaldo`.
+- **Respaldo:** si el navegador no admite IndexedDB, la app sigue usando `localStorage`.
+- **Varias pestañas:** los cambios se sincronizan entre pestañas abiertas.
 
 Consejo: en **Personalizar → Copias de seguridad** puedes exportar o importar tus datos en JSON.
 
@@ -23,6 +29,7 @@ Después, ábrela en el navegador y pulsa **Personalizar → 📲 Instalar Mi Mu
 | `index.html` | Estructura de la página |
 | `styles.css` | Estilos y temas (oscuro / claro) |
 | `utils.js` | Constantes y funciones puras, sin DOM; se prueban con tests unitarios |
+| `storage.js` | Persistencia: IndexedDB (y `localStorage` como respaldo), imágenes y migración |
 | `app.js` | Estado, renderizado, eventos e inicio (usa `utils.js`) |
 | `sw.js` | Service worker: funcionamiento sin conexión |
 | `manifest.webmanifest`, `icons/` | Datos e iconos para instalar la app |

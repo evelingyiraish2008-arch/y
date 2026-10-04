@@ -21,6 +21,15 @@ describe('norm y splitList', () => {
     it('acepta valores vacíos', () => assert.deepEqual(u.splitList(undefined), []));
 });
 
+describe('formatBytes', () => {
+    it('usa la unidad adecuada', () => {
+        assert.equal(u.formatBytes(512), '512 B');
+        assert.equal(u.formatBytes(2048), '2 KB');
+        assert.equal(u.formatBytes(5 * 1048576), '5.0 MB');
+        assert.equal(u.formatBytes(3 * 1073741824), '3.0 GB');
+    });
+});
+
 describe('getProgress', () => {
     it('calcula el progreso de un libro', () => assert.equal(u.getProgress({ type: 'book', pages: 100, progress: 50 }), 50));
     it('nunca pasa del 100 %', () => assert.equal(u.getProgress({ type: 'book', pages: 100, progress: 150 }), 100));

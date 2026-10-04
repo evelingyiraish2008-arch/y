@@ -7,8 +7,6 @@
 // ============================================================
 // 1. CONSTANTES
 // ============================================================
-const STORAGE_KEY = 'mi_mundo_data_v16';
-const STORAGE_LIMIT = 5000000;
 const DEFAULT_SETTINGS = { themeColor: '#8b5cf6', fontSize: 14, imageFit: 'contain', darkMode: true, userName: 'Sara' };
 const TYPE_META = {
     book:   { label: 'Libro',  icon: '📚', color: '#8b5cf6', progressLabel: 'Página actual',   unit: 'págs', step: 10 },
@@ -36,7 +34,12 @@ function esc(s) {
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function norm(s) { return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 function splitList(str) { return String(str || '').split(',').map(t => t.trim()).filter(Boolean); }
-function formatBytes(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
+function formatBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(1) + ' GB';
+}
 function fmtDate(d) {
     if (!d) return '–';
     const date = typeof d === 'number' ? new Date(d) : new Date(d + (String(d).length === 10 ? 'T00:00:00' : ''));
@@ -54,8 +57,12 @@ const PH = {
     person: makePlaceholder('👤', '#8b5cf6', 300, 300), couple: makePlaceholder('💕', '#ec4899', 400, 250),
     banner: makePlaceholder('✨', '#8b5cf6', 1000, 400)
 };
+/** Convierte una referencia guardada (p. ej. "idb:…") en una URL que se puede mostrar. La define app.js. */
+let resolveImageSrc = src => src || '';
+function setImageResolver(fn) { resolveImageSrc = fn; }
+function imageSrc(src, ph) { return resolveImageSrc(src) || PH[ph] || ''; }
 function img(src, ph, alt = '', extra = '') {
-    return `<img src="${esc(src || PH[ph])}" alt="${esc(alt)}" loading="lazy" data-ph="${ph}" ${extra}>`;
+    return `<img src="${esc(imageSrc(src, ph))}" alt="${esc(alt)}" loading="lazy" data-ph="${ph}" ${extra}>`;
 }
 function cssUrl(src) { return `url("${String(src).replace(/["\\\n]/g, encodeURIComponent)}")`; }
 
@@ -189,8 +196,6 @@ function sortWorks(list, key) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        STORAGE_KEY,
-        STORAGE_LIMIT,
         DEFAULT_SETTINGS,
         TYPE_META,
         READ_STATUSES,
@@ -210,6 +215,8 @@ if (typeof module !== 'undefined' && module.exports) {
         makePlaceholder,
         PH,
         img,
+        imageSrc,
+        setImageResolver,
         cssUrl,
         getStars,
         ratingText,

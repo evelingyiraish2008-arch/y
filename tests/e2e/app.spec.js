@@ -1,6 +1,6 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { openApp, goTo, stored, STORAGE_KEY } = require('./helpers');
+const { openApp, goTo, stored, reloadSaved } = require('./helpers');
 
 const PAGES = ['home', 'books', 'series', 'anime', 'manhwa', 'bl', 'persons', 'couples', 'emission', 'stats', 'collections', 'notes', 'settings'];
 
@@ -154,7 +154,7 @@ test('modo claro y color de acento se guardan', async ({ page }) => {
     await goTo(page, 'settings');
     await page.click('#themeToggle');
     await page.click('[data-color="#10b981"]');
-    await page.reload();
+    await reloadSaved(page);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
     expect(accent).toBe('#10b981');
@@ -165,7 +165,8 @@ test('los datos se mantienen al recargar y borrar todo no vuelve a cargar los ej
     await goTo(page, 'settings');
     page.on('dialog', d => d.accept());
     await page.click('#wipeBtn');
-    await page.reload();
+    await expect(page.locator('.toast').last()).toContainText('borrados');
+    await reloadSaved(page);
     expect((await stored(page)).works).toEqual([]);
     await goTo(page, 'books');
     await expect(page.locator('#booksGrid .empty-state')).toBeVisible();
@@ -178,7 +179,7 @@ test('exportar e importar una copia de seguridad', async ({ page }, testInfo) =>
     const file = testInfo.outputPath('backup.json');
     await download.saveAs(file);
 
-    await page.evaluate(key => { appData.works = []; saveData(); }, STORAGE_KEY);
+    await page.evaluate(() => { appData.works = []; saveData(); });
     page.on('dialog', d => d.accept());
     await page.setInputFiles('#importFileInput', file);
     await expect(page.locator('.toast').last()).toContainText('importados');
@@ -197,8 +198,8 @@ test('una imagen subida se reduce antes de guardarse', async ({ page }) => {
         return c.toDataURL('image/png').split(',')[1];
     });
     await page.setInputFiles('#workImageFile', { name: 'grande.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-    await expect(page.locator('#f_image')).toHaveValue(/^data:image\/(webp|jpeg)/);
-    const dims = await page.evaluate(() => new Promise(r => { const i = new Image(); i.onload = () => r([i.width, i.height]); i.src = document.getElementById('f_image').value; }));
+    await expect(page.locator('#f_image')).toHaveValue(/^idb:img_/);
+    const dims = await page.evaluate(() => new Promise(r => { const i = new Image(); i.onload = () => r([i.width, i.height]); i.src = imageSrc(document.getElementById('f_image').value, 'book'); }));
     expect(dims[0]).toBeLessThanOrEqual(480);
     expect(dims[1]).toBeLessThanOrEqual(720);
 });

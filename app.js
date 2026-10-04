@@ -14,45 +14,74 @@ const checked = id => !!($(id) && $(id).checked);
 // 2. DATOS Y PERSISTENCIA
 // ============================================================
 let appData = emptyData();
+let store = null;               // IdbBackend o LocalBackend (storage.js)
+let saveChain = Promise.resolve();
+let savePending = false;
+const syncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('mi-mundo') : null;
 
-function loadData() {
-    let stored = null;
-    try { stored = localStorage.getItem(STORAGE_KEY); } catch (e) { console.warn('localStorage no disponible', e); }
-    if (stored) {
-        try { appData = normalizeData(JSON.parse(stored)); }
-        catch (e) { console.error('Datos corruptos, se cargan ejemplos', e); appData = emptyData(); seedSampleData(); saveData(); }
+setImageResolver(src => (isImageRef(src) ? (store ? store.resolve(src) : '') : (src || '')));
+
+/** Abre el almacenamiento, migra los datos antiguos de localStorage si hace falta y carga todo en memoria. */
+async function loadData() {
+    store = await openStorage();
+    let data = null;
+    try { data = await store.load(); }
+    catch (e) { console.error('Datos corruptos, se cargan ejemplos', e); }
+    if (data) {
+        appData = normalizeData(data);
+        store.collectGarbage(appData).catch(err => console.warn('No se pudieron limpiar imágenes', err));
+        return;
+    }
+    const legacy = store.kind === 'indexeddb' ? readLegacyData() : null;
+    if (legacy) {
+        appData = normalizeData(legacy.data);
+        const moved = await externalizeImages(appData, store);
+        await store.save(appData);
+        archiveLegacyData(legacy.raw);
+        console.info(`Datos migrados a IndexedDB (${appData.works.length} obras, ${moved} imágenes).`);
     } else {
         appData = emptyData();
         seedSampleData();
-        saveData();
+        await persistNow();
     }
 }
 function isQuotaError(e) {
     return e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
 }
-function saveData() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-        return true;
-    } catch (e) {
-        if (isQuotaError(e)) {
-            showToast('⚠️ El almacenamiento está lleno. Ve a Personalizar → “Optimizar imágenes” o usa URLs en lugar de subir imágenes.', 'error', 7000);
-        } else {
-            console.error(e);
-            showToast('❌ No se pudo guardar', 'error');
-        }
-        return false;
-    }
+async function persistNow() {
+    await store.save(appData);
+    if (syncChannel) syncChannel.postMessage({ type: 'saved' });
 }
-/** Aplica un cambio; si no se puede guardar, lo revierte para no perder coherencia. */
+/**
+ * Programa el guardado de appData. Los cambios ya están en memoria y la interfaz se actualiza al momento;
+ * la escritura se agrupa y se hace en segundo plano. Si falla, se vuelve al último estado guardado.
+ */
+function saveData() {
+    if (savePending) return true;
+    savePending = true;
+    saveChain = saveChain.then(async () => {
+        savePending = false;
+        try {
+            await persistNow();
+        } catch (e) {
+            if (isQuotaError(e)) {
+                showToast('⚠️ El almacenamiento está lleno. Ve a Personalizar → “Optimizar imágenes” o elimina datos que no uses.', 'error', 7000);
+            } else {
+                console.error(e);
+                showToast('❌ No se pudo guardar el último cambio', 'error');
+            }
+            const last = store.snapshot();
+            if (last) { appData = normalizeData(last); applySettings(); refreshView(); }
+        }
+    });
+    return true;
+}
+/** Promesa que se resuelve cuando no queda nada por guardar. */
+function whenSaved() { return saveChain; }
+/** Aplica un cambio en memoria, lo guarda y actualiza la vista. */
 function mutate(fn, msg) {
-    const backup = JSON.stringify(appData);
     fn();
-    if (!saveData()) {
-        appData = JSON.parse(backup);
-        refreshView();
-        return false;
-    }
+    saveData();
     if (msg) showToast(msg);
     refreshView();
     return true;
@@ -304,7 +333,7 @@ function renderHero(inProgress) {
             </div>`;
         return;
     }
-    bg.style.backgroundImage = cssUrl(w.image || PH[w.type]);
+    bg.style.backgroundImage = cssUrl(imageSrc(w.image, w.type));
     const p = getProgress(w), total = getTotal(w);
     const step = TYPE_META[w.type].step;
     content.innerHTML = `
@@ -441,10 +470,10 @@ function loadImage(src) {
     });
 }
 let webpSupported = null;
-function canvasToDataUrl(canvas, quality) {
-    if (webpSupported === null) webpSupported = canvas.toDataURL('image/webp').startsWith('data:image/webp');
-    return webpSupported ? canvas.toDataURL('image/webp', quality) : canvas.toDataURL('image/jpeg', quality);
+function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('No se pudo crear la imagen'))), type, quality));
 }
+/** Reduce una imagen al tamaño adecuado para su uso y la devuelve como Blob WebP (o JPEG si no hay WebP). */
 async function compressImage(src, kind) {
     const [maxW, maxH, quality] = IMAGE_SIZES[kind] || IMAGE_SIZES.poster;
     const im = await loadImage(src);
@@ -457,7 +486,12 @@ async function compressImage(src, kind) {
     ctx.fillRect(0, 0, w, h);
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(im, 0, 0, w, h);
-    return canvasToDataUrl(canvas, quality);
+    if (webpSupported !== false) {
+        const blob = await canvasToBlob(canvas, 'image/webp', quality);
+        webpSupported = blob.type === 'image/webp';
+        if (webpSupported) return blob;
+    }
+    return canvasToBlob(canvas, 'image/jpeg', quality);
 }
 async function handleImageUpload(input) {
     const file = input.files && input.files[0];
@@ -466,14 +500,15 @@ async function handleImageUpload(input) {
     if (!file.type.startsWith('image/')) { showToast('⚠️ El archivo no es una imagen', 'error'); return; }
     const url = URL.createObjectURL(file);
     try {
-        const dataUrl = await compressImage(url, input.dataset.kind);
+        const blob = await compressImage(url, input.dataset.kind);
+        const ref = await store.saveImage(blob);
         const target = $(input.dataset.target);
-        target.value = dataUrl;
+        target.value = ref;
         target.dispatchEvent(new Event('input', { bubbles: true }));
-        showToast(`✅ Imagen optimizada: ${formatBytes(file.size)} → ${formatBytes(dataUrl.length)}`);
+        showToast(`✅ Imagen optimizada: ${formatBytes(file.size)} → ${formatBytes(blob.size)}`);
     } catch (e) {
         console.error(e);
-        showToast('❌ No se pudo procesar la imagen', 'error');
+        showToast(isQuotaError(e) ? '⚠️ No queda espacio para guardar la imagen' : '❌ No se pudo procesar la imagen', 'error');
     } finally {
         URL.revokeObjectURL(url);
     }
@@ -483,33 +518,42 @@ function bindPreview(inputId, previewId, ph) {
         const v = $(inputId).value.trim();
         const pv = $(previewId);
         pv.onerror = () => { pv.onerror = null; pv.src = PH[ph]; };
-        pv.src = v || PH[ph];
+        pv.src = imageSrc(v, ph);
     };
     $(inputId).addEventListener('input', update);
     return update;
 }
+/** Vuelve a comprimir las imágenes guardadas que ocupan mucho (p. ej. las subidas con versiones antiguas). */
 async function optimizeStoredImages() {
     const btn = $('optimizeImagesBtn');
     btn.disabled = true;
     btn.textContent = '⏳ Optimizando…';
-    const before = JSON.stringify(appData).length;
+    let saved = 0;
     const jobs = [];
-    const queue = (obj, key, kind) => {
-        const v = obj[key];
-        if (typeof v === 'string' && v.startsWith('data:image/') && !v.startsWith('data:image/svg') && v.length > 40000) {
-            jobs.push(compressImage(v, kind).then(out => { if (out.length < v.length) obj[key] = out; }).catch(() => {}));
+    forEachImageField(appData, (item, field, kind) => {
+        const v = item[field];
+        if (isImageRef(v) && store.imageSize(v) > 150000) {
+            const before = store.imageSize(v);
+            jobs.push(compressImage(store.resolve(v), kind)
+                .then(blob => (blob.size < before ? store.replaceImage(v, blob).then(() => { saved += before - blob.size; }) : null))
+                .catch(() => {}));
+        } else if (isEmbeddedImage(v) && v.length > 40000) {
+            jobs.push(compressImage(v, kind)
+                .then(blob => store.saveImage(blob))
+                .then(ref => {
+                    const after = isImageRef(ref) ? store.imageSize(ref) : ref.length;
+                    if (after < v.length) { saved += v.length - after; item[field] = ref; }
+                })
+                .catch(() => {}));
         }
-    };
-    appData.works.forEach(w => queue(w, 'image', 'poster'));
-    appData.persons.forEach(p => { queue(p, 'image', 'avatar'); queue(p, 'banner', 'banner'); });
-    appData.couples.forEach(c => queue(c, 'image', 'couple'));
+    });
     await Promise.all(jobs);
-    const after = JSON.stringify(appData).length;
     btn.disabled = false;
     btn.textContent = '🪄 Optimizar imágenes guardadas';
-    if (saveData()) {
-        showToast(after < before ? `✨ Liberado ${formatBytes(before - after)} de espacio` : '👌 Tus imágenes ya estaban optimizadas');
-    }
+    saveData();
+    await whenSaved();
+    await store.collectGarbage(appData).catch(() => 0);
+    showToast(saved > 0 ? `✨ Liberado ${formatBytes(saved)} de espacio` : '👌 Tus imágenes ya estaban optimizadas');
     refreshView();
 }
 
@@ -686,7 +730,7 @@ function renderDetail() {
 
     $('detailPanel').innerHTML = `
       <div class="detail-header">
-        <div class="bg" style="background-image:${esc(cssUrl(w.image || PH[w.type]))}"></div>
+        <div class="bg" style="background-image:${esc(cssUrl(imageSrc(w.image, w.type)))}"></div>
         <button class="icon-btn detail-close" data-detail-close aria-label="Cerrar">✕</button>
       </div>
       <div class="detail-top">
@@ -942,9 +986,9 @@ function renderPersonDetail() {
     const focused = document.activeElement && document.activeElement.id;
     const caret = focused === 'pdSearch' ? document.activeElement.selectionStart : null;
     $('personDetailCard').innerHTML = `
-        <div class="person-detail-banner" style="${p.banner ? 'background-image:' + esc(cssUrl(p.banner)) : ''}"></div>
+        <div class="person-detail-banner" style="${resolveImageSrc(p.banner) ? 'background-image:' + esc(cssUrl(resolveImageSrc(p.banner))) : ''}"></div>
         <button class="icon-btn sm person-detail-close" data-close aria-label="Cerrar">✕</button>
-        <img class="person-detail-avatar" src="${esc(p.image || PH.person)}" alt="${esc(p.name)}" data-ph="person">
+        <img class="person-detail-avatar" src="${esc(imageSrc(p.image, 'person'))}" alt="${esc(p.name)}" data-ph="person">
         <div class="person-detail-content">
           <div class="person-detail-name">${esc(p.name)}</div>
           <div class="person-detail-meta">
@@ -1259,17 +1303,23 @@ function renderSettings() {
     $('themeToggle').setAttribute('aria-checked', String(!!s.darkMode));
     updateStorageMeter();
 }
-function updateStorageMeter() {
-    // Los navegadores permiten ≈5 millones de caracteres por sitio
-    let used = 0;
-    try { used = (localStorage.getItem(STORAGE_KEY) || '').length + STORAGE_KEY.length; } catch (e) { /* sin acceso */ }
-    const pct = Math.min(100, used / STORAGE_LIMIT * 100);
-    $('storageUsed').textContent = `${formatBytes(used)} usados (${pct.toFixed(0)}%)`;
-    $('storageMeter').firstElementChild.style.width = pct + '%';
+async function updateStorageMeter() {
+    if (!store) return;
+    const info = await store.estimate();
+    const usage = info.usage || 0, quota = info.quota || 0;
+    const pct = quota ? Math.min(100, usage / quota * 100) : 0;
+    $('storageUsed').textContent = `${formatBytes(usage)} usados${pct >= 1 ? ` (${pct.toFixed(0)}%)` : ''}`;
+    $('storageQuota').textContent = quota ? `de ${store.kind === 'indexeddb' ? '' : '≈'}${formatBytes(quota)}` : '';
+    $('storageMeter').firstElementChild.style.width = Math.max(pct, usage ? 1 : 0) + '%';
     $('storageMeter').classList.toggle('warn', pct > 75);
+    $('storageBackend').textContent = store.kind === 'indexeddb'
+        ? `Guardado en IndexedDB · ${info.imageCount} ${info.imageCount === 1 ? 'imagen' : 'imágenes'} (${formatBytes(info.images)})`
+        : 'Guardado en localStorage (tu navegador no admite IndexedDB): límite de unos 5 MB.';
 }
-function exportData() {
-    const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+async function exportData() {
+    await whenSaved();
+    const data = await embedImages(appData, store);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `mi-mundo-backup-${todayISO()}.json`;
@@ -1277,26 +1327,34 @@ function exportData() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    showToast('📤 Copia de seguridad descargada');
+    showToast('📤 Copia de seguridad descargada (incluye las imágenes)');
 }
 function importData(file) {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
         let parsed;
         try { parsed = JSON.parse(reader.result); } catch (e) { showToast('❌ El archivo no es un JSON válido', 'error'); return; }
         if (!parsed || !Array.isArray(parsed.works)) { showToast('❌ El archivo no parece una copia de Mi Mundo', 'error'); return; }
         if (!confirm(`Se importarán ${parsed.works.length} obras y se reemplazarán tus datos actuales. ¿Continuar?`)) return;
-        const ok = mutate(() => { appData = normalizeData(parsed); }, '📥 Datos importados correctamente');
-        if (ok) { applySettings(); renderSettings(); }
+        const data = normalizeData(parsed);
+        try { await externalizeImages(data, store); }
+        catch (e) { console.error(e); showToast('❌ No se pudieron guardar las imágenes de la copia', 'error'); return; }
+        mutate(() => { appData = data; }, '📥 Datos importados correctamente');
+        applySettings();
+        renderSettings();
+        await whenSaved();
+        store.collectGarbage(appData).then(updateStorageMeter).catch(() => {});
     };
     reader.readAsText(file);
 }
-function wipeData() {
+async function wipeData() {
     if (!confirm('¿Borrar TODOS tus datos? Esta acción no se puede deshacer.\n\nConsejo: exporta una copia antes.')) return;
     if (!confirm('¿Seguro del todo?')) return;
     const settings = appData.settings;
     mutate(() => { appData = emptyData(); appData.settings = settings; }, '🗑️ Datos borrados');
+    await whenSaved();
+    store.collectGarbage(appData).then(updateStorageMeter).catch(() => {});
 }
 
 // ============================================================
@@ -1498,11 +1556,17 @@ $('wipeBtn').addEventListener('click', wipeData);
 $('optimizeImagesBtn').addEventListener('click', optimizeStoredImages);
 $('globalSearch').addEventListener('focus', () => { if ($('globalSearch').value.trim().length >= 2) runGlobalSearch(); });
 window.addEventListener('hashchange', () => navigateTo(location.hash.slice(1), { push: false }));
+// Sincroniza si la app está abierta en otra pestaña
+async function reloadFromStore() {
+    if (savePending) return; // hay cambios propios sin guardar: no los pisamos
+    try {
+        const data = await store.load();
+        if (data) { appData = normalizeData(data); applySettings(); refreshView(); }
+    } catch (err) { console.warn('No se pudo sincronizar con otra pestaña', err); }
+}
+if (syncChannel) syncChannel.onmessage = e => { if (e.data && e.data.type === 'saved') reloadFromStore(); };
 window.addEventListener('storage', e => {
-    // Sincroniza si la app está abierta en otra pestaña
-    if (e.key === STORAGE_KEY && e.newValue) {
-        try { appData = normalizeData(JSON.parse(e.newValue)); applySettings(); refreshView(); } catch (err) { /* ignorar */ }
-    }
+    if (store && store.kind === 'localstorage' && e.key === LEGACY_KEY && e.newValue) reloadFromStore();
 });
 // Actualiza saludo/fecha cada minuto
 setInterval(() => { if (currentPage === 'home') renderHome(); }, 60000);
@@ -1581,22 +1645,30 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
 // ============================================================
 // 24. INICIO
 // ============================================================
-loadData();
-applySettings();
-if (window.innerWidth <= 760) {
-    document.querySelectorAll('[data-toggle-filters]').forEach(btn => {
-        $(btn.dataset.toggleFilters).classList.add('is-collapsed');
-        btn.classList.remove('is-on');
-    });
-}
-renderSidebar();
-renderInstallState();
-renderPersistState();
-updateOnlineState(false);
-navigateTo(location.hash.slice(1) || 'home', { push: false });
-// Acceso directo “Agregar obra” del icono de la app
-const startParams = new URLSearchParams(location.search);
-if (startParams.get('accion') === 'agregar') {
-    history.replaceState(null, '', location.pathname + location.hash);
-    openWorkModal('book');
-}
+(async function init() {
+    try {
+        await loadData();
+    } catch (e) {
+        console.error('No se pudieron cargar los datos', e);
+        showToast('❌ No se pudieron cargar tus datos. Prueba a recargar la página.', 'error', 8000);
+    }
+    applySettings();
+    if (window.innerWidth <= 760) {
+        document.querySelectorAll('[data-toggle-filters]').forEach(btn => {
+            $(btn.dataset.toggleFilters).classList.add('is-collapsed');
+            btn.classList.remove('is-on');
+        });
+    }
+    renderSidebar();
+    renderInstallState();
+    renderPersistState();
+    updateOnlineState(false);
+    navigateTo(location.hash.slice(1) || 'home', { push: false });
+    // Acceso directo “Agregar obra” del icono de la app
+    const startParams = new URLSearchParams(location.search);
+    if (startParams.get('accion') === 'agregar') {
+        history.replaceState(null, '', location.pathname + location.hash);
+        openWorkModal('book');
+    }
+    document.documentElement.dataset.ready = 'true';
+})();
