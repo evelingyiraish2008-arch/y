@@ -141,6 +141,14 @@ function seedSampleData() {
     ];
     appData.works.find(w => w.id === 'w3').note = appData.notes[0].content;
     appData.works.find(w => w.id === 'w8').note = appData.notes[1].content;
+    // Algo de actividad de ejemplo en las últimas semanas, para que las estadísticas no empiecen vacías
+    let seed = 7;
+    const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    ['w1', 'w3', 'w4', 'w5', 'w6'].forEach((id, k) => {
+        const w = appData.works.find(x => x.id === id);
+        w.activity = {};
+        for (let d = 1; d < 75; d++) if (rnd() < 0.32 - k * 0.03) w.activity[dayKey(now - d * day)] = 1 + Math.floor(rnd() * 3);
+    });
     // Marca de "ejemplo": ver IdbBackend.save (nunca ganan a datos reales al sincronizar)
     ['works', 'persons', 'couples', 'collections', 'notes'].forEach(k => appData[k].forEach(item => { item.sample = true; }));
 }
@@ -207,19 +215,6 @@ function miniCard(w) {
 }
 function emptyState(icon, title, text, addType) {
     return `<div class="empty-state"><div class="big">${icon}</div><h4>${esc(title)}</h4><p>${esc(text)}</p>${addType ? `<button class="btn btn-primary btn-sm" data-add="${addType}">＋ Agregar</button>` : ''}</div>`;
-}
-function hbars(container, entries, emptyMsg) {
-    if (!entries.length) { container.innerHTML = `<div class="empty-state" style="padding:24px"><p>${esc(emptyMsg)}</p></div>`; return; }
-    const max = Math.max(...entries.map(e => e[1]), 1);
-    container.innerHTML = entries.map(([label, count]) => `
-        <div class="hbar"><span class="hbar-label" title="${esc(label)}">${esc(label)}</span><div class="hbar-track"><div class="hbar-fill" style="width:${(count / max) * 100}%"></div></div><span class="hbar-val">${count}</span></div>`).join('');
-}
-function vbars(container, items, color) {
-    const max = Math.max(1, ...items.flatMap(i => i.values || [i.value]));
-    container.innerHTML = items.map(i => {
-        const values = i.values || [i.value];
-        return `<div class="vbar"><span class="vbar-val">${values.join(' · ')}</span><div class="vbar-track">${values.map((v, k) => `<div class="vbar-fill ${k ? 'alt' : ''}" style="height:${(v / max) * 100}%;${color && !k ? 'background:' + color : ''}"></div>`).join('')}</div><span class="vbar-label">${esc(i.label)}</span></div>`;
-    }).join('');
 }
 // ============================================================
 // 5. FILTROS Y ORDEN
@@ -330,8 +325,114 @@ function renderHome() {
     $('homeRecent').innerHTML = recent.length ? recent.map(w => workCard(w, { compact: true, showType: true })).join('')
         : emptyState('✨', 'Tu mundo está vacío', 'Agrega tu primera obra para empezar.', 'book');
 
-    hbars($('homeGenresChart'), tagCounts(appData.works).slice(0, 8), 'Añade etiquetas a tus obras para ver las más populares.');
+    $('homeGenresChart').innerHTML = barList(tagCounts(appData.works).slice(0, 8).map(([label, value]) => ({ label, value })),
+        { caption: 'Etiquetas más usadas', empty: 'Añade etiquetas a tus obras para ver las más populares.' });
     renderHero(inProgress);
+    renderToday();
+    renderBell();
+}
+
+/** Fila "Hoy": racha, reto anual y lo que se emite hoy. */
+function renderToday() {
+    const now = Date.now();
+    const st = streaks(activityByDay(appData.works), now);
+    const year = new Date().getFullYear();
+    const goal = Number(appData.settings.yearGoal) || 0;
+    const done = finishedInYear(appData.works, year);
+    const today = new Date().getDay();
+    const airing = appData.works.filter(w => isActive(w) && getAirDay(w) === today);
+    $('todayGrid').innerHTML = `
+        <button class="today-card" data-nav="stats">
+            <div class="today-icon fire">🔥</div>
+            <div><div class="t-title">Racha</div><div class="t-value">${st.current} ${st.current === 1 ? 'día' : 'días'}</div>
+            <div class="t-sub">${st.today ? '¡Hoy ya sumaste! 💪' : st.current ? 'Avanza algo hoy para no perderla' : 'Avanza una obra para empezar una racha'}</div></div>
+        </button>
+        <button class="today-card" data-nav="stats">
+            <div class="today-icon">🎯</div>
+            <div><div class="t-title">Reto ${year}</div><div class="t-value">${goal ? `${done} / ${goal}` : `${done} terminadas`}</div>
+            <div class="t-sub">${goal ? (done >= goal ? '¡Reto cumplido! 🏆' : `${Math.round(done / goal * 100)} % completado`) : 'Ponte una meta en Estadísticas'}</div></div>
+        </button>
+        <button class="today-card" data-nav="emission">
+            <div class="today-icon tv">📺</div>
+            <div><div class="t-title">Hoy se emite</div><div class="t-value">${airing.length ? `${airing.length} ${airing.length === 1 ? 'obra' : 'obras'}` : 'Nada hoy'}</div>
+            <div class="t-sub">${airing.length ? esc(airing.map(w => w.title).join(' · ')) : 'Asigna el día de emisión al editar una obra'}</div></div>
+        </button>`;
+}
+
+// ---------- Avisos (campana) ----------
+const SEEN_KEY = 'mi_mundo_avisos_vistos';
+function seenNotifications() {
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch (e) { return new Set(); }
+}
+function renderBell() {
+    const list = computeNotifications(appData.works, appData.settings);
+    const seen = seenNotifications();
+    const unseen = list.filter(n => !seen.has(n.id)).length;
+    $('bellBadge').hidden = !unseen;
+    $('bellBadge').textContent = unseen > 9 ? '9+' : unseen;
+}
+function openNotifications() {
+    const list = computeNotifications(appData.works, appData.settings);
+    const seen = seenNotifications();
+    openSheet('🔔 Avisos', () => list.length ? `<div class="pick-list">${list.map(n => `
+        <button class="notif-item ${seen.has(n.id) ? '' : 'is-new'}" ${n.workId ? `data-open="${n.workId}"` : 'data-nav="stats"'}>
+            <span class="n-icon">${n.icon}</span><span><b>${esc(n.title)}</b><small>${esc(n.text)}</small></span>
+        </button>`).join('')}</div>`
+        : emptyState('🔕', 'Todo al día', 'Aquí verás lo que se emite hoy, lo que estás a punto de terminar y lo que llevas tiempo sin avanzar.'));
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(list.map(n => n.id))); } catch (e) { /* sin acceso */ }
+    renderBell();
+}
+
+// ---------- ¿Qué veo hoy? ----------
+let pickType = 'all', pickExclude = [], pickCurrent = null;
+function openPicker() {
+    pickExclude = [];
+    pickCurrent = pickForToday(appData.works, { type: pickType });
+    openSheet('🎲 ¿Qué veo hoy?', renderPicker);
+}
+function renderPicker() {
+    const types = [['all', 'Todo'], ['book', '📚 Libro'], ['series', '🎬 Serie'], ['anime', '🎌 Anime'], ['manhwa', '📕 Manhwa']];
+    const w = pickCurrent && getWorkById(pickCurrent.id);
+    return `<div class="pick-filters">${types.map(([t, l]) => `<button class="chip chip-muted ${pickType === t ? 'is-on' : ''}" data-act="pick-type" data-id="${t}">${l}</button>`).join('')}</div>
+        ${w ? `<div class="pick-card dice-roll">
+            <div class="poster">${img(w.image, w.type, w.title)}</div>
+            <div>
+                <span class="chip">${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}</span> <span class="chip chip-muted">${esc(getStatusLabel(w.status))}</span>
+                <h3>${esc(w.title)}</h3>
+                <p>${esc(w.synopsis || getSubtitle(w))}</p>
+                <div class="seg-inline">
+                    ${isPlanned(w) ? `<button class="btn btn-primary btn-sm" data-act="pick-start" data-id="${w.id}">▶️ Empezar hoy</button>` : `<button class="btn btn-primary btn-sm" data-open="${w.id}">▶️ Continuar</button>`}
+                    <button class="btn btn-secondary btn-sm" data-act="pick-again">🎲 Otra</button>
+                </div>
+            </div>
+        </div>` : emptyState('🤷', 'No hay nada pendiente', 'Marca obras como “Quiero ver” o “Quiero leer” y aquí te propondré una al azar.')}`;
+}
+
+// ---------- Valorar con estrellas ----------
+function starInput(id, rating) {
+    const r = Number(rating) || 0;
+    return `<span class="star-input" role="group" aria-label="Valoración: ${ratingText(r)}">${[1, 2, 3, 4, 5].map(n =>
+        `<button type="button" class="${r >= n ? 'on' : r >= n - 0.5 ? 'half' : ''}" data-act="rate" data-id="${id}" data-star="${n}" aria-label="Valorar con ${n} ${n === 1 ? 'estrella' : 'estrellas'}">★</button>`).join('')}</span>`;
+}
+function setRating(id, value) {
+    const w = getWorkById(id);
+    if (!w) return;
+    const next = Number(w.rating) === value ? 0 : value;
+    mutate(() => { w.rating = next; }, next ? `⭐ Valorada con ${ratingText(next)}` : '☆ Valoración quitada');
+}
+
+// ---------- Mi lista ----------
+function myList() { return appData.collections.find(c => norm(c.name) === 'mi lista'); }
+function toggleMyList(id) {
+    const w = getWorkById(id);
+    if (!w) return;
+    const list = myList();
+    const inList = list && list.items.includes(id);
+    mutate(() => {
+        let col = myList();
+        if (!col) { col = { id: generateId(), name: 'Mi lista', description: 'Lo que quiero ver o leer pronto', items: [], createdAt: Date.now() }; appData.collections.push(col); }
+        col.items = inList ? col.items.filter(x => x !== id) : [...col.items, id];
+    }, inList ? `➖ Quitada de “Mi lista”` : `✅ Añadida a “Mi lista”`);
 }
 
 function renderHero(inProgress) {
@@ -358,7 +459,7 @@ function renderHero(inProgress) {
             <h2 class="hero-title">${esc(w.title)}</h2>
             <div class="hero-meta">
                 <span>${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}</span>
-                ${w.rating ? `<span style="color:var(--gold)">★ ${ratingText(w.rating)}</span>` : ''}
+                <span class="hero-stars">${starInput(w.id, w.rating)}</span>
                 ${getSubtitle(w) !== getTypeLabel(w.type) ? `<span>${esc(getSubtitle(w))}</span>` : ''}
                 ${w.bl ? '<span>💖 BL</span>' : ''}
             </div>
@@ -367,6 +468,7 @@ function renderHero(inProgress) {
             <div class="hero-actions">
                 ${total && (Number(w.progress) || 0) < total ? `<button class="btn btn-primary" data-act="progress" data-id="${w.id}">＋${step} ${TYPE_META[w.type].unit}</button>` : ''}
                 <button class="btn btn-secondary" data-open="${w.id}">Ver detalles</button>
+                <button class="btn btn-secondary" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ En Mi lista' : '＋ Mi lista'}</button>
             </div>
         </div>`;
 }
@@ -383,6 +485,7 @@ function changeProgress(id, delta) {
     mutate(() => {
         w.progress = next;
         w.updatedAt = Date.now();
+        if (delta > 0) bumpActivity(w);
         if (finishes) {
             w.status = 'terminado';
             if (!w.endDate) w.endDate = todayISO();
@@ -440,11 +543,11 @@ function renderSidebar() {
 // 9. BÚSQUEDA GLOBAL
 // ============================================================
 let searchResults = [], searchIndex = -1;
-function runGlobalSearch() {
-    const q = norm($('globalSearch').value);
-    const box = $('globalSearchResults');
-    if (q.length < 2) { box.classList.remove('active'); return; }
+/** Busca en obras, personas, parejas, colecciones y notas. */
+function searchAll(raw, limit = 12) {
+    const q = norm(raw);
     const results = [];
+    if (q.length < 2) return results;
     appData.works.forEach(w => {
         if (norm([w.title, w.tags, w.author, w.actors, w.studio].join(' ')).includes(q))
             results.push({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type });
@@ -453,7 +556,18 @@ function runGlobalSearch() {
     appData.couples.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'couple', id: c.id, title: c.name, sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
     appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `🗂️ Colección · ${c.items.length} obras`, icon: '🗂️' }); });
     appData.notes.forEach(n => { if (norm(n.content + ' ' + n.workTitle).includes(q)) results.push({ kind: 'note', id: n.workId, title: n.workTitle || 'Nota', sub: '📝 ' + n.content.slice(0, 50), icon: '📝' }); });
-    searchResults = results.slice(0, 12);
+    return results.slice(0, limit);
+}
+function openResult(r) {
+    if (r.kind === 'work' || r.kind === 'note') openDetail(r.id);
+    else if (r.kind === 'person') openPersonDetail(r.id);
+    else if (r.kind === 'couple') openCoupleModal(getCoupleById(r.id));
+    else if (r.kind === 'collection') { navigateTo('collections'); openCollectionView(r.id); }
+}
+function runGlobalSearch() {
+    const box = $('globalSearchResults');
+    if (norm($('globalSearch').value).length < 2) { box.classList.remove('active'); return; }
+    searchResults = searchAll($('globalSearch').value);
     searchIndex = -1;
     box.innerHTML = searchResults.length ? searchResults.map((r, i) => `
         <button class="search-result" data-result="${i}" role="option">
@@ -467,10 +581,68 @@ function openSearchResult(i) {
     if (!r) return;
     $('globalSearchResults').classList.remove('active');
     $('globalSearch').value = '';
-    if (r.kind === 'work' || r.kind === 'note') openDetail(r.id);
-    else if (r.kind === 'person') openPersonDetail(r.id);
-    else if (r.kind === 'couple') openCoupleModal(getCoupleById(r.id));
-    else if (r.kind === 'collection') { navigateTo('collections'); openCollectionView(r.id); }
+    openResult(r);
+}
+
+// ---------- Paleta de comandos (Ctrl K) ----------
+const PAGE_NAMES = {
+    home: '🏠 Inicio', books: '📖 Libros', series: '🎬 Series y Películas', anime: '🎌 Anime', manhwa: '📕 Manhwas', bl: '💖 Solo BL',
+    persons: '👥 Personas', couples: '💕 Parejas BL', emission: '📡 Centro de Emisión', collections: '🗂️ Colecciones',
+    stats: '📊 Estadísticas', notes: '📝 Notas', settings: '⚙️ Personalizar'
+};
+let paletteItems = [], paletteIndex = 0;
+function paletteActions() {
+    return [
+        { icon: '📚', title: 'Agregar libro', run: () => openWorkModal('book') },
+        { icon: '🎬', title: 'Agregar serie o película', run: () => openWorkModal('series') },
+        { icon: '🎌', title: 'Agregar anime', run: () => openWorkModal('anime') },
+        { icon: '📕', title: 'Agregar manhwa', run: () => openWorkModal('manhwa') },
+        { icon: '👤', title: 'Agregar persona', run: () => openPersonModal() },
+        { icon: '🎲', title: '¿Qué veo hoy?', run: openPicker },
+        { icon: '🔔', title: 'Ver avisos', run: openNotifications },
+        { icon: appData.settings.darkMode ? '☀️' : '🌙', title: appData.settings.darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => updateSetting('darkMode', !appData.settings.darkMode) },
+        { icon: '📤', title: 'Exportar copia de seguridad', run: exportData },
+        ...(cloud.state === 'signedIn' ? [{ icon: '🔄', title: 'Sincronizar ahora', run: () => cloud.syncNow() }] : [])
+    ];
+}
+function openPalette() {
+    $('paletteInput').value = '';
+    renderPalette();
+    openModal('paletteModal');
+    $('paletteInput').focus();
+}
+function renderPalette() {
+    const raw = $('paletteInput').value;
+    const q = norm(raw);
+    const match = t => !q || norm(t).includes(q);
+    const groups = [];
+    const found = searchAll(raw, 8).map(r => ({ icon: r.icon || '', image: r.image, ph: r.ph, title: r.title, sub: r.sub, run: () => openResult(r) }));
+    if (found.length) groups.push(['Resultados', found]);
+    const actions = paletteActions().filter(a => match(a.title));
+    if (actions.length) groups.push(['Acciones', actions]);
+    const pages = Object.entries(PAGE_NAMES).filter(([, name]) => match(name)).map(([page, name]) => ({ icon: name.split(' ')[0], title: name.slice(name.indexOf(' ') + 1), sub: 'Ir a la sección', run: () => navigateTo(page) }));
+    if (pages.length) groups.push(['Ir a', pages]);
+    paletteItems = groups.flatMap(g => g[1]);
+    paletteIndex = 0;
+    let i = 0;
+    $('paletteList').innerHTML = paletteItems.length ? groups.map(([name, items]) => `<div class="palette-group">${name}</div>${items.map(it => `
+        <button class="palette-item ${i === 0 ? 'is-active' : ''}" data-palette-item="${i++}" role="option">
+            <span class="p-icon">${it.image !== undefined && !it.icon ? img(it.image, it.ph) : it.icon}</span>
+            <span class="p-text"><b>${esc(it.title)}</b>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>
+        </button>`).join('')}`).join('') : `<div class="search-empty">Nada coincide con “${esc(raw)}”</div>`;
+}
+function runPaletteItem(i) {
+    const it = paletteItems[i];
+    if (!it) return;
+    closeModal('paletteModal');
+    it.run();
+}
+function movePalette(delta) {
+    const items = [...document.querySelectorAll('.palette-item')];
+    if (!items.length) return;
+    paletteIndex = (paletteIndex + delta + items.length) % items.length;
+    items.forEach((el, k) => el.classList.toggle('is-active', k === paletteIndex));
+    items[paletteIndex].scrollIntoView({ block: 'nearest' });
 }
 
 // ============================================================
@@ -578,6 +750,7 @@ async function optimizeStoredImages() {
 let lastFocus = null;
 function openModal(id) {
     lastFocus = document.activeElement;
+    $('vizTip').classList.remove('show');
     $(id).classList.add('active');
     const first = $(id).querySelector('input:not([type=hidden]):not([type=file]), select, textarea, button');
     setTimeout(() => first && first.focus({ preventScroll: true }), 60);
@@ -671,13 +844,24 @@ function saveWork() {
     if (total && data.progress > total) data.progress = total;
     if (data.endDate && data.startDate && data.endDate < data.startDate) { showToast('⚠️ La fecha de fin es anterior a la de inicio', 'error'); return; }
     const editing = editingWorkId;
+    // Fechas automáticas: al empezar o terminar se apunta el día de hoy si no hay otra fecha
+    if ((data.status === 'leyendo' || data.status === 'viendo' || data.status === 'terminado') && !data.startDate) data.startDate = todayISO();
+    if (data.status === 'terminado' && !data.endDate) data.endDate = todayISO();
+    if (!editing) {
+        const dup = appData.works.find(w => w.type === formType && norm(w.title) === norm(data.title));
+        if (dup && !confirm(`Ya tienes “${dup.title}” en ${getTypeLabel(dup.type).toLowerCase()}s. ¿Agregarla de todas formas?`)) return;
+    }
     const ok = mutate(() => {
         if (editing) {
             const w = getWorkById(editing);
+            const before = { progress: Number(w.progress) || 0, status: w.status };
             Object.assign(w, data, { updatedAt: Date.now() });
+            if ((Number(w.progress) || 0) > before.progress || (w.status !== before.status && !isPlanned(w))) bumpActivity(w);
             appData.notes.forEach(n => { if (n.workId === w.id) n.workTitle = w.title; });
         } else {
-            appData.works.push({ id: generateId(), type: formType, ...data, createdAt: Date.now(), updatedAt: Date.now() });
+            const w = { id: generateId(), type: formType, ...data, createdAt: Date.now(), updatedAt: Date.now() };
+            if ((Number(w.progress) || 0) > 0) bumpActivity(w);
+            appData.works.push(w);
         }
     }, editing ? '✅ Obra actualizada' : '✅ Obra agregada');
     if (ok) closeModal('workModal');
@@ -764,6 +948,7 @@ function renderDetail() {
         <div class="detail-actions">
           <button class="btn btn-primary btn-sm" data-act="edit" data-id="${w.id}">✏️ Editar</button>
           <button class="btn btn-secondary btn-sm ${w.favorite ? 'is-on' : ''}" data-act="fav" data-id="${w.id}">${w.favorite ? '❤️ Favorito' : '🤍 Favorito'}</button>
+          <button class="btn btn-secondary btn-sm ${myList() && myList().items.includes(w.id) ? 'is-on' : ''}" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ Mi lista' : '＋ Mi lista'}</button>
           <button class="btn btn-secondary btn-sm" data-act="collect" data-id="${w.id}">📂 Colecciones${inColls.length ? ' · ' + inColls.length : ''}</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}">🗑️</button>
         </div>
@@ -779,7 +964,7 @@ function renderDetail() {
           <div class="progress-text"><span>${p}% completado</span><span>${total - (Number(w.progress) || 0)} ${TYPE_META[w.type].unit} restantes</span></div>
         </div>` : ''}
         <div class="detail-stats">
-          <div class="detail-stat"><div class="k">Valoración</div><div class="v" style="color:var(--gold)">${w.rating ? '★ ' + ratingText(w.rating) : '–'}</div></div>
+          <div class="detail-stat detail-rating"><div class="k">Valoración ${w.rating ? '· ' + ratingText(w.rating) : ''}</div><div class="v">${starInput(w.id, w.rating)}</div></div>
           <div class="detail-stat"><div class="k">🌶️ Spicy</div><div class="v">${w.spicy || 0} / 5</div></div>
           <div class="detail-stat"><div class="k">💧 Tristeza</div><div class="v">${w.sadness || 0} / 5</div></div>
           <div class="detail-stat"><div class="k">Año</div><div class="v">${esc(w.year || '–')}</div></div>
@@ -1175,53 +1360,124 @@ function renderEmission() {
 // ============================================================
 // 18. ESTADÍSTICAS
 // ============================================================
+const TYPE_ORDER = ['book', 'series', 'anime', 'manhwa'];
+const TYPE_PLURAL = { book: 'Libros', series: 'Series', anime: 'Anime', manhwa: 'Manhwas' };
+let goalEditing = false;
+
+function kpi(label, value, delta = '', trend = '') {
+    return `<div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${delta ? `<div class="kpi-delta ${trend}">${esc(delta)}</div>` : ''}</div>`;
+}
 function renderStats() {
     const works = appData.works;
-    const done = works.filter(w => w.status === 'terminado');
-    const rated = works.filter(w => w.rating);
-    const minutesByType = { book: 0, series: 0, anime: 0, manhwa: 0 };
-    works.forEach(w => { minutesByType[w.type] += estimateMinutes(w); });
-    const totalMin = Object.values(minutesByType).reduce((a, b) => a + b, 0);
-    const hours = Math.round(totalMin / 60);
-    $('statsTotal').textContent = works.length;
-    $('statsDone').textContent = done.length;
-    $('statsHours').textContent = hours + 'h';
-    $('statsTotalHours').textContent = hours + 'h';
-    $('statsAvg').textContent = rated.length ? '★ ' + (rated.reduce((a, w) => a + Number(w.rating), 0) / rated.length).toFixed(1) : '–';
+    const now = Date.now();
+    const year = new Date(now).getFullYear();
+    const byDay = activityByDay(works);
+    const st = streaks(byDay, now);
+    const doneYear = finishedInYear(works, year);
+    const donePrev = finishedInYear(works, year - 1);
+    const hours = hoursByType(works);
+    const totalHours = TYPE_ORDER.reduce((a, t) => a + hours[t], 0);
+    const rated = works.filter(w => Number(w.rating) > 0);
+    const avg = rated.length ? rated.reduce((a, w) => a + Number(w.rating), 0) / rated.length : 0;
+    const monthStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime();
+    const addedThisMonth = works.filter(w => !w.sample && (w.createdAt || 0) >= monthStart).length;
+    const diff = doneYear - donePrev;
 
-    // Donut dinámico
-    let acc = 0;
-    const segs = Object.keys(minutesByType).map(t => {
-        const pct = totalMin ? (minutesByType[t] / totalMin) * 100 : 0;
-        const seg = `${TYPE_META[t].color} ${acc}% ${acc + pct}%`;
-        acc += pct;
-        return seg;
+    $('statsKpis').innerHTML = [
+        kpi('🗃️ Obras', works.length, `${addedThisMonth} agregadas este mes`),
+        kpi(`✅ Terminadas en ${year}`, doneYear, donePrev || doneYear ? (diff === 0 ? `Igual que en ${year - 1}` : `${diff > 0 ? '▲' : '▼'} ${Math.abs(diff)} ${diff > 0 ? 'más' : 'menos'} que en ${year - 1}`) : '', diff > 0 ? 'up' : diff < 0 ? 'down' : ''),
+        kpi('🔥 Racha actual', `${st.current} ${st.current === 1 ? 'día' : 'días'}`, `Mejor racha: ${st.best} ${st.best === 1 ? 'día' : 'días'}`),
+        kpi('⏱️ Horas estimadas', `${Math.round(totalHours).toLocaleString('es-ES')} h`, `≈ ${Math.round(totalHours / 24)} días seguidos`),
+        kpi('⭐ Valoración media', avg ? avg.toFixed(1) : '–', `${rated.length} ${rated.length === 1 ? 'obra valorada' : 'obras valoradas'}`)
+    ].join('');
+
+    $('statsStreakSub').textContent = st.current
+        ? `Llevas ${st.current} ${st.current === 1 ? 'día' : 'días'} seguidos · tu mejor racha: ${st.best}`
+        : 'Días en los que avanzaste, agregaste o terminaste algo (últimas 26 semanas)';
+    $('statsCalendar').innerHTML = activityCalendar(byDay, { weeks: 26, now, caption: 'Sesiones por día' });
+    const calWrap = document.querySelector('#statsCalendar .viz-calendar-wrap');
+    if (calWrap) calWrap.scrollLeft = calWrap.scrollWidth;
+
+    renderGoal(doneYear, year, now);
+
+    const months = finishedByMonth(works, 12, now);
+    $('statsMonthly').innerHTML = columnChart({
+        categories: months.map(m => m.label),
+        series: TYPE_ORDER.map(t => ({ name: TYPE_PLURAL[t], color: TYPE_META[t].color })),
+        values: months.map(m => TYPE_ORDER.map(t => m.byType[t])),
+        caption: 'Obras terminadas por mes y tipo'
     });
-    $('statsDonut').style.background = totalMin ? `conic-gradient(${segs.join(', ')})` : 'var(--bg-elevated)';
-    $('statsLegend').innerHTML = Object.keys(minutesByType).map(t => `
-        <div class="legend-item"><div class="legend-color" style="background:${TYPE_META[t].color}"></div><div class="legend-label">${TYPE_META[t].icon} ${t === 'series' ? 'Series' : getTypeLabel(t) + (t === 'anime' ? '' : 's')}</div>
-        <div class="legend-value">${Math.round(minutesByType[t] / 60)}h · ${totalMin ? Math.round(minutesByType[t] / totalMin * 100) : 0}%</div></div>`).join('');
 
-    // Actividad mensual real
-    const months = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        months.push({ y: d.getFullYear(), m: d.getMonth(), label: d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') });
-    }
-    const inMonth = (date, mo) => date && date.getFullYear() === mo.y && date.getMonth() === mo.m;
-    vbars($('statsChart'), months.map(mo => ({
-        label: mo.label,
-        values: [
-            works.filter(w => w.createdAt && inMonth(new Date(w.createdAt), mo)).length,
-            works.filter(w => w.endDate && inMonth(new Date(w.endDate + 'T00:00:00'), mo)).length
-        ]
-    })));
-    const levels = key => [1, 2, 3, 4, 5].map(l => ({ label: String(l), value: works.filter(w => Number(w[key]) === l).length }));
-    vbars($('statsSpicyChart'), levels('spicy'), 'linear-gradient(180deg,#f87171,#b91c1c)');
-    vbars($('statsSadnessChart'), levels('sadness'), 'linear-gradient(180deg,#60a5fa,#1d4ed8)');
-    hbars($('statsGenresChart'), tagCounts(works).slice(0, 10), 'Añade etiquetas para ver estadísticas de géneros.');
+    const sum = statusSummary(works);
+    $('statsStatus').innerHTML = barList([
+        { label: 'En curso', value: sum.active },
+        { label: 'Terminadas', value: sum.done },
+        { label: 'Pendientes', value: sum.planned },
+        { label: 'Abandonadas', value: sum.dropped }
+    ], { caption: 'Obras por estado' });
+
+    $('statsTime').innerHTML = proportionBar(TYPE_ORDER.map(t => ({
+        name: TYPE_PLURAL[t], value: hours[t], color: TYPE_META[t].color, display: `${Math.round(hours[t]).toLocaleString('es-ES')} h`
+    })), { caption: 'Horas estimadas por tipo' });
+
+    const hist = ratingHistogram(works);
+    $('statsRatingSub').textContent = rated.length ? `Media ${avg.toFixed(1)} · la más repetida: ${ratingText(hist.reduce((a, b) => (b.count > a.count ? b : a)).rating)} ★` : 'Cuántas obras tienen cada nota';
+    $('statsRatings').innerHTML = rated.length ? columnChart({
+        categories: hist.map(b => (b.rating % 1 ? (b.rating === 0.5 ? '½' : `${Math.floor(b.rating)}½`) : String(b.rating))),
+        series: [{ name: 'Obras', color: 'var(--gold)' }],
+        values: hist.map(b => [b.count]),
+        height: 150,
+        caption: 'Obras por valoración'
+    }) : '<p class="viz-empty">Valora tus obras con estrellas para ver esto.</p>';
+
+    $('statsMood').innerHTML = heatGrid(moodGrid(works), {
+        rows: ['5', '4', '3', '2', '1'], cols: ['1', '2', '3', '4', '5'],
+        rowTitle: '💧 Tristeza', colTitle: '🌶️ Spicy', caption: 'Obras según spicy y tristeza', cellAction: 'mood'
+    });
+    $('statsGenresChart').innerHTML = barList(tagCounts(works).slice(0, 10).map(([label, value]) => ({ label, value })),
+        { caption: 'Etiquetas más usadas', empty: 'Añade etiquetas para ver estadísticas de géneros.' });
+    $('statsCountries').innerHTML = barList(topValues(works, 'country').map(x => ({ label: x.label, value: x.count })),
+        { caption: 'Obras por país', empty: 'Añade el país a tus series y animes.' });
+    $('statsPlatforms').innerHTML = barList(topValues(works, 'platform').map(x => ({ label: x.label, value: x.count })),
+        { caption: 'Obras por plataforma', empty: 'Añade la plataforma a tus series y manhwas.' });
     renderAchievements();
+}
+function renderGoal(done, year, now) {
+    const goal = Number(appData.settings.yearGoal) || 0;
+    if (!goal || goalEditing) {
+        $('statsGoal').innerHTML = `
+            <p class="panel-desc" style="margin:0 0 12px">¿Cuántas obras quieres terminar en ${year}? Llevas <b>${done}</b>.</p>
+            <div class="upload-row">
+                <input type="number" class="text-input" id="goalInput" min="1" max="1000" value="${goal || Math.max(12, done + 6)}" aria-label="Meta anual">
+                <button class="btn btn-primary btn-sm" data-act="goal-save">🎯 ${goal ? 'Guardar' : 'Fijar reto'}</button>
+            </div>`;
+        return;
+    }
+    const pct = Math.min(100, Math.round(done / goal * 100));
+    const start = new Date(year, 0, 1).getTime(), end = new Date(year + 1, 0, 1).getTime();
+    const elapsed = Math.max(0.01, (now - start) / (end - start));
+    const projected = Math.round(done / elapsed);
+    const expected = Math.floor(goal * elapsed);
+    const status = done >= goal ? '🏆 ¡Reto cumplido!' : done >= expected ? '✅ Vas al día' : `⏳ Vas ${expected - done} por detrás`;
+    $('statsGoal').innerHTML = `
+        <div class="goal-card">
+            <div class="goal-ring">${ringMeter(done, goal, { label: `${done} de ${goal} obras` })}
+                <div class="goal-ring-text"><b>${done}</b><span>de ${goal}</span></div></div>
+            <div class="goal-info">
+                <h4>${status}</h4>
+                <p>${pct} % del reto · a este ritmo terminarás unas ${projected} en ${year}.${done < goal ? ` Te faltan ${goal - done}.` : ''}</p>
+                <button class="btn btn-secondary btn-sm" data-act="goal-edit">Cambiar meta</button>
+            </div>
+        </div>`;
+}
+function openMoodCell(key) {
+    const [r, c] = key.split(':').map(Number);
+    const sadness = 5 - r, spicy = c + 1;
+    const list = appData.works.filter(w => Number(w.sadness) === sadness && Number(w.spicy) === spicy);
+    openSheet(`🌶️ ${spicy} · 💧 ${sadness}`, () => list.length ? `<div class="pick-list">${list.map(w => `
+        <button class="pick-item" data-open="${w.id}"><div class="thumb">${img(w.image, w.type, w.title)}</div>
+        <span class="info"><b>${esc(w.title)}</b><small>${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))} · ${esc(getStatusLabel(w.status))}</small></span></button>`).join('')}</div>`
+        : emptyState('🫙', 'Ninguna obra aquí', 'Ajusta el spicy y la tristeza al editar tus obras.'));
 }
 function calculateAchievements() {
     const w = appData.works;
@@ -1416,6 +1672,39 @@ function handleAction(act, id, el) {
         case 'couple-new': openCoupleModal(); break;
         case 'couple-fav': { const c = getCoupleById(id); if (c) mutate(() => { c.favorite = !c.favorite; }, c.favorite ? '🤍 Quitada de favoritas' : '❤️ Pareja favorita'); break; }
         case 'couple-delete': deleteCouple(id); break;
+        case 'mylist': toggleMyList(id); break;
+        case 'notifications': openNotifications(); break;
+        case 'pick': openPicker(); break;
+        case 'pick-type': pickType = id; pickExclude = []; pickCurrent = pickForToday(appData.works, { type: pickType }); sheetRefresh && sheetRefresh(); break;
+        case 'pick-again': {
+            if (pickCurrent) pickExclude.push(pickCurrent.id);
+            pickCurrent = pickForToday(appData.works, { type: pickType, exclude: pickExclude });
+            if (!pickCurrent) { pickExclude = []; pickCurrent = pickForToday(appData.works, { type: pickType }); }
+            if (sheetRefresh) sheetRefresh();
+            break;
+        }
+        case 'pick-start': {
+            const w = getWorkById(id);
+            if (!w) break;
+            closeModal('sheetModal');
+            mutate(() => {
+                w.status = STATUS_BY_TYPE[w.type][0];
+                if (!w.startDate) w.startDate = todayISO();
+                bumpActivity(w);
+            }, `▶️ ¡A por “${w.title}”!`);
+            openDetail(id);
+            break;
+        }
+        case 'goal-edit': goalEditing = true; renderStats(); setTimeout(() => $('goalInput') && $('goalInput').focus(), 0); break;
+        case 'goal-save': {
+            const v = Math.round(Number($('goalInput').value));
+            if (!(v >= 1 && v <= 1000)) { showToast('⚠️ Escribe un número entre 1 y 1000', 'error'); break; }
+            goalEditing = false;
+            updateSetting('yearGoal', v, `🎯 Reto de ${v} obras fijado`);
+            renderStats();
+            break;
+        }
+        case 'mood': openMoodCell(id); break;
     }
 }
 
@@ -1431,6 +1720,27 @@ document.addEventListener('click', e => {
     if (t.closest('[data-detail-close]')) { closeDetail(); return; }
     const add = t.closest('[data-add]');
     if (add) { openWorkModal(add.dataset.add, null, add.dataset.bl ? { bl: true } : {}); return; }
+    const paletteItem = t.closest('[data-palette-item]');
+    if (paletteItem) { runPaletteItem(Number(paletteItem.dataset.paletteItem)); return; }
+    if (t.closest('[data-palette]')) { openPalette(); return; }
+    const tableToggle = t.closest('[data-table-toggle]');
+    if (tableToggle) {
+        const card = tableToggle.closest('.viz-card');
+        const on = card.classList.toggle('show-table');
+        tableToggle.classList.toggle('is-on', on);
+        tableToggle.textContent = on ? 'Ver gráfico' : 'Ver tabla';
+        return;
+    }
+    const star = t.closest('[data-act="rate"]');
+    if (star) {
+        e.preventDefault();
+        const n = Number(star.dataset.star);
+        const rect = star.getBoundingClientRect();
+        // Clic en la mitad izquierda de la estrella = media estrella (con teclado, estrella entera)
+        const half = e.detail > 0 && e.clientX - rect.left < rect.width / 2;
+        setRating(star.dataset.id, half ? n - 0.5 : n);
+        return;
+    }
     const act = t.closest('[data-act]');
     if (act) {
         e.preventDefault();
@@ -1493,6 +1803,7 @@ $('detailOverlay').addEventListener('click', closeDetail);
 // Inputs y filtros
 document.addEventListener('input', e => {
     const t = e.target;
+    if (t.id === 'paletteInput') { renderPalette(); return; }
     if (t.dataset.render && RENDERERS[t.dataset.render]) RENDERERS[t.dataset.render]();
     if (t.type === 'range' && t.dataset.out) updateRangeOutputs(t.closest('.modal, .panel-card') || document);
     if (t.id === 'pdSearch') renderPersonDetail();
@@ -1520,9 +1831,12 @@ document.addEventListener('change', e => {
 document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        if (currentPage !== 'home') navigateTo('home');
-        $('globalSearch').focus();
+        if ($('paletteModal').classList.contains('active')) closeModal('paletteModal'); else openPalette();
         return;
+    }
+    if (e.target.id === 'paletteInput') {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); movePalette(e.key === 'ArrowDown' ? 1 : -1); return; }
+        if (e.key === 'Enter') { e.preventDefault(); runPaletteItem(paletteIndex); return; }
     }
     if (e.target.id === 'globalSearch' && $('globalSearchResults').classList.contains('active')) {
         const items = [...document.querySelectorAll('.search-result')];
@@ -1586,6 +1900,38 @@ window.addEventListener('storage', e => {
 });
 // Actualiza saludo/fecha cada minuto
 setInterval(() => { if (currentPage === 'home') renderHome(); }, 60000);
+
+// Tooltip de los gráficos: el valor destaca y la etiqueta acompaña (con textContent, nunca HTML).
+const vizTip = $('vizTip');
+function showTip(el, x, y) {
+    vizTip.querySelector('b').textContent = el.dataset.tipValue;
+    vizTip.querySelector('span').textContent = el.dataset.tipLabel || '';
+    vizTip.classList.add('show');
+    const r = vizTip.getBoundingClientRect();
+    const left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x - r.width / 2));
+    const top = y - r.height - 12 < 8 ? y + 18 : y - r.height - 12;
+    vizTip.style.left = left + 'px';
+    vizTip.style.top = top + 'px';
+}
+document.addEventListener('pointermove', e => {
+    const el = e.target.closest && e.target.closest('[data-tip-value]');
+    if (el) showTip(el, e.clientX, e.clientY);
+    else vizTip.classList.remove('show');
+});
+document.addEventListener('focusin', e => {
+    const el = e.target.closest && e.target.closest('[data-tip-value]');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    showTip(el, r.left + r.width / 2, r.top);
+});
+document.addEventListener('focusout', () => vizTip.classList.remove('show'));
+document.addEventListener('scroll', () => {
+    const el = document.activeElement;
+    if (el && el.dataset && el.dataset.tipValue !== undefined) {
+        const r = el.getBoundingClientRect();
+        showTip(el, r.left + r.width / 2, r.top);
+    } else vizTip.classList.remove('show');
+}, true);
 
 // Si una imagen falla, se cambia por su ilustración de relleno (sin handlers en línea).
 document.addEventListener('error', e => {
