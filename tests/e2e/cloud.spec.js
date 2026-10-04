@@ -224,3 +224,25 @@ test('un dispositivo con datos propios puede unirlos con los de la nube', async 
     await phone.context.close();
     await laptop.context.close();
 });
+
+test('la papelera viaja entre dispositivos y restaurar también', async ({ browser }) => {
+    const phone = await newDevice(browser);
+    await signIn(phone.page, { create: true });
+    const laptop = await newDevice(browser);
+    await signIn(laptop.page);
+
+    await phone.page.evaluate(() => deleteWork('w2'));
+    await syncNow(phone.page);
+    expect(cloudWorks().find(r => r.id === 'w2').data.trashedAt).toBeGreaterThan(0);
+    await syncNow(laptop.page);
+    expect(await laptop.page.evaluate(() => [appData.works.some(w => w.id === 'w2'), appData.trash.works.map(w => w.id)])).toEqual([false, ['w2']]);
+
+    await laptop.page.evaluate(() => restoreFromTrash('works:w2'));
+    await syncNow(laptop.page);
+    await syncNow(phone.page);
+    expect(await phone.page.evaluate(() => [appData.works.some(w => w.id === 'w2'), appData.trash.works.length])).toEqual([true, 0]);
+    expect(phone.errors).toEqual([]);
+    expect(laptop.errors).toEqual([]);
+    await phone.context.close();
+    await laptop.context.close();
+});

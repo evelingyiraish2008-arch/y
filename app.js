@@ -91,13 +91,83 @@ function runAfterSaves(fn) {
     saveChain = task.catch(() => {});
     return task;
 }
-/** Aplica un cambio en memoria, lo guarda y actualiza la vista. */
-function mutate(fn, msg) {
+/**
+ * Aplica un cambio en memoria, lo guarda y actualiza la vista.
+ * Se apunta en el historial para poder deshacerlo (opts.undo = false para no hacerlo) y,
+ * si cambió alguna obra, en el historial de versiones de esa obra.
+ */
+function mutate(fn, msg, opts = {}) {
+    const before = indexRecords(appData);
     fn();
+    recordVersions(before, appData);
+    const entry = opts.undo === false ? null : pushUndo(opts.label || msg, diffIndex(before, indexRecords(appData)));
     saveData();
-    if (msg) showToast(msg);
+    if (msg) showToast(msg, opts.type || 'info', entry ? 5000 : 2800, entry ? { label: 'Deshacer', run: () => undoUntil(entry) } : null);
     refreshView();
     return true;
+}
+
+// ---------- Deshacer / rehacer ----------
+const UNDO_LIMIT = 50;
+let undoStack = [], redoStack = [];
+function pushUndo(label, changes) {
+    if (!changes.length) return null;
+    const entry = { id: generateId(), label: String(label || 'Cambio').replace(/^\W+\s*/u, ''), at: Date.now(), changes };
+    undoStack.push(entry);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack = [];
+    return entry;
+}
+function afterHistoryJump(msg) {
+    saveData();
+    applySettings();
+    showToast(msg);
+    refreshView();
+}
+function undo() {
+    const entry = undoStack.pop();
+    if (!entry) { showToast('Nada que deshacer'); return; }
+    applyChanges(appData, entry.changes, 'before');
+    redoStack.push(entry);
+    afterHistoryJump(`↩️ Deshecho: ${entry.label}`);
+}
+function redo() {
+    const entry = redoStack.pop();
+    if (!entry) { showToast('Nada que rehacer'); return; }
+    applyChanges(appData, entry.changes, 'after');
+    undoStack.push(entry);
+    afterHistoryJump(`↪️ Rehecho: ${entry.label}`);
+}
+/** Deshace todo hasta esa acción incluida (el botón "Deshacer" de un aviso o del historial). */
+function undoUntil(entry) {
+    const i = undoStack.indexOf(entry);
+    if (i < 0) { showToast('Ese cambio ya no se puede deshacer'); return; }
+    const undone = undoStack.splice(i).reverse();
+    undone.forEach(e => applyChanges(appData, e.changes, 'before'));
+    redoStack.push(...undone);
+    afterHistoryJump(undone.length > 1 ? `↩️ Deshechos ${undone.length} cambios` : `↩️ Deshecho: ${entry.label}`);
+}
+function openHistory() {
+    openSheet('🕓 Historial de cambios', () => undoStack.length || redoStack.length ? `
+        <p class="panel-desc" style="margin:0 0 12px">Tus últimos ${UNDO_LIMIT} cambios de esta sesión. También puedes usar <kbd>Ctrl</kbd>+<kbd>Z</kbd> y <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>.</p>
+        <div class="pick-list">${undoStack.slice().reverse().map(e => `
+            <div class="pick-item history-item">
+                <span class="info"><b>${esc(e.label)}</b><small>${esc(relativeTime(e.at))} · ${e.changes.length} ${e.changes.length === 1 ? 'registro' : 'registros'}</small></span>
+                <button class="btn btn-secondary btn-sm" data-act="undo-until" data-id="${e.id}">↩️ Deshacer hasta aquí</button>
+            </div>`).join('')}
+            ${redoStack.length ? `<button class="pick-item" data-act="redo" style="justify-content:center;font-weight:600">↪️ Rehacer “${esc(redoStack[redoStack.length - 1].label)}”</button>` : ''}
+        </div>` : emptyState('🕓', 'Sin cambios todavía', 'Aquí aparecerá lo que hagas en esta sesión, para deshacerlo si te equivocas.'));
+}
+/** "hace 5 min", "ayer", "hace 3 días"… */
+function relativeTime(ts, now = Date.now()) {
+    const s = Math.round((now - ts) / 1000);
+    if (s < 45) return 'hace un momento';
+    if (s < 3600) return `hace ${Math.max(1, Math.round(s / 60))} min`;
+    if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+    const d = Math.round(s / 86400);
+    if (d === 1) return 'ayer';
+    if (d < 30) return `hace ${d} días`;
+    return fmtDate(ts);
 }
 
 function seedSampleData() {
@@ -181,6 +251,7 @@ function workCard(w, opts = {}) {
         <div class="card-top">
           <span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span>
           ${w.bl ? '<span class="pill bl">BL</span>' : ''}
+          ${w.locked ? '<span class="pill" title="Bloqueada">🔒</span>' : ''}
           ${opts.showType ? `<span class="pill">${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}</span>` : ''}
           <span class="spacer"></span>
           ${w.rating ? `<span class="pill rating">★ ${ratingText(w.rating)}</span>` : ''}
@@ -416,7 +487,7 @@ function starInput(id, rating) {
 }
 function setRating(id, value) {
     const w = getWorkById(id);
-    if (!w) return;
+    if (!w || isLocked(w)) return;
     const next = Number(w.rating) === value ? 0 : value;
     mutate(() => { w.rating = next; }, next ? `⭐ Valorada con ${ratingText(next)}` : '☆ Valoración quitada');
 }
@@ -475,7 +546,7 @@ function renderHero(inProgress) {
 
 function changeProgress(id, delta) {
     const w = getWorkById(id);
-    if (!w) return;
+    if (!w || isLocked(w)) return;
     const total = getTotal(w);
     const step = delta * TYPE_META[w.type].step;
     let next = Math.max(0, (Number(w.progress) || 0) + step);
@@ -602,6 +673,10 @@ function paletteActions() {
         { icon: '🔔', title: 'Ver avisos', run: openNotifications },
         { icon: appData.settings.darkMode ? '☀️' : '🌙', title: appData.settings.darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => updateSetting('darkMode', !appData.settings.darkMode) },
         { icon: '📤', title: 'Exportar copia de seguridad', run: exportData },
+        { icon: '↩️', title: 'Deshacer último cambio', sub: 'Ctrl + Z', run: undo },
+        { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
+        { icon: '🕓', title: 'Historial de cambios', run: openHistory },
+        { icon: '🗑️', title: 'Abrir papelera', run: openTrash },
         ...(cloud.state === 'signedIn' ? [{ icon: '🔄', title: 'Sincronizar ahora', run: () => cloud.syncNow() }] : [])
     ];
 }
@@ -748,18 +823,32 @@ async function optimizeStoredImages() {
 // 11. MODALES (genérico)
 // ============================================================
 let lastFocus = null;
+/** Formularios que avisan antes de cerrarse con cambios sin guardar. */
+const DIRTY_MODALS = ['workModal', 'personModal', 'coupleModal', 'collectionModal'];
+const modalBaselines = {};
+function modalSnapshot(id) {
+    return [...$(id).querySelectorAll('input:not([type=file]), select, textarea')].map(el => (el.type === 'checkbox' ? el.checked : el.value)).join('\u0001');
+}
 function openModal(id) {
     lastFocus = document.activeElement;
     $('vizTip').classList.remove('show');
     $(id).classList.add('active');
+    if (DIRTY_MODALS.includes(id)) modalBaselines[id] = modalSnapshot(id);
     const first = $(id).querySelector('input:not([type=hidden]):not([type=file]), select, textarea, button');
     setTimeout(() => first && first.focus({ preventScroll: true }), 60);
 }
-function closeModal(id) {
+/** Cierra un modal. Si tiene cambios sin guardar, pregunta antes (salvo force). Devuelve false si no se cerró. */
+function closeModal(id, { force = false } = {}) {
+    if (!force && $(id).classList.contains('active') && modalBaselines[id] !== undefined && modalSnapshot(id) !== modalBaselines[id]) {
+        if (!confirm('Tienes cambios sin guardar. ¿Cerrar sin guardarlos?')) return false;
+        if (id === 'workModal' && !editingWorkId) clearDraft();
+    }
+    delete modalBaselines[id];
     $(id).classList.remove('active');
     if (id === 'sheetModal') sheetRefresh = null;
     if (id === 'personDetailOverlay') currentPersonId = null;
     if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
+    return true;
 }
 function topOpenModal() {
     const open = [...document.querySelectorAll('.modal-overlay.active')];
@@ -809,7 +898,18 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     $('f_status').innerHTML = '';
     setFormType(work ? work.type : type);
     document.querySelectorAll('#workTypeTabs .seg-btn').forEach(b => b.disabled = !!work && b.dataset.type !== work.type);
-    const src = work || preset;
+    fillWorkForm(work || preset);
+    const draft = !work && !preset.title ? readDraft() : null;
+    $('workDraftBar').hidden = !draft;
+    if (draft) {
+        $('workDraftBar').innerHTML = `<span>📝 Tienes un borrador sin guardar: <b>${esc(draft.data.title)}</b> <small>(${esc(relativeTime(draft.at))})</small></span>
+            <span class="seg-inline"><button type="button" class="btn btn-primary btn-sm" data-act="draft-restore">Recuperar</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-act="draft-discard">Descartar</button></span>`;
+    }
+    openModal('workModal');
+    setTimeout(() => $('f_title').focus(), 60);
+}
+function fillWorkForm(src) {
     workForm.querySelectorAll('[data-field]').forEach(el => {
         const f = el.dataset.field;
         let v = src[f];
@@ -821,9 +921,45 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     updateRangeOutputs(workForm);
     updateWorkPreview();
     if ($('workImagePreview').src === '' || !$('f_image').value) $('workImagePreview').src = PH[formType];
-    openModal('workModal');
-    setTimeout(() => $('f_title').focus(), 60);
+    updateTitleHint();
 }
+
+// ---------- Borrador del formulario (se guarda solo mientras escribes) ----------
+const DRAFT_KEY = 'mi_mundo_borrador_obra';
+const DRAFT_MAX_AGE = 7 * 86400000;
+function saveDraft() {
+    if (editingWorkId || !$('workModal').classList.contains('active')) return;
+    const data = collectWorkForm();
+    try {
+        if (data.title) localStorage.setItem(DRAFT_KEY, JSON.stringify({ type: formType, data, at: Date.now() }));
+        else localStorage.removeItem(DRAFT_KEY);
+    } catch (e) { /* sin acceso a localStorage */ }
+}
+function readDraft() {
+    try {
+        const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+        if (d && d.data && d.data.title && TYPE_META[d.type] && Date.now() - d.at < DRAFT_MAX_AGE) return d;
+    } catch (e) { /* borrador dañado */ }
+    return null;
+}
+function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* sin acceso */ } }
+function restoreDraft() {
+    const d = readDraft();
+    if (!d) return;
+    setFormType(d.type);
+    fillWorkForm(d.data);
+    $('workDraftBar').hidden = true;
+    showToast('📝 Borrador recuperado');
+}
+
+/** Aviso mientras escribes el título: "¿Ya la tienes?". */
+function updateTitleHint() {
+    const el = $('titleHint');
+    const sims = findSimilarWorks($('f_title').value, appData.works, { excludeId: editingWorkId, limit: 2 });
+    el.hidden = !sims.length;
+    el.innerHTML = sims.length ? `💡 ¿Ya la tienes? ${sims.map(x => `<button type="button" class="link-btn" data-open="${x.work.id}">${TYPE_META[x.work.type].icon} ${esc(x.work.title)}</button>`).join(' ')}` : '';
+}
+
 function collectWorkForm() {
     const data = {};
     workForm.querySelectorAll('[data-field]').forEach(el => {
@@ -850,6 +986,8 @@ function saveWork() {
     if (!editing) {
         const dup = appData.works.find(w => w.type === formType && norm(w.title) === norm(data.title));
         if (dup && !confirm(`Ya tienes “${dup.title}” en ${getTypeLabel(dup.type).toLowerCase()}s. ¿Agregarla de todas formas?`)) return;
+        const sim = !dup && findSimilarWorks(data.title, appData.works, { min: 0.85, limit: 1 })[0];
+        if (sim && !confirm(`Se parece mucho a “${sim.work.title}” (${getTypeLabel(sim.work.type)}). ¿Agregarla de todas formas?`)) return;
     }
     const ok = mutate(() => {
         if (editing) {
@@ -863,23 +1001,107 @@ function saveWork() {
             if ((Number(w.progress) || 0) > 0) bumpActivity(w);
             appData.works.push(w);
         }
-    }, editing ? '✅ Obra actualizada' : '✅ Obra agregada');
-    if (ok) closeModal('workModal');
+    }, editing ? '✅ Obra actualizada' : '✅ Obra agregada', { label: editing ? `Editar “${data.title}”` : `Agregar “${data.title}”` });
+    if (ok) { if (!editing) clearDraft(); closeModal('workModal', { force: true }); }
 }
 function deleteWork(id) {
     const w = getWorkById(id);
-    if (!w || !confirm(`¿Eliminar “${w.title}” permanentemente?`)) return;
+    if (!w || isLocked(w)) return;
+    // Solo se pregunta si se van a perder relaciones: lo demás se puede deshacer o recuperar de la papelera
+    const colls = appData.collections.filter(c => c.items.includes(id)).length;
+    const notes = appData.notes.filter(n => n.workId === id).length;
+    if (colls || notes) {
+        const parts = [colls ? `está en ${colls} ${colls === 1 ? 'colección' : 'colecciones'}` : '', notes ? `tiene ${notes} ${notes === 1 ? 'nota' : 'notas'}` : ''].filter(Boolean);
+        if (!confirm(`“${w.title}” ${parts.join(' y ')}.\n\nSe enviará a la papelera con sus notas y podrás restaurarla durante ${TRASH_DAYS} días. ¿Continuar?`)) return;
+    }
     if (currentDetailId === id) closeDetail();
-    mutate(() => {
-        appData.works = appData.works.filter(x => x.id !== id);
-        appData.notes = appData.notes.filter(n => n.workId !== id);
-        appData.collections.forEach(c => { c.items = c.items.filter(i => i !== id); });
-    }, '🗑️ Obra eliminada');
+    mutate(() => { trashRecord(appData, 'works', id, Date.now(), { from: TYPE_PLURAL[w.type] }); }, `🗑️ “${w.title}” enviada a la papelera`, { label: `Eliminar “${w.title}”` });
 }
 function toggleFavorite(id) {
     const w = getWorkById(id);
     if (!w) return;
     mutate(() => { w.favorite = !w.favorite; w.updatedAt = Date.now(); }, w.favorite ? '🤍 Quitado de favoritos' : '❤️ Añadido a favoritos');
+}
+
+/** Si la obra está bloqueada, avisa y devuelve true. */
+function isLocked(w) {
+    if (!w || !w.locked) return false;
+    showToast('🔒 Esta obra está bloqueada. Desbloquéala en su ficha para cambiarla.', 'error');
+    return true;
+}
+function toggleLock(id) {
+    const w = getWorkById(id);
+    if (!w) return;
+    mutate(() => { w.locked = !w.locked; }, w.locked ? '🔓 Obra desbloqueada' : '🔒 Obra bloqueada: no se podrá editar, avanzar ni borrar sin querer');
+}
+function openDuplicate(id) {
+    const w = getWorkById(id);
+    if (!w) return;
+    openSheet('⧉ Duplicar obra', () => `
+        <p class="panel-desc" style="margin:0 0 12px">Se creará una copia de “${esc(w.title)}” sin progreso, fechas ni valoración, como pendiente. ¿De qué tipo?</p>
+        <div class="pick-list">${TYPE_ORDER.map(t => `
+            <button class="pick-item" data-act="duplicate-as" data-id="${w.id}" data-type="${t}">
+                <span class="n-icon">${TYPE_META[t].icon}</span>
+                <span class="info"><b>${esc(getTypeLabel(t))}${t === w.type ? ' (mismo tipo)' : ''}</b><small>${t === w.type ? 'Ideal para otra temporada o edición' : `Por ejemplo, la adaptación en ${getTypeLabel(t).toLowerCase()}`}</small></span>
+            </button>`).join('')}</div>`);
+}
+function duplicateAs(id, type) {
+    const w = getWorkById(id);
+    if (!w || !TYPE_META[type]) return;
+    const copy = duplicateWork(w, { type });
+    closeModal('sheetModal');
+    mutate(() => { appData.works.push(copy); }, `⧉ Copia creada: “${copy.title}”`, { label: `Duplicar “${w.title}”` });
+    openWorkModal(null, getWorkById(copy.id));
+}
+function duplicatePersonById(id) {
+    const p = getPersonById(id);
+    if (!p) return;
+    const copy = duplicatePerson(p);
+    if (currentPersonId) closeModal('personDetailOverlay');
+    mutate(() => { appData.persons.push(copy); }, `⧉ Copia creada: ${copy.name}`, { label: `Duplicar a ${p.name}` });
+    openPersonModal(getPersonById(copy.id));
+}
+
+// ---------- Historial de versiones de una obra ----------
+const FIELD_LABELS = {
+    title: 'Título', status: 'Estado', progress: 'Progreso', rating: 'Valoración', favorite: 'Favorito', bl: 'BL', author: 'Autor',
+    studio: 'Estudio', platform: 'Plataforma', country: 'País', genre: 'Género', year: 'Año', actors: 'Actores', directors: 'Directores',
+    pages: 'Páginas', totalEpisodes: 'Episodios', totalChapters: 'Capítulos', seasons: 'Temporadas', season: 'Temporada',
+    airDay: 'Día de emisión', startDate: 'Inicio', endDate: 'Fin', tags: 'Etiquetas', synopsis: 'Sinopsis', spicy: 'Spicy',
+    sadness: 'Tristeza', image: 'Portada', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
+};
+function fieldValueText(field, v) {
+    if (v === null || v === undefined || v === '') return '—';
+    if (typeof v === 'boolean') return v ? 'Sí' : 'No';
+    if (field === 'status') return getStatusLabel(v);
+    if (field === 'type') return getTypeLabel(v);
+    if (field === 'image') return 'imagen';
+    if (field === 'rating') return Number(v) ? '★ ' + ratingText(v) : '—';
+    if (field === 'airDay') return (WEEK.find(d => d.day === Number(v)) || {}).short || '—';
+    if (field === 'startDate' || field === 'endDate') return fmtDate(v);
+    if (typeof v === 'object') return '…';
+    const str = String(v);
+    return str.length > 40 ? str.slice(0, 40) + '…' : str;
+}
+function versionsHtml(w) {
+    const versions = w.versions || [];
+    const added = w.createdAt && !w.sample ? `<p class="hint" style="margin:10px 0 0">➕ Agregada el ${fmtDate(w.createdAt)}</p>` : '';
+    if (!versions.length) return `<p>Aún no hay cambios. Aquí verás tus últimos ${MAX_VERSIONS} cambios en esta obra y podrás volver atrás.</p>${added}`;
+    return `<div class="version-list">${versions.map((v, i) => ({ v, i })).reverse().map(({ v, i }) => `
+        <div class="version-item">
+          <div class="version-head"><b>${esc(relativeTime(v.at))}</b>
+            <button class="btn btn-secondary btn-sm" data-act="version-restore" data-id="${w.id}" data-version="${i}" title="Deshace este cambio y los posteriores">⏪ Volver a antes</button></div>
+          <ul>${Object.entries(v.changes).map(([f, [a, b]]) => `<li><span>${esc(FIELD_LABELS[f] || f)}:</span> ${esc(fieldValueText(f, a))} → <b>${esc(fieldValueText(f, b))}</b></li>`).join('')}</ul>
+        </div>`).join('')}</div>${added}`;
+}
+function restoreVersion(id, index) {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !(w.versions || [])[index]) return;
+    const target = workBeforeVersion(w, index);
+    mutate(() => {
+        const i = appData.works.indexOf(w);
+        appData.works[i] = { ...target, versions: w.versions };
+    }, `⏪ “${w.title}” ha vuelto a una versión anterior`, { label: `Restaurar versión de “${w.title}”` });
 }
 
 // ============================================================
@@ -890,6 +1112,7 @@ function openDetail(id) {
     if (!getWorkById(id)) return;
     if (currentDetailId !== id) $('detailPanel').innerHTML = '';
     currentDetailId = id;
+    rememberSession({ detail: id });
     renderDetail();
     $('detailPanel').scrollTop = 0;
     $('detailPanel').classList.add('active');
@@ -901,6 +1124,19 @@ function closeDetail() {
     $('detailPanel').setAttribute('aria-hidden', 'true');
     $('detailOverlay').classList.remove('active');
     currentDetailId = null;
+    rememberSession({ detail: null });
+}
+// ---------- Recuperar la sesión (si la app se cerró con una obra abierta) ----------
+const SESSION_KEY = 'mi_mundo_sesion';
+function rememberSession(patch) {
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...JSON.parse(localStorage.getItem(SESSION_KEY) || '{}'), ...patch, at: Date.now() })); }
+    catch (e) { /* sin acceso */ }
+}
+function offerSessionRecovery() {
+    let last = null;
+    try { last = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { /* dañado */ }
+    const w = last && last.detail && Date.now() - last.at < 86400000 && getWorkById(last.detail);
+    if (w) showToast(`👀 La última vez estabas viendo “${w.title}”`, 'info', 7000, { label: 'Abrir', run: () => openDetail(w.id) });
 }
 function peopleChips(str) {
     return splitList(str).map(n => {
@@ -950,7 +1186,9 @@ function renderDetail() {
           <button class="btn btn-secondary btn-sm ${w.favorite ? 'is-on' : ''}" data-act="fav" data-id="${w.id}">${w.favorite ? '❤️ Favorito' : '🤍 Favorito'}</button>
           <button class="btn btn-secondary btn-sm ${myList() && myList().items.includes(w.id) ? 'is-on' : ''}" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ Mi lista' : '＋ Mi lista'}</button>
           <button class="btn btn-secondary btn-sm" data-act="collect" data-id="${w.id}">📂 Colecciones${inColls.length ? ' · ' + inColls.length : ''}</button>
-          <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}">🗑️</button>
+          <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar">⧉ Duplicar</button>
+          <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
         ${total ? `
         <div class="detail-progress">
@@ -998,6 +1236,10 @@ function renderDetail() {
             ${similar.length ? `<div class="mini-grid">${similar.map(miniCard).join('')}</div>` : `<p>${tags.length ? 'No hay obras con etiquetas en común.' : 'Añade etiquetas a esta obra para ver recomendaciones.'}</p>`}
           </div>
         </details>
+        <details class="expandable" ${openStates[3] ? 'open' : ''}>
+          <summary>🕓 Historial${(w.versions || []).length ? ` · ${w.versions.length}` : ''}</summary>
+          <div class="expandable-content">${versionsHtml(w)}</div>
+        </details>
       </div>`;
 }
 function saveNote(id) {
@@ -1013,12 +1255,13 @@ function saveNote(id) {
     }, '📝 Nota guardada');
 }
 function deleteNote(workId) {
-    if (!confirm('¿Eliminar esta nota?')) return;
+    const notes = appData.notes.filter(n => n.workId === workId);
+    if (!notes.length) return;
     mutate(() => {
-        appData.notes = appData.notes.filter(n => n.workId !== workId);
+        notes.forEach(n => trashRecord(appData, 'notes', n.id, Date.now(), { from: 'Notas' }));
         const w = getWorkById(workId);
         if (w) delete w.note;
-    }, '🗑️ Nota eliminada');
+    }, '🗑️ Nota enviada a la papelera', { label: 'Eliminar nota' });
 }
 
 // ============================================================
@@ -1065,12 +1308,14 @@ function saveCollection() {
         if (id) Object.assign(getCollectionById(id), { name, description });
         else appData.collections.push({ id: generateId(), name, description, items: pendingCollectWorkId ? [pendingCollectWorkId] : [], createdAt: Date.now() });
     }, id ? '✅ Colección actualizada' : (pendingCollectWorkId ? '✅ Colección creada con la obra' : '✅ Colección creada'));
-    if (ok) { pendingCollectWorkId = null; closeModal('collectionModal'); }
+    if (ok) { pendingCollectWorkId = null; closeModal('collectionModal', { force: true }); }
 }
 function deleteCollection(id) {
     const c = getCollectionById(id);
-    if (!c || !confirm(`¿Eliminar la colección “${c.name}”? Las obras no se borrarán.`)) return;
-    mutate(() => { appData.collections = appData.collections.filter(x => x.id !== id); }, '🗑️ Colección eliminada');
+    if (!c) return;
+    const n = c.items.filter(getWorkById).length;
+    if (n && !confirm(`La colección “${c.name}” tiene ${n} ${n === 1 ? 'obra' : 'obras'} (las obras no se borran).\n\nSe enviará a la papelera. ¿Continuar?`)) return;
+    mutate(() => { trashRecord(appData, 'collections', id, Date.now(), { from: 'Colecciones' }); }, `🗑️ Colección “${c.name}” enviada a la papelera`, { label: `Eliminar colección “${c.name}”` });
 }
 function openCollectionView(id) {
     openSheet((getCollectionById(id) || {}).name || 'Colección', () => {
@@ -1205,6 +1450,7 @@ function renderPersonDetail() {
           ${social ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${social}</div>` : ''}
           <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
             <button class="btn btn-secondary btn-sm" data-act="person-edit" data-id="${p.id}">✏️ Editar</button>
+            <button class="btn btn-secondary btn-sm" data-act="person-duplicate" data-id="${p.id}">⧉ Duplicar</button>
           </div>
           <div class="detail-section-title">📚 Obras en tu colección (${totalLinked})</div>
           ${totalLinked ? `
@@ -1255,13 +1501,15 @@ function savePerson() {
         if (id) Object.assign(getPersonById(id), data, { updatedAt: Date.now() });
         else appData.persons.push({ id: generateId(), ...data, createdAt: Date.now() });
     }, id ? '✅ Persona actualizada' : '✅ Persona agregada');
-    if (ok) closeModal('personModal');
+    if (ok) closeModal('personModal', { force: true });
 }
 function deletePerson(id) {
     const p = getPersonById(id);
-    if (!p || !confirm(`¿Eliminar a ${p.name}?`)) return;
+    if (!p) return;
+    const n = worksForPerson(p).length;
+    if (n && !confirm(`${p.name} aparece en ${n} ${n === 1 ? 'obra' : 'obras'} de tu colección (las obras no se borran).\n\nSe enviará a la papelera. ¿Continuar?`)) return;
     if (currentPersonId === id) closeModal('personDetailOverlay');
-    mutate(() => { appData.persons = appData.persons.filter(x => x.id !== id); }, '🗑️ Persona eliminada');
+    mutate(() => { trashRecord(appData, 'persons', id, Date.now(), { from: 'Personas' }); }, `🗑️ ${p.name} enviada a la papelera`, { label: `Eliminar a ${p.name}` });
 }
 
 // ============================================================
@@ -1320,12 +1568,12 @@ function saveCouple() {
         if (id) Object.assign(getCoupleById(id), data);
         else appData.couples.push({ id: generateId(), ...data, createdAt: Date.now() });
     }, id ? '✅ Pareja actualizada' : '✅ Pareja añadida');
-    if (ok) closeModal('coupleModal');
+    if (ok) closeModal('coupleModal', { force: true });
 }
 function deleteCouple(id) {
     const c = getCoupleById(id);
-    if (!c || !confirm(`¿Eliminar a “${c.name}”?`)) return;
-    mutate(() => { appData.couples = appData.couples.filter(x => x.id !== id); }, '🗑️ Pareja eliminada');
+    if (!c) return;
+    mutate(() => { trashRecord(appData, 'couples', id, Date.now(), { from: 'Parejas BL' }); }, `🗑️ “${c.name}” enviada a la papelera`, { label: `Eliminar pareja “${c.name}”` });
 }
 
 // ============================================================
@@ -1578,8 +1826,81 @@ function renderSettings() {
     $('btnContain').classList.toggle('is-on', s.imageFit !== 'cover');
     $('btnCover').classList.toggle('is-on', s.imageFit === 'cover');
     $('themeToggle').setAttribute('aria-checked', String(!!s.darkMode));
+    renderTrash();
     updateStorageMeter();
 }
+// ---------- Papelera ----------
+const TRASH_KIND = {
+    works: ['Obras', w => w.title, w => img(w.image, w.type, w.title)],
+    persons: ['Personas', p => p.name, p => img(p.image, 'person', p.name)],
+    couples: ['Parejas BL', c => c.name, c => img(c.image, 'couple', c.name)],
+    collections: ['Colecciones', c => c.name, () => '🗂️'],
+    notes: ['Notas', n => `Nota de “${n.workTitle || 'obra'}”`, () => '📝']
+};
+function renderTrash() {
+    const entries = trashEntries(appData);
+    const now = Date.now();
+    $('trashCount').textContent = entries.length || '';
+    if (!entries.length) {
+        $('trashBody').innerHTML = `<p class="panel-desc" style="margin:0">La papelera está vacía. Lo que elimines se guarda aquí ${TRASH_DAYS} días por si te arrepientes.</p>`;
+        return;
+    }
+    $('trashBody').innerHTML = RECORD_KINDS.map(kind => {
+        const list = entries.filter(e => e.kind === kind);
+        if (!list.length) return '';
+        const [label, title, thumb] = TRASH_KIND[kind];
+        return `<div class="trash-group"><div class="trash-group-title">${label} · ${list.length}</div>${list.map(({ item, extra }) => {
+            const info = item.trashInfo || {};
+            const left = trashDaysLeft(item, now);
+            return `<div class="pick-item trash-item">
+                <div class="thumb">${thumb(item)}</div>
+                <span class="info"><b>${esc(title(item))}</b>
+                    <small>Eliminada ${esc(relativeTime(item.trashedAt, now))}${info.from ? ' · desde ' + esc(info.from) : ''}${extra ? ` · con ${extra} ${extra === 1 ? 'nota' : 'notas'}` : ''} · ${left ? `se borra en ${left} ${left === 1 ? 'día' : 'días'}` : 'se borra hoy'}</small>
+                    ${kind === 'notes' ? `<small class="trash-preview">${esc(String(item.content || '').slice(0, 90))}</small>` : ''}
+                </span>
+                <span class="trash-actions">
+                    <button class="btn btn-secondary btn-sm" data-act="trash-restore" data-id="${kind}:${esc(item.id)}">↩️ Restaurar</button>
+                    <button class="icon-btn sm" data-act="trash-purge" data-id="${kind}:${esc(item.id)}" title="Eliminar para siempre" aria-label="Eliminar para siempre">✕</button>
+                </span>
+            </div>`;
+        }).join('')}</div>`;
+    }).join('') + `<button class="btn btn-danger btn-sm btn-block" data-act="trash-empty" style="margin-top:12px">🧹 Vaciar papelera</button>`;
+}
+function splitTrashId(key) {
+    const i = key.indexOf(':');
+    return [key.slice(0, i), key.slice(i + 1)];
+}
+function restoreFromTrash(key) {
+    const [kind, id] = splitTrashId(key);
+    const item = (appData.trash[kind] || []).find(x => x.id === id);
+    if (!item) return;
+    const name = TRASH_KIND[kind][1](item);
+    mutate(() => { restoreRecord(appData, kind, id); }, `↩️ Restaurada: ${name}`, { label: `Restaurar ${name}` });
+}
+function purgeFromTrash(key) {
+    const [kind, id] = splitTrashId(key);
+    const item = (appData.trash[kind] || []).find(x => x.id === id);
+    if (!item) return;
+    const name = TRASH_KIND[kind][1](item);
+    if (!confirm(`¿Eliminar para siempre “${name}”? Ya no se podrá recuperar.`)) return;
+    mutate(() => { purgeRecord(appData, kind, id); }, `✕ Eliminada para siempre: ${name}`, { label: `Eliminar para siempre ${name}` });
+}
+function emptyTrash() {
+    const n = trashCount(appData);
+    if (!n) return;
+    if (!confirm(`¿Vaciar la papelera? Se eliminarán para siempre ${n} ${n === 1 ? 'elemento' : 'elementos'}.`)) return;
+    if (!confirm('¿Seguro del todo? No se podrá deshacer.')) return;
+    mutate(() => { RECORD_KINDS.forEach(k => { appData.trash[k] = []; }); }, '🧹 Papelera vaciada', { undo: false });
+    whenSaved().then(() => store.collectGarbage(appData)).then(updateStorageMeter).catch(() => {});
+}
+function openTrash() {
+    navigateTo('settings');
+    const panel = $('trashPanel');
+    panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    panel.classList.add('flash');
+    setTimeout(() => panel.classList.remove('flash'), 1200);
+}
+
 async function updateStorageMeter() {
     if (!store) return;
     const info = await store.estimate();
@@ -1617,7 +1938,8 @@ function importData(file) {
         const data = normalizeData(parsed);
         try { await externalizeImages(data, store); }
         catch (e) { console.error(e); showToast('❌ No se pudieron guardar las imágenes de la copia', 'error'); return; }
-        mutate(() => { appData = data; }, '📥 Datos importados correctamente');
+        mutate(() => { appData = data; }, '📥 Datos importados correctamente', { undo: false });
+        undoStack = []; redoStack = [];
         applySettings();
         renderSettings();
         await whenSaved();
@@ -1630,7 +1952,8 @@ async function wipeData() {
     if (!confirm('¿Borrar TODOS tus datos? Esta acción no se puede deshacer.\n\nConsejo: exporta una copia antes.' + inCloud)) return;
     if (!confirm('¿Seguro del todo?')) return;
     const settings = appData.settings;
-    mutate(() => { appData = emptyData(); appData.settings = settings; }, '🗑️ Datos borrados');
+    mutate(() => { appData = emptyData(); appData.settings = settings; }, '🗑️ Datos borrados', { undo: false });
+    undoStack = []; redoStack = [];
     await whenSaved();
     store.collectGarbage(appData).then(updateStorageMeter).catch(() => {});
 }
@@ -1638,15 +1961,27 @@ async function wipeData() {
 // ============================================================
 // 21. TOAST
 // ============================================================
-function showToast(msg, type = 'info', ms = 2800) {
+/** Aviso breve. action = { label, run } añade un botón (p. ej. "Deshacer"). */
+function showToast(msg, type = 'info', ms = 2800, action = null) {
     const stack = $('toastStack');
     while (stack.children.length >= 3) stack.firstElementChild.remove();
     const el = document.createElement('div');
     el.className = 'toast toast-' + type;
-    el.textContent = msg;
+    const text = document.createElement('span');
+    text.textContent = msg;
+    el.appendChild(text);
+    const hide = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); };
+    if (action) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toast-action';
+        btn.textContent = action.label;
+        btn.addEventListener('click', () => { hide(); action.run(); });
+        el.appendChild(btn);
+    }
     stack.appendChild(el);
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
-    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, ms);
+    setTimeout(hide, ms);
 }
 
 // ============================================================
@@ -1654,7 +1989,20 @@ function showToast(msg, type = 'info', ms = 2800) {
 // ============================================================
 function handleAction(act, id, el) {
     switch (act) {
-        case 'edit': openWorkModal(null, getWorkById(id)); break;
+        case 'edit': { const w = getWorkById(id); if (w && !isLocked(w)) openWorkModal(null, w); break; }
+        case 'lock': toggleLock(id); break;
+        case 'duplicate': openDuplicate(id); break;
+        case 'duplicate-as': duplicateAs(id, el.dataset.type); break;
+        case 'person-duplicate': duplicatePersonById(id); break;
+        case 'version-restore': restoreVersion(id, Number(el.dataset.version)); break;
+        case 'draft-restore': restoreDraft(); break;
+        case 'draft-discard': clearDraft(); $('workDraftBar').hidden = true; break;
+        case 'history': openHistory(); break;
+        case 'undo-until': { const e = undoStack.find(x => x.id === id); if (e) undoUntil(e); break; }
+        case 'redo': redo(); break;
+        case 'trash-restore': restoreFromTrash(id); break;
+        case 'trash-purge': purgeFromTrash(id); break;
+        case 'trash-empty': emptyTrash(); break;
         case 'delete': deleteWork(id); break;
         case 'progress': changeProgress(id, 1); break;
         case 'progress-minus': changeProgress(id, -1); break;
@@ -1758,6 +2106,7 @@ document.addEventListener('click', e => {
     if (nav) { navigateTo(nav.dataset.nav); return; }
     const open = t.closest('[data-open]');
     if (open) {
+        if (open.closest('#workModal') && !closeModal('workModal')) return;
         if (open.closest('#sheetModal')) closeModal('sheetModal');
         if (open.closest('#personDetailOverlay')) closeModal('personDetailOverlay');
         openDetail(open.dataset.open);
@@ -1810,6 +2159,7 @@ $('detailOverlay').addEventListener('click', closeDetail);
 document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'paletteInput') { renderPalette(); return; }
+    if (t.closest && t.closest('#workForm')) { saveDraft(); if (t.id === 'f_title') updateTitleHint(); }
     if (t.dataset.render && RENDERERS[t.dataset.render]) RENDERERS[t.dataset.render]();
     if (t.type === 'range' && t.dataset.out) updateRangeOutputs(t.closest('.modal, .panel-card') || document);
     if (t.id === 'pdSearch') renderPersonDetail();
@@ -1823,6 +2173,7 @@ document.addEventListener('change', e => {
     if (t.id === 'importFileInput') { importData(t.files[0]); t.value = ''; }
     if (t.id === 'pdType') renderPersonDetail();
     if (t.id === 'fontSizeSlider') saveData();
+    if (t.closest && t.closest('#workForm')) saveDraft();
     if (t.dataset.pickColl) {
         const c = getCollectionById(t.dataset.pickColl), wid = t.dataset.work;
         if (!c) return;
@@ -1854,6 +2205,12 @@ document.addEventListener('keydown', e => {
             return;
         }
         if (e.key === 'Enter') { e.preventDefault(); openSearchResult(searchIndex >= 0 ? searchIndex : 0); return; }
+    }
+    const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]');
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !typing) {
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+        if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); return; }
     }
     if (e.key === 'Escape') {
         const m = topOpenModal();
@@ -1904,8 +2261,9 @@ if (syncChannel) syncChannel.onmessage = e => { if (e.data && e.data.type === 's
 window.addEventListener('storage', e => {
     if (store && store.kind === 'localstorage' && e.key === LEGACY_KEY && e.newValue) reloadFromStore();
 });
-// Actualiza saludo/fecha cada minuto
+// Actualiza saludo/fecha cada minuto y limpia la papelera cada hora
 setInterval(() => { if (currentPage === 'home') renderHome(); }, 60000);
+setInterval(() => { if (purgeExpiredTrash(appData)) { saveData(); refreshView(); } }, 3600000);
 
 // Tooltip de los gráficos: el valor destaca y la etiqueta acompaña (con textContent, nunca HTML).
 const vizTip = $('vizTip');
@@ -2027,6 +2385,7 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
             btn.classList.remove('is-on');
         });
     }
+    if (purgeExpiredTrash(appData)) saveData(); // lo que lleva más de 30 días en la papelera se borra solo
     renderSidebar();
     renderInstallState();
     renderPersistState();
@@ -2037,7 +2396,7 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     if (startParams.get('accion') === 'agregar') {
         history.replaceState(null, '', location.pathname + location.hash);
         openWorkModal('book');
-    }
+    } else offerSessionRecovery();
     document.documentElement.dataset.ready = 'true';
     cloud.init();
 })();

@@ -79,15 +79,23 @@ function ratingText(r) { return r ? (Math.round(r * 10) / 10).toString() : '–'
 // 3. MODELO DE DATOS
 // ============================================================
 function emptyData() {
-    return { works: [], persons: [], couples: [], collections: [], notes: [], settings: { ...DEFAULT_SETTINGS } };
+    return {
+        works: [], persons: [], couples: [], collections: [], notes: [], settings: { ...DEFAULT_SETTINGS },
+        trash: { works: [], persons: [], couples: [], collections: [], notes: [] }
+    };
 }
 function normalizeData(d) {
     const out = emptyData();
     if (!d || typeof d !== 'object') return out;
-    ['works', 'persons', 'couples', 'collections', 'notes'].forEach(k => { out[k] = Array.isArray(d[k]) ? d[k] : []; });
+    // Lo que está en la papelera (trashedAt) se separa: puede venir mezclado (IndexedDB, nube) o ya en d.trash
+    ['works', 'persons', 'couples', 'collections', 'notes'].forEach(k => {
+        const all = [...(Array.isArray(d[k]) ? d[k] : []), ...(d.trash && Array.isArray(d.trash[k]) ? d.trash[k] : [])]
+            .filter(x => x && x.id && (k !== 'works' || TYPE_META[x.type]));
+        out[k] = all.filter(x => !x.trashedAt);
+        out.trash[k] = all.filter(x => x.trashedAt);
+    });
     out.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
-    out.works = out.works.filter(w => w && w.id && TYPE_META[w.type]);
-    out.collections.forEach(c => { if (!Array.isArray(c.items)) c.items = []; });
+    [...out.collections, ...out.trash.collections].forEach(c => { if (!Array.isArray(c.items)) c.items = []; });
     // Sincroniza notas antiguas guardadas solo en la obra
     out.works.forEach(w => {
         if (w.note && !out.notes.some(n => n.workId === w.id)) {

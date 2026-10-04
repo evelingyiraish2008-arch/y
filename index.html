@@ -499,6 +499,11 @@
                             <p class="hint" style="margin:10px 0 12px;">Todo se guarda en este navegador. Exporta una copia de vez en cuando para no perder nada.</p>
                             <button class="btn btn-secondary btn-sm btn-block" id="optimizeImagesBtn">🪄 Optimizar imágenes guardadas</button>
                         </div>
+                        <div class="panel-card" id="trashPanel">
+                            <div class="panel-title">🗑️ Papelera <span class="chip chip-muted nav-count" id="trashCount"></span>
+                                <button class="btn btn-secondary btn-sm" data-act="history" style="margin-left:auto">🕓 Historial</button></div>
+                            <div id="trashBody"></div>
+                        </div>
                         <div class="panel-card">
                             <div class="panel-title">💾 Copias de seguridad</div>
                             <div class="stack" style="gap:10px">
@@ -532,6 +537,7 @@
                 <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
             </header>
             <div class="modal-body">
+                <div class="draft-bar" id="workDraftBar" hidden></div>
                 <div class="seg" id="workTypeTabs">
                     <button type="button" class="seg-btn" data-type="book">📚 Libro</button>
                     <button type="button" class="seg-btn" data-type="series">🎬 Serie</button>
@@ -548,6 +554,7 @@
                     </div>
                     <div class="form-grid">
                         <label class="field span-2"><span>Título *</span><input type="text" id="f_title" data-field="title" placeholder="Nombre de la obra" required></label>
+                        <div class="title-hint span-2" id="titleHint" hidden></div>
                         <label class="field"><span>Estado</span><select id="f_status" data-field="status"></select></label>
                         <label class="field" data-types="series"><span>Tipo</span><select data-field="seriesType" data-default="Serie"><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select></label>
                         <label class="field" data-types="book manhwa"><span>Autor</span><input type="text" data-field="author" placeholder="Autor" list="personNames"></label>
@@ -718,6 +725,7 @@
 
     <script src="utils.js"></script>
     <script src="insights.js"></script>
+    <script src="history.js"></script>
     <script src="charts.js"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
