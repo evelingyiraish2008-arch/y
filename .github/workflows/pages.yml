@@ -1,0 +1,39 @@
+name: Publicar en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar solo los archivos de la app
+        run: |
+          mkdir _site
+          cp index.html styles.css utils.js storage.js sync.js cloud.js app.js sw.js manifest.webmanifest _site/
+          cp -r vendor _site/
+          cp -r icons _site/
+          # Cambia la versión del service worker en cada publicación para limpiar cachés antiguas
+          sed -i "s/const VERSION = 'v1';/const VERSION = '${GITHUB_SHA::7}';/" _site/sw.js
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

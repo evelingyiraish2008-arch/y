@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Organiza tus libros, series, anime, manhwas y BL en un solo lugar." />
+    <meta name="theme-color" content="#0b0b13" />
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Mi Mundo" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Mi Mundo · Tu universo, organizado</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container" id="app">
+        <!-- ===== SIDEBAR ===== -->
+        <aside class="sidebar" aria-label="Navegación principal">
+            <div class="logo">
+                <div class="logo-icon">📚</div>
+                <div class="logo-text">
+                    <h1>Mi Mundo</h1>
+                    <p>Tu universo, organizado.</p>
+                </div>
+            </div>
+            <nav class="nav-section">
+                <button class="nav-item active" data-nav="home"><span class="icon">🏠</span><span class="label">Inicio</span></button>
+                <button class="nav-item" data-nav="books"><span class="icon">📖</span><span class="label">Libros</span><span class="nav-count" data-count="book"></span></button>
+                <button class="nav-item" data-nav="series"><span class="icon">🎬</span><span class="label">Series y Películas</span><span class="nav-count" data-count="series"></span></button>
+                <button class="nav-item" data-nav="anime"><span class="icon">🎌</span><span class="label">Anime</span><span class="nav-count" data-count="anime"></span></button>
+                <button class="nav-item" data-nav="manhwa"><span class="icon">📕</span><span class="label">Manhwas</span><span class="nav-count" data-count="manhwa"></span></button>
+                <button class="nav-item" data-nav="bl"><span class="icon">💖</span><span class="label">Solo BL</span><span class="nav-count" data-count="bl"></span></button>
+                <button class="nav-item" data-nav="persons"><span class="icon">👥</span><span class="label">Personas</span></button>
+                <button class="nav-item" data-nav="couples"><span class="icon">💕</span><span class="label">Parejas BL</span></button>
+                <button class="nav-item" data-nav="emission"><span class="icon">📡</span><span class="label">Centro de Emisión</span></button>
+            </nav>
+            <div class="nav-divider"></div>
+            <nav class="nav-section">
+                <div class="nav-section-title">Gestión</div>
+                <button class="nav-item" data-nav="collections"><span class="icon">🗂️</span><span class="label">Colecciones</span></button>
+                <button class="nav-item" data-nav="stats"><span class="icon">📊</span><span class="label">Estadísticas</span></button>
+                <button class="nav-item" data-nav="notes"><span class="icon">📝</span><span class="label">Notas</span></button>
+            </nav>
+            <div class="nav-divider"></div>
+            <nav class="nav-section">
+                <button class="nav-item" data-nav="settings"><span class="icon">⚙️</span><span class="label">Personalizar</span></button>
+            </nav>
+            <button class="user-profile" data-nav="settings" title="Personalizar">
+                <div class="user-avatar" id="userAvatar">S</div>
+                <div class="user-info">
+                    <h4><span id="userName">Sara</span> <span id="cloudChip" class="cloud-chip"></span></h4>
+                    <div class="user-rank" id="userRank">🌱 Semilla · Nivel 1</div>
+                    <div class="level-bar"><span id="userLevelBar" style="width:0%"></span></div>
+                </div>
+            </button>
+        </aside>
+
+        <!-- ===== MAIN ===== -->
+        <main class="main-content" id="main">
+          <div class="page-inner">
+            <!-- HOME -->
+            <section class="page-view active" id="page-home">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title" id="homeGreeting">¡Bienvenida de nuevo! 💜</h1>
+                        <p class="page-subtitle" id="home-date">Cargando…</p>
+                    </div>
+                    <div class="header-actions">
+                        <div class="search-box" id="globalSearchBox">
+                            <span aria-hidden="true">🔍</span>
+                            <input type="search" id="globalSearch" placeholder="Buscar en todo tu mundo…" autocomplete="off" aria-label="Búsqueda global">
+                            <kbd>Ctrl K</kbd>
+                            <div class="search-results" id="globalSearchResults" role="listbox"></div>
+                        </div>
+                        <button class="btn btn-primary" data-add="book">＋ Agregar obra</button>
+                    </div>
+                </div>
+
+                <div class="hero-banner" id="heroBanner">
+                    <div class="hero-bg" id="heroBg"></div>
+                    <div class="hero-content" id="heroContent"></div>
+                </div>
+
+                <div class="stats-grid">
+                    <button class="stat-card" data-nav="books"><div class="stat-icon">📚</div><div><div class="stat-value" id="statBooks">0</div><div class="stat-label">Libros</div></div></button>
+                    <button class="stat-card" data-nav="series"><div class="stat-icon pink">🎬</div><div><div class="stat-value" id="statSeries">0</div><div class="stat-label">Series / Películas</div></div></button>
+                    <button class="stat-card" data-nav="anime"><div class="stat-icon orange">🎌</div><div><div class="stat-value" id="statAnime">0</div><div class="stat-label">Anime</div></div></button>
+                    <button class="stat-card" data-nav="manhwa"><div class="stat-icon blue">📕</div><div><div class="stat-value" id="statManhwa">0</div><div class="stat-label">Manhwas</div></div></button>
+                    <button class="stat-card" data-nav="persons"><div class="stat-icon green">👥</div><div><div class="stat-value" id="statPersons">0</div><div class="stat-label">Personas</div></div></button>
+                </div>
+
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">▶️ Continuar</h3><button class="section-link" data-nav="emission">Ver calendario →</button></div>
+                    <div class="scroll-container">
+                        <button class="scroll-arrow left" data-scroll="-1" aria-label="Anterior">‹</button>
+                        <div class="card-row" id="homeContinueWatching"></div>
+                        <button class="scroll-arrow right" data-scroll="1" aria-label="Siguiente">›</button>
+                    </div>
+                </div>
+
+                <div class="section" id="homeFavSection">
+                    <div class="section-header"><h3 class="section-title">❤️ Tus favoritos</h3></div>
+                    <div class="scroll-container">
+                        <button class="scroll-arrow left" data-scroll="-1" aria-label="Anterior">‹</button>
+                        <div class="card-row" id="homeFavorites"></div>
+                        <button class="scroll-arrow right" data-scroll="1" aria-label="Siguiente">›</button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">🆕 Agregados recientemente</h3></div>
+                    <div class="scroll-container">
+                        <button class="scroll-arrow left" data-scroll="-1" aria-label="Anterior">‹</button>
+                        <div class="card-row" id="homeRecent"></div>
+                        <button class="scroll-arrow right" data-scroll="1" aria-label="Siguiente">›</button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">🏷️ Etiquetas más populares</h3><button class="section-link" data-nav="stats">Más estadísticas →</button></div>
+                    <div class="chart-container"><div class="hbars" id="homeGenresChart"></div></div>
+                </div>
+            </section>
+
+            <!-- LIBROS -->
+            <section class="page-view" id="page-books">
+                <div class="page-header">
+                    <div><h1 class="page-title">📖 Libros</h1><p class="page-subtitle">Tu biblioteca personal de lecturas.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="booksSearch" placeholder="Título, autor o etiqueta…" data-render="books"></div>
+                        <button class="btn btn-secondary is-on" data-toggle-filters="booksFilterBar">🎛 Filtros</button>
+                        <button class="btn btn-primary" data-add="book">＋ Agregar</button>
+                    </div>
+                </div>
+                <div class="filter-bar" id="booksFilterBar">
+                    <select class="filter-select" id="booksStatusFilter" data-render="books"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="booksSort" data-render="books"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="pages">Páginas</option><option value="progress">Progreso</option></select>
+                    <select class="filter-select" id="booksSpicyFilter" data-render="books"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="booksSadnessFilter" data-render="books"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <span class="filter-sep"></span>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="booksBlFilter" data-render="books"> 💖 Solo BL</label>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="booksFavFilter" data-render="books"> ❤️ Favoritos</label>
+                </div>
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">📚 Estantería <span class="muted" id="booksCount"></span></h3></div>
+                    <div class="card-grid" id="booksGrid"></div>
+                </div>
+            </section>
+
+            <!-- SERIES -->
+            <section class="page-view" id="page-series">
+                <div class="page-header">
+                    <div><h1 class="page-title">🎬 Series y Películas</h1><p class="page-subtitle">Explora y organiza todas tus series a tu manera.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="seriesSearch" placeholder="Título, actor o etiqueta…" data-render="series"></div>
+                        <button class="btn btn-secondary is-on" data-toggle-filters="seriesFilterBar">🎛 Filtros</button>
+                        <button class="btn btn-primary" data-add="series">＋ Agregar</button>
+                    </div>
+                </div>
+                <div class="tabs" id="seriesTabs">
+                    <button class="tab active" data-filter="all">❤️ Todas <span class="count" id="seriesCountAll">0</span></button>
+                    <button class="tab" data-filter="bl">💕 BL <span class="count" id="seriesCountBl">0</span></button>
+                    <button class="tab" data-filter="viendo">▶️ Viendo <span class="count" id="seriesCountViendo">0</span></button>
+                    <button class="tab" data-filter="terminado">✅ Terminadas <span class="count" id="seriesCountTerminado">0</span></button>
+                    <button class="tab" data-filter="quiero ver">⏳ Pendientes <span class="count" id="seriesCountPlan">0</span></button>
+                </div>
+                <div class="filter-bar" id="seriesFilterBar">
+                    <span class="filter-label">Vista</span>
+                    <button class="btn btn-secondary btn-sm is-on" id="viewGridBtn" data-view="grid">🎴 Tarjetas</button>
+                    <button class="btn btn-secondary btn-sm" id="viewListBtn" data-view="list">📋 Lista</button>
+                    <span class="filter-sep"></span>
+                    <select class="filter-select" id="seriesSort" data-render="series"><option value="rating">Ordenar: mi calificación</option><option value="recent">Más recientes</option><option value="year">Año</option><option value="title">Título A-Z</option><option value="progress">Progreso</option></select>
+                    <select class="filter-select" id="seriesTypeFilter" data-render="series"><option value="all">Tipo: todos</option><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select>
+                    <select class="filter-select" id="seriesYearFilter" data-render="series"><option value="all">Año: todos</option></select>
+                    <select class="filter-select" id="seriesSpicyFilter" data-render="series"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="seriesSadnessFilter" data-render="series"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="seriesFavFilter" data-render="series"> ❤️ Favoritos</label>
+                </div>
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title" id="seriesSectionTitle">❤️ Todas</h3></div>
+                    <div class="card-grid" id="seriesGrid"></div>
+                </div>
+            </section>
+
+            <!-- ANIME -->
+            <section class="page-view" id="page-anime">
+                <div class="page-header">
+                    <div><h1 class="page-title">🎌 Anime</h1><p class="page-subtitle">Tu colección de animes con seguimiento de episodios.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="animeSearch" placeholder="Título, estudio o etiqueta…" data-render="anime"></div>
+                        <button class="btn btn-secondary is-on" data-toggle-filters="animeFilterBar">🎛 Filtros</button>
+                        <button class="btn btn-primary" data-add="anime">＋ Agregar</button>
+                    </div>
+                </div>
+                <div class="filter-bar" id="animeFilterBar">
+                    <select class="filter-select" id="animeStatusFilter" data-render="anime"><option value="all">Estado: todos</option><option value="viendo">Viendo</option><option value="terminado">Terminado</option><option value="quiero ver">Quiero ver</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="animeSort" data-render="anime"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="episodes">Episodios</option><option value="progress">Progreso</option></select>
+                    <select class="filter-select" id="animeSpicyFilter" data-render="anime"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="animeSadnessFilter" data-render="anime"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <span class="filter-sep"></span>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="animeBlFilter" data-render="anime"> 💖 Solo BL</label>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="animeFavFilter" data-render="anime"> ❤️ Favoritos</label>
+                </div>
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">🎌 Tu colección <span class="muted" id="animeCount"></span></h3></div>
+                    <div class="card-grid" id="animeGrid"></div>
+                </div>
+            </section>
+
+            <!-- MANHWA -->
+            <section class="page-view" id="page-manhwa">
+                <div class="page-header">
+                    <div><h1 class="page-title">📕 Manhwas</h1><p class="page-subtitle">Tu colección de manhwas con seguimiento de capítulos.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="manhwaSearch" placeholder="Título, autor o etiqueta…" data-render="manhwa"></div>
+                        <button class="btn btn-secondary is-on" data-toggle-filters="manhwaFilterBar">🎛 Filtros</button>
+                        <button class="btn btn-primary" data-add="manhwa">＋ Agregar</button>
+                    </div>
+                </div>
+                <div class="filter-bar" id="manhwaFilterBar">
+                    <select class="filter-select" id="manhwaStatusFilter" data-render="manhwa"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="manhwaSort" data-render="manhwa"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="progress">Progreso</option></select>
+                    <select class="filter-select" id="manhwaSpicyFilter" data-render="manhwa"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="manhwaSadnessFilter" data-render="manhwa"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <span class="filter-sep"></span>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="manhwaBlFilter" data-render="manhwa"> 💖 Solo BL</label>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="manhwaFavFilter" data-render="manhwa"> ❤️ Favoritos</label>
+                </div>
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">📖 Tu colección <span class="muted" id="manhwaCount"></span></h3></div>
+                    <div class="card-grid" id="manhwaGrid"></div>
+                </div>
+            </section>
+
+            <!-- SOLO BL -->
+            <section class="page-view" id="page-bl">
+                <div class="page-header">
+                    <div><h1 class="page-title">💖 Solo BL</h1><p class="page-subtitle">Todas tus obras BL, unificadas en un solo lugar.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="blSearch" placeholder="Buscar en BL…" data-render="bl"></div>
+                        <button class="btn btn-secondary is-on" data-toggle-filters="blFilterBar">🎛 Filtros</button>
+                        <button class="btn btn-primary" data-add="series" data-bl="1">＋ Agregar BL</button>
+                    </div>
+                </div>
+                <div class="filter-bar" id="blFilterBar">
+                    <select class="filter-select" id="blTypeFilter" data-render="bl"><option value="all">Todos los tipos</option><option value="book">Libros</option><option value="series">Series</option><option value="anime">Anime</option><option value="manhwa">Manhwa</option></select>
+                    <select class="filter-select" id="blStatusFilter" data-render="bl"><option value="all">Todos los estados</option><option value="active">En curso</option><option value="terminado">Terminado</option><option value="plan">Pendiente</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="blSort" data-render="bl"><option value="recent">Recientes</option><option value="rating">Valoración</option><option value="spicy">Más spicy</option><option value="title">Título A-Z</option></select>
+                    <span class="filter-sep"></span>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="blMinRating" data-render="bl"> ⭐ Solo 4+ estrellas</label>
+                </div>
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">💖 Galería BL <span class="muted" id="blCount"></span></h3></div>
+                    <div class="card-grid" id="blGrid"></div>
+                </div>
+            </section>
+
+            <!-- PERSONAS -->
+            <section class="page-view" id="page-persons">
+                <div class="page-header">
+                    <div><h1 class="page-title">👥 Personas</h1><p class="page-subtitle">Actores, autores, directores y más.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="personSearch" placeholder="Buscar por nombre…" data-render="persons"></div>
+                        <select class="filter-select" id="personSortSelect" data-render="persons" style="height:40px">
+                            <option value="name">Ordenar: nombre</option>
+                            <option value="works">Más obras</option>
+                            <option value="rating">Mejor valoración</option>
+                        </select>
+                        <button class="btn btn-primary" id="addPersonBtn">＋ Agregar persona</button>
+                    </div>
+                </div>
+                <div class="tabs" id="personTabs">
+                    <button class="tab active" data-tab="general">📊 General</button>
+                    <button class="tab" data-tab="actor">🎭 Actores <span class="count" id="personActorsTab">0</span></button>
+                    <button class="tab" data-tab="author">✍️ Autores <span class="count" id="personAuthorsTab">0</span></button>
+                    <button class="tab" data-tab="director">🎬 Directores <span class="count" id="personDirectorsTab">0</span></button>
+                    <button class="tab" data-tab="bl">💖 BL <span class="count" id="personBlTab">0</span></button>
+                </div>
+                <div id="person-general">
+                    <div class="stats-grid cols-4">
+                        <div class="stat-card"><div class="stat-icon">👥</div><div><div class="stat-value" id="personTotal">0</div><div class="stat-label">Total</div></div></div>
+                        <div class="stat-card"><div class="stat-icon pink">🎭</div><div><div class="stat-value" id="personActors">0</div><div class="stat-label">Actores</div></div></div>
+                        <div class="stat-card"><div class="stat-icon blue">✍️</div><div><div class="stat-value" id="personAuthors">0</div><div class="stat-label">Autores</div></div></div>
+                        <div class="stat-card"><div class="stat-icon orange">🎬</div><div><div class="stat-value" id="personDirectors">0</div><div class="stat-label">Directores</div></div></div>
+                    </div>
+                    <div class="two-column-layout">
+                        <div>
+                            <div class="section-header"><h3 class="section-title">✨ Todas las personas</h3></div>
+                            <div class="person-grid" id="allPersonsGrid"></div>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🏆 Top con más obras</div>
+                            <div class="ranking-list" id="personRanking"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="person-list" hidden>
+                    <div class="person-grid" id="personsGrid"></div>
+                </div>
+            </section>
+
+            <!-- PAREJAS BL -->
+            <section class="page-view" id="page-couples">
+                <div class="page-header">
+                    <div><h1 class="page-title">💕 Parejas BL</h1><p class="page-subtitle">Todas las parejas BL que forman parte de tu colección.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="couplesSearch" placeholder="Buscar parejas…" data-render="couples"></div>
+                        <button class="btn btn-primary" id="addCoupleBtn">＋ Añadir pareja</button>
+                    </div>
+                </div>
+                <div class="tabs" id="coupleTabs">
+                    <button class="tab active" data-filter="all">Todas</button>
+                    <button class="tab" data-filter="favorite">❤️ Favoritas</button>
+                    <button class="tab" data-filter="rating">⭐ Mejor valoradas</button>
+                </div>
+                <div class="two-column-layout">
+                    <div>
+                        <div class="section-header"><h3 class="section-title" id="coupleCount">0 parejas</h3></div>
+                        <div class="couple-grid" id="couplesGrid"></div>
+                    </div>
+                    <div class="panel-card">
+                        <div class="panel-title">🏆 Ranking de parejas</div>
+                        <div class="ranking-list" id="coupleRanking"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CENTRO DE EMISIÓN -->
+            <section class="page-view" id="page-emission">
+                <div class="page-header">
+                    <div><h1 class="page-title">📡 Centro de Emisión</h1><p class="page-subtitle">Todo lo que estás siguiendo, organizado por día de emisión.</p></div>
+                </div>
+                <div class="stats-grid cols-4">
+                    <div class="stat-card"><div class="stat-icon">📺</div><div><div class="stat-value" id="emissionToday">0</div><div class="stat-label">Hoy</div></div></div>
+                    <div class="stat-card"><div class="stat-icon pink">🗓️</div><div><div class="stat-value" id="emissionThisWeek">0</div><div class="stat-label">Esta semana</div></div></div>
+                    <div class="stat-card"><div class="stat-icon green">▶️</div><div><div class="stat-value" id="emissionTotal">0</div><div class="stat-label">En curso</div></div></div>
+                    <div class="stat-card"><div class="stat-icon orange">⏳</div><div><div class="stat-value" id="emissionPending">0</div><div class="stat-label">Pendientes</div></div></div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><h3 class="section-title">📅 Calendario semanal</h3><span class="muted" style="font-size:12px;color:var(--text-muted)">Asigna el “Día de emisión” al editar una obra</span></div>
+                    <div class="weekly-calendar" id="weeklyCalendar"></div>
+                </div>
+                <div class="section" id="unscheduledSection">
+                    <div class="section-header"><h3 class="section-title">🕓 En curso sin día asignado</h3></div>
+                    <div class="card-grid" id="unscheduledGrid"></div>
+                </div>
+            </section>
+
+            <!-- ESTADÍSTICAS -->
+            <section class="page-view" id="page-stats">
+                <div class="page-header">
+                    <div><h1 class="page-title">📊 Estadísticas</h1><p class="page-subtitle">Descubre tu progreso y tus hábitos.</p></div>
+                </div>
+                <div class="stats-grid cols-4">
+                    <div class="stat-card"><div class="stat-icon">🗃️</div><div><div class="stat-value" id="statsTotal">0</div><div class="stat-label">Obras totales</div></div></div>
+                    <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-value" id="statsDone">0</div><div class="stat-label">Terminadas</div></div></div>
+                    <div class="stat-card"><div class="stat-icon pink">⏱️</div><div><div class="stat-value" id="statsHours">0h</div><div class="stat-label">Horas estimadas</div></div></div>
+                    <div class="stat-card"><div class="stat-icon orange">⭐</div><div><div class="stat-value" id="statsAvg">–</div><div class="stat-label">Valoración media</div></div></div>
+                </div>
+                <div class="two-column-layout">
+                    <div class="stack">
+                        <div class="chart-container">
+                            <div class="chart-title">📈 Actividad (últimos 6 meses)<span class="chart-legend"><span><i style="background:var(--accent)"></i>Agregadas</span><span><i style="background:var(--pink)"></i>Terminadas</span></span></div>
+                            <div class="vbars" id="statsChart"></div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-title">🌶️ Niveles de spicy</div>
+                            <div class="vbars" id="statsSpicyChart"></div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-title">💧 Niveles de tristeza</div>
+                            <div class="vbars" id="statsSadnessChart"></div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-title">🏷️ Etiquetas más frecuentes</div>
+                            <div class="hbars" id="statsGenresChart"></div>
+                        </div>
+                    </div>
+                    <div class="right-panel">
+                        <div class="panel-card">
+                            <div class="panel-title">⏱️ Distribución de tiempo</div>
+                            <p class="panel-desc">Estimado a partir de tu progreso.</p>
+                            <div class="donut-container">
+                                <div class="donut" id="statsDonut"><div class="donut-center"><div class="donut-value" id="statsTotalHours">0h</div><div class="donut-label">en total</div></div></div>
+                                <div class="donut-legend" id="statsLegend"></div>
+                            </div>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🏆 Logros <span class="muted" id="achievementsCount"></span></div>
+                            <div id="achievementsList" style="max-height:440px;overflow-y:auto;padding-right:4px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- COLECCIONES -->
+            <section class="page-view" id="page-collections">
+                <div class="page-header">
+                    <div><h1 class="page-title">🗂️ Colecciones</h1><p class="page-subtitle">Crea listas personalizadas para organizar tus obras.</p></div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" id="addCollectionBtn">＋ Nueva colección</button>
+                    </div>
+                </div>
+                <div class="collection-grid" id="collectionsList"></div>
+            </section>
+
+            <!-- NOTAS -->
+            <section class="page-view" id="page-notes">
+                <div class="page-header">
+                    <div><h1 class="page-title">📝 Notas</h1><p class="page-subtitle">Tus pensamientos, teorías y reseñas.</p></div>
+                    <div class="header-actions">
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="notesSearch" placeholder="Buscar en notas…" data-render="notes"></div>
+                    </div>
+                </div>
+                <div class="notes-grid" id="notesList"></div>
+            </section>
+
+            <!-- PERSONALIZAR -->
+            <section class="page-view" id="page-settings">
+                <div class="page-header">
+                    <div><h1 class="page-title">⚙️ Personalizar</h1><p class="page-subtitle">Los cambios se guardan automáticamente.</p></div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" id="resetSettingsBtn">↺ Restaurar apariencia</button>
+                    </div>
+                </div>
+                <div class="two-column-layout">
+                    <div class="stack">
+                        <div class="panel-card">
+                            <div class="panel-title">👤 Tu perfil</div>
+                            <label class="field"><span>Tu nombre</span><input type="text" id="settingName" maxlength="30" placeholder="Tu nombre"></label>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🎨 Color principal</div>
+                            <div class="color-options" id="colorOptions">
+                                <button class="color-option" data-color="#8b5cf6" style="background:#8b5cf6;color:#8b5cf6" aria-label="Violeta"></button>
+                                <button class="color-option" data-color="#3b82f6" style="background:#3b82f6;color:#3b82f6" aria-label="Azul"></button>
+                                <button class="color-option" data-color="#ec4899" style="background:#ec4899;color:#ec4899" aria-label="Rosa"></button>
+                                <button class="color-option" data-color="#10b981" style="background:#10b981;color:#10b981" aria-label="Verde"></button>
+                                <button class="color-option" data-color="#f59e0b" style="background:#f59e0b;color:#f59e0b" aria-label="Naranja"></button>
+                                <button class="color-option" data-color="#ef4444" style="background:#ef4444;color:#ef4444" aria-label="Rojo"></button>
+                                <button class="color-option" data-color="#14b8a6" style="background:#14b8a6;color:#14b8a6" aria-label="Turquesa"></button>
+                            </div>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🔤 Tamaño de la interfaz</div>
+                            <div class="slider-group">
+                                <div class="slider-label">Pequeño</div>
+                                <input type="range" min="12" max="18" step="1" value="14" id="fontSizeSlider" aria-label="Tamaño de la interfaz">
+                                <div class="slider-value" id="fontSizeValue">14px</div>
+                            </div>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🖼️ Fotos de personas</div>
+                            <div class="seg-inline">
+                                <button class="btn btn-secondary btn-sm" id="btnContain" data-fit="contain">Completa (sin recorte)</button>
+                                <button class="btn btn-secondary btn-sm" id="btnCover" data-fit="cover">Rellenar (con recorte)</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="right-panel">
+                        <div class="panel-card">
+                            <div class="panel-title">🌙 Tema</div>
+                            <div class="setting-row"><span>Modo oscuro</span><button class="toggle-switch" id="themeToggle" role="switch" aria-checked="true" aria-label="Modo oscuro"></button></div>
+                        </div>
+                        <div class="panel-card" id="cloudPanel">
+                            <div class="panel-title">☁️ Sincronización en la nube</div>
+                            <div id="cloudPanelBody"></div>
+                        </div>
+                        <div class="panel-card" id="installPanel">
+                            <div class="panel-title">📲 App</div>
+                            <p class="panel-desc" id="installStatus" style="margin:-6px 0 0">Instala Mi Mundo para abrirla como una app, incluso sin conexión.</p>
+                            <button class="btn btn-primary btn-sm btn-block" id="installAppBtn" style="margin-top:12px" hidden>📲 Instalar Mi Mundo</button>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">💽 Almacenamiento</div>
+                            <div class="meter" id="storageMeter"><span style="width:0%"></span></div>
+                            <div class="meter-text"><span id="storageUsed">0 KB</span><span id="storageQuota"></span></div>
+                            <p class="hint" id="storageBackend" style="margin:6px 0 0;"></p>
+                            <p class="hint" id="persistStatus" style="margin:8px 0 0;"></p>
+                            <p class="hint" style="margin:10px 0 12px;">Todo se guarda en este navegador. Exporta una copia de vez en cuando para no perder nada.</p>
+                            <button class="btn btn-secondary btn-sm btn-block" id="optimizeImagesBtn">🪄 Optimizar imágenes guardadas</button>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">💾 Copias de seguridad</div>
+                            <div class="stack" style="gap:10px">
+                                <button class="btn btn-primary btn-sm btn-block" id="exportBtn">📤 Exportar datos (JSON)</button>
+                                <button class="btn btn-secondary btn-sm btn-block" id="importBtn">📥 Importar datos (JSON)</button>
+                                <input type="file" id="importFileInput" accept=".json,application/json" hidden>
+                                <button class="btn btn-danger btn-sm btn-block" id="wipeBtn">🗑️ Borrar todos los datos</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+          </div>
+        </main>
+    </div>
+
+    <!-- ===== DETAIL PANEL ===== -->
+    <div class="overlay" id="detailOverlay"></div>
+    <aside class="detail-panel" id="detailPanel" aria-hidden="true" aria-label="Detalle de la obra"></aside>
+
+    <!-- ===== PERSON DETAIL ===== -->
+    <div class="modal-overlay" id="personDetailOverlay" role="dialog" aria-modal="true">
+        <div class="person-detail-card" id="personDetailCard"></div>
+    </div>
+
+    <!-- ===== MODAL OBRA ===== -->
+    <div class="modal-overlay" id="workModal" role="dialog" aria-modal="true" aria-labelledby="workModalTitle">
+        <div class="modal modal-lg">
+            <header class="modal-header">
+                <h2 class="modal-title" id="workModalTitle">Agregar obra</h2>
+                <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
+            </header>
+            <div class="modal-body">
+                <div class="seg" id="workTypeTabs">
+                    <button type="button" class="seg-btn" data-type="book">📚 Libro</button>
+                    <button type="button" class="seg-btn" data-type="series">🎬 Serie</button>
+                    <button type="button" class="seg-btn" data-type="anime">🎌 Anime</button>
+                    <button type="button" class="seg-btn" data-type="manhwa">📕 Manhwa</button>
+                </div>
+                <form id="workForm" class="work-form" autocomplete="off" novalidate>
+                    <div class="cover-picker">
+                        <div class="cover-preview"><img id="workImagePreview" alt="Portada"></div>
+                        <button type="button" class="btn btn-secondary btn-sm" data-upload="workImageFile">📤 Subir imagen</button>
+                        <input type="file" id="workImageFile" accept="image/*" hidden data-target="f_image" data-kind="poster">
+                        <input type="text" class="text-input" id="f_image" data-field="image" placeholder="…o pega una URL" style="border-radius:var(--radius-md)">
+                        <span class="hint">Se reduce automáticamente para ahorrar espacio.</span>
+                    </div>
+                    <div class="form-grid">
+                        <label class="field span-2"><span>Título *</span><input type="text" id="f_title" data-field="title" placeholder="Nombre de la obra" required></label>
+                        <label class="field"><span>Estado</span><select id="f_status" data-field="status"></select></label>
+                        <label class="field" data-types="series"><span>Tipo</span><select data-field="seriesType" data-default="Serie"><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select></label>
+                        <label class="field" data-types="book manhwa"><span>Autor</span><input type="text" data-field="author" placeholder="Autor" list="personNames"></label>
+                        <label class="field" data-types="anime"><span>Estudio</span><input type="text" data-field="studio" placeholder="MAPPA, Kyoto…"></label>
+                        <label class="field" data-types="series manhwa"><span>Plataforma</span><input type="text" data-field="platform" placeholder="Netflix, Viki, Webtoon…"></label>
+                        <label class="field" data-types="series anime"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…"></label>
+                        <label class="field" data-types="book manhwa"><span>Género</span><input type="text" data-field="genre" placeholder="Fantasía, Romance…"></label>
+                        <label class="field"><span>Año</span><input type="number" data-field="year" data-num placeholder="2026" min="1800" max="2100"></label>
+                        <label class="field span-2" data-types="series"><span>Actores (separados por comas)</span><input type="text" data-field="actors" placeholder="Actor 1, Actor 2…"></label>
+                        <label class="field span-2" data-types="series"><span>Directores (separados por comas)</span><input type="text" data-field="directors" placeholder="Director 1, Director 2…"></label>
+                        <label class="field"><span id="lbl_progress">Progreso</span><input type="number" data-field="progress" data-num min="0" placeholder="0"></label>
+                        <label class="field" data-types="book"><span>Total de páginas</span><input type="number" data-field="pages" data-num min="0" placeholder="0"></label>
+                        <label class="field" data-types="series anime"><span>Total de episodios</span><input type="number" data-field="totalEpisodes" data-num min="0" placeholder="0"></label>
+                        <label class="field" data-types="manhwa"><span>Total de capítulos</span><input type="number" data-field="totalChapters" data-num min="0" placeholder="0"></label>
+                        <label class="field" data-types="anime"><span>Temporadas</span><input type="number" data-field="seasons" data-num min="1" placeholder="1" data-default="1"></label>
+                        <label class="field" data-types="manhwa"><span>Temporada</span><input type="number" data-field="season" data-num min="1" placeholder="1" data-default="1"></label>
+                        <label class="field" data-types="series anime manhwa"><span>Día de emisión</span>
+                            <select data-field="airDay" data-default=""><option value="">Sin asignar</option><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option></select>
+                        </label>
+                        <label class="field"><span id="lbl_start">Fecha de inicio</span><input type="date" data-field="startDate"></label>
+                        <label class="field"><span>Fecha de fin</span><input type="date" data-field="endDate"></label>
+                        <label class="field span-2"><span>Etiquetas (separadas por comas)</span><input type="text" data-field="tags" placeholder="BL, drama, fantasía…"></label>
+                        <label class="field span-2"><span>Sinopsis</span><textarea data-field="synopsis" placeholder="¿De qué trata?"></textarea></label>
+                        <div class="field span-2">
+                            <div class="sliders">
+                                <div class="slider-group"><span class="slider-label">⭐ Valoración</span><input type="range" class="rating" min="0" max="5" step="0.5" data-field="rating" data-num data-default="0" data-out="out_rating"><output class="slider-value" id="out_rating">–</output></div>
+                                <div class="slider-group"><span class="slider-label">🌶️ Spicy</span><input type="range" class="spicy" min="0" max="5" step="1" data-field="spicy" data-num data-default="0" data-out="out_spicy"><output class="slider-value" id="out_spicy">0</output></div>
+                                <div class="slider-group"><span class="slider-label">💧 Tristeza</span><input type="range" class="sadness" min="0" max="5" step="1" data-field="sadness" data-num data-default="0" data-out="out_sadness"><output class="slider-value" id="out_sadness">0</output></div>
+                            </div>
+                        </div>
+                        <div class="field span-2 checks">
+                            <label class="checkbox-wrapper"><input type="checkbox" id="f_bl" data-field="bl"> 💖 Es BL</label>
+                            <label class="checkbox-wrapper"><input type="checkbox" data-field="favorite"> ❤️ Favorito</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn-secondary" data-close>Cancelar</button>
+                <button class="btn btn-primary" id="workSaveBtn">Guardar</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ===== MODAL PERSONAS ===== -->
+    <div class="modal-overlay" id="personModal" role="dialog" aria-modal="true" aria-labelledby="personModalTitle">
+        <div class="modal">
+            <header class="modal-header">
+                <h2 class="modal-title" id="personModalTitle">Agregar persona</h2>
+                <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
+            </header>
+            <div class="modal-body">
+                <input type="hidden" id="editPersonId">
+                <div class="form-grid">
+                    <div class="field span-2 cover-picker">
+                        <div class="cover-preview round"><img id="personImagePreview" alt="Foto"></div>
+                        <div class="upload-row">
+                            <input type="text" class="text-input" id="personImage" placeholder="URL de la foto">
+                            <button type="button" class="btn btn-secondary btn-sm" data-upload="personImageFile">📤 Subir</button>
+                            <input type="file" id="personImageFile" accept="image/*" hidden data-target="personImage" data-kind="avatar">
+                        </div>
+                    </div>
+                    <label class="field span-2"><span>Nombre *</span><input type="text" id="personName" placeholder="Nombre completo"></label>
+                    <label class="field"><span>Rol</span><select id="personType"><option value="actor">Actor / Actriz</option><option value="author">Autor / Autora</option><option value="director">Director / Directora</option></select></label>
+                    <label class="field"><span>Nacionalidad</span><input type="text" id="personNationality" placeholder="Corea del Sur"></label>
+                    <label class="field"><span>Fecha de nacimiento</span><input type="date" id="personBirthDate"></label>
+                    <label class="field"><span>Obras (si no están en tu colección)</span><input type="number" id="personWorks" min="0" placeholder="0"></label>
+                    <div class="field span-2"><div class="sliders"><div class="slider-group"><span class="slider-label">⭐ Valoración</span><input type="range" class="rating" min="0" max="5" step="0.5" id="personRating" data-out="out_personRating"><output class="slider-value" id="out_personRating">–</output></div></div></div>
+                    <label class="field span-2"><span>Biografía</span><textarea id="personBio" placeholder="Biografía…"></textarea></label>
+                    <label class="field span-2"><span>Redes sociales (enlaces o usuarios, separados por comas)</span><input type="text" id="personSocialLinks" placeholder="https://instagram.com/…, @usuario"></label>
+                    <div class="field span-2">
+                        <span class="field-label">Banner</span>
+                        <div class="cover-preview wide"><img id="personBannerPreview" alt="Banner"></div>
+                        <div class="upload-row">
+                            <input type="text" class="text-input" id="personBanner" placeholder="URL del banner">
+                            <button type="button" class="btn btn-secondary btn-sm" data-upload="personBannerFile">📤 Subir</button>
+                            <input type="file" id="personBannerFile" accept="image/*" hidden data-target="personBanner" data-kind="banner">
+                        </div>
+                    </div>
+                    <div class="field span-2 checks"><label class="checkbox-wrapper"><input type="checkbox" id="personBl"> 💖 Relacionada con BL</label></div>
+                </div>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn-secondary" data-close>Cancelar</button>
+                <button class="btn btn-primary" id="personSaveBtn">Guardar</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ===== MODAL PAREJAS ===== -->
+    <div class="modal-overlay" id="coupleModal" role="dialog" aria-modal="true" aria-labelledby="coupleModalTitle">
+        <div class="modal">
+            <header class="modal-header">
+                <h2 class="modal-title" id="coupleModalTitle">Añadir pareja BL</h2>
+                <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
+            </header>
+            <div class="modal-body">
+                <input type="hidden" id="editCoupleId">
+                <div class="form-grid">
+                    <div class="field span-2 cover-picker">
+                        <div class="cover-preview wide"><img id="coupleImagePreview" alt="Imagen"></div>
+                        <div class="upload-row">
+                            <input type="text" class="text-input" id="coupleImage" placeholder="URL de la imagen">
+                            <button type="button" class="btn btn-secondary btn-sm" data-upload="coupleImageFile">📤 Subir</button>
+                            <input type="file" id="coupleImageFile" accept="image/*" hidden data-target="coupleImage" data-kind="couple">
+                        </div>
+                    </div>
+                    <label class="field span-2"><span>Nombre *</span><input type="text" id="coupleName" placeholder="Ej: First & Khaotung"></label>
+                    <label class="field"><span>Obras juntos</span><input type="number" id="coupleWorks" min="0" placeholder="0"></label>
+                    <div class="field checks" style="align-self:end;padding-bottom:10px"><label class="checkbox-wrapper"><input type="checkbox" id="coupleFavorite"> ❤️ Favorita</label></div>
+                    <div class="field span-2"><div class="sliders"><div class="slider-group"><span class="slider-label">⭐ Valoración</span><input type="range" class="rating" min="0" max="5" step="0.5" id="coupleRating" data-out="out_coupleRating"><output class="slider-value" id="out_coupleRating">–</output></div></div></div>
+                </div>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn-secondary" data-close>Cancelar</button>
+                <button class="btn btn-primary" id="coupleSaveBtn">Guardar</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ===== MODAL COLECCIONES ===== -->
+    <div class="modal-overlay" id="collectionModal" role="dialog" aria-modal="true" aria-labelledby="collectionModalTitle">
+        <div class="modal">
+            <header class="modal-header">
+                <h2 class="modal-title" id="collectionModalTitle">Nueva colección</h2>
+                <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
+            </header>
+            <div class="modal-body">
+                <input type="hidden" id="editCollectionId">
+                <div class="form-grid">
+                    <label class="field span-2"><span>Nombre *</span><input type="text" id="collectionName" placeholder="Ej: Para maratonear"></label>
+                    <label class="field span-2"><span>Descripción</span><textarea id="collectionDesc" placeholder="¿Qué hay en esta colección?"></textarea></label>
+                </div>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn-secondary" data-close>Cancelar</button>
+                <button class="btn btn-primary" id="collectionSaveBtn">Guardar</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ===== MODAL GENÉRICO (selector / vista) ===== -->
+    <div class="modal-overlay" id="sheetModal" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+        <div class="modal">
+            <header class="modal-header">
+                <h2 class="modal-title" id="sheetTitle">—</h2>
+                <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
+            </header>
+            <div class="modal-body" id="sheetBody"></div>
+            <footer class="modal-footer" id="sheetFooter">
+                <button class="btn btn-primary" data-close>Listo</button>
+            </footer>
+        </div>
+    </div>
+
+    <datalist id="personNames"></datalist>
+    <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+    <div class="offline-pill" id="offlinePill" role="status" hidden>📡 Sin conexión · tus datos siguen disponibles</div>
+
+    <script src="utils.js"></script>
+    <script src="storage.js"></script>
+    <script src="sync.js"></script>
+    <script src="cloud.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
