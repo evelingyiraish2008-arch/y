@@ -145,3 +145,21 @@ describe('búsqueda de datos', () => {
         assert.deepEqual(md.metadataSources('series', { tmdbKey: 'k' }).map(s => s.id), ['tmdb', 'tvmaze']);
     });
 });
+
+describe('próximos episodios', () => {
+    it('lee AniList y TVmaze', () => {
+        assert.deepEqual(md.parseAniListAiring({ data: { Page: { media: [{ id: 5, nextAiringEpisode: { airingAt: 1700000000, episode: 7 } }, { id: 6, nextAiringEpisode: null }] } } }), { 5: { at: 1700000000000, episode: 7 }, 6: null });
+        assert.deepEqual(md.parseTvmazeNext({ _embedded: { nextepisode: { airstamp: '2026-10-08T12:00:00+00:00', number: 9, season: 2 } } }), { at: Date.parse('2026-10-08T12:00:00Z'), episode: 9, season: 2 });
+        assert.equal(md.parseTvmazeNext({}), null);
+    });
+    it('los ids de AniList y TVmaze se guardan al rellenar datos', () => {
+        assert.equal(md.mergeMetadata({}, { anilistId: 12, title: 'x' }).anilistId, 12);
+    });
+    it('consulta solo las obras con id', async () => {
+        const calls = [];
+        const fetchFn = async (url, init) => { calls.push(url); return { ok: true, json: async () => (url.includes('anilist') ? { data: { Page: { media: [{ id: 1, nextAiringEpisode: { airingAt: 10, episode: 2 } }] } } } : { _embedded: {} }) }; };
+        const out = await md.fetchNextEpisodes([{ id: 'a', anilistId: 1 }, { id: 'b', tvmazeId: 3 }, { id: 'c' }], { fetchFn });
+        assert.deepEqual(out, { a: { at: 10000, episode: 2 }, b: null });
+        assert.equal(calls.length, 2);
+    });
+});

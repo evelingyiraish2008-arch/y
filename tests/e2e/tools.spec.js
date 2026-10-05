@@ -182,3 +182,28 @@ test('en el móvil ninguna página es más ancha que la pantalla', async ({ page
         expect(scroll, p).toBeLessThanOrEqual(inner);
     }
 });
+
+test('fechas de emisión reales: próximos episodios desde AniList', async ({ page }) => {
+    await openApp(page);
+    const at = Math.floor((Date.now() + 2 * 86400000) / 1000);
+    await page.route('https://graphql.anilist.co/**', route => route.fulfill({ json: { data: { Page: { media: [{ id: 113415, nextAiringEpisode: { airingAt: at, episode: 13 } }] } } } }));
+    await page.evaluate(() => { getWorkById('w5').anilistId = 113415; saveData(); });
+    await goTo(page, 'emission');
+    await page.click('[data-act="airing-refresh"]');
+    await expect(page.locator('#nextAiring')).toContainText('Jujutsu Kaisen');
+    await expect(page.locator('#nextAiring')).toContainText('Ep 13');
+    await expect(page.locator('#nextAiring')).toContainText('en 2 días');
+    expect((await stored(page)).works.find(w => w.id === 'w5').nextAiring.episode).toBe(13);
+});
+
+test('al rellenar datos desde AniList se guarda su id para consultar emisiones', async ({ page }) => {
+    await openApp(page);
+    await mockApis(page);
+    await page.evaluate(() => openWorkModal('anime'));
+    await page.fill('#f_title', 'Given');
+    await page.click('[data-act="meta-search"]');
+    await page.locator('#sheetBody .meta-result').first().click();
+    await expect(page.locator('[data-field="anilistId"]')).toHaveValue('1');
+    await page.click('#workSaveBtn');
+    expect((await stored(page)).works.find(w => w.title === 'Given').anilistId).toBe(1);
+});

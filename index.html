@@ -368,8 +368,9 @@
             <section class="page-view" id="page-emission">
                 <div class="page-header">
                     <div><h1 class="page-title">📡 Centro de Emisión</h1><p class="page-subtitle">Todo lo que estás siguiendo, organizado por día de emisión.</p></div>
-                    <div class="header-actions"><button class="btn btn-secondary" data-act="export-ics">📅 Añadir a mi calendario (.ics)</button></div>
+                    <div class="header-actions"><button class="btn btn-secondary" data-act="airing-refresh">🔄 Próximos episodios</button><button class="btn btn-secondary" data-act="export-ics">📅 Añadir a mi calendario (.ics)</button></div>
                 </div>
+                <div class="next-airing" id="nextAiring" hidden></div>
                 <div class="stats-grid cols-4">
                     <div class="stat-card"><div class="stat-icon">📺</div><div><div class="stat-value" id="emissionToday">0</div><div class="stat-label">Hoy</div></div></div>
                     <div class="stat-card"><div class="stat-icon pink">🗓️</div><div><div class="stat-value" id="emissionThisWeek">0</div><div class="stat-label">Esta semana</div></div></div>
@@ -704,6 +705,8 @@
                     <button type="button" class="seg-btn" data-type="manhwa">📕 Manhwa</button>
                 </div>
                 <form id="workForm" class="work-form" autocomplete="off" novalidate>
+                    <input type="hidden" data-field="anilistId" data-num>
+                    <input type="hidden" data-field="tvmazeId" data-num>
                     <div class="cover-picker">
                         <div class="cover-preview"><img id="workImagePreview" alt="Portada"></div>
                         <button type="button" class="btn btn-secondary btn-sm" data-upload="workImageFile">📤 Subir imagen</button>

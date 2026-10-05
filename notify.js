@@ -68,6 +68,12 @@ function dueNotifications(data, now = Date.now(), sent = {}) {
             push(`air:${w.id}:${today}`, `📺 Hoy sale ${w.title}`, `Te toca el ${w.type === 'manhwa' ? 'capítulo' : 'episodio'} ${(Number(w.progress) || 0) + 1}.`, { workId: w.id });
         });
     }
+    // Episodios nuevos según AniList/TVmaze (fecha real de emisión)
+    if (ns.airing.on) {
+        active.filter(w => w.nextAiring && w.nextAiring.at <= now && now - w.nextAiring.at < 2 * 86400000).forEach(w => {
+            push(`newep:${w.id}:${w.nextAiring.episode}`, `🆕 Ya salió: ${w.title}`, `Episodio ${w.nextAiring.episode} disponible.`, { workId: w.id });
+        });
+    }
     if (ns.weekly.on && new Date(now).getDay() === Number(ns.weekly.day) && now >= atTime(now, ns.weekly.time)) {
         let sessions = 0;
         for (let i = 0; i < 7; i++) sessions += byDay.get(dayKey(addDays(now, -i))) || 0;

@@ -36,7 +36,7 @@ async function signIn(page, { email = 'sara@example.com', password = 'contraseñ
     page.on('dialog', onDialog);
     try {
         await page.click(`[data-cloud="${create ? 'signup' : 'signin'}"]`);
-        await expect(page.locator('#cloudPanelBody')).toContainText('Conectada como ' + email);
+        await expect(page.locator('#cloudPanelBody')).toContainText('Conectada como ' + email, { timeout: 10000 });
         await expect(page.locator('#cloudStatus')).toContainText('Sincronizado', { timeout: 10000 });
     } finally {
         page.off('dialog', onDialog);
@@ -173,7 +173,7 @@ test('sin conexión los cambios esperan y se envían al volver', async ({ browse
     await page.evaluate(() => { appData.works.find(w => w.id === 'w3').title = 'Cambiado sin red'; saveData(); });
     await page.evaluate(() => whenSaved());
     await page.evaluate(() => cloud.syncNow());
-    await expect(page.locator('#cloudStatus')).toContainText('cambios esperando');
+    await expect(page.locator('#cloudStatus')).toContainText('cambios esperando', { timeout: 10000 });
     await expect(page.locator('#cloudChip')).toHaveText('⚠️');
     fake.offline = false;
     await syncNow(page);

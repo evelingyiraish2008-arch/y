@@ -480,4 +480,44 @@ function updateAirDayHint() {
         : same.length ? `📺 Ese día ya tienes ${same.length}: ${same.slice(0, 3).map(w => w.title).join(', ')}${same.length > 3 ? '…' : ''}` : '';
 }
 
+// ============================================================
+// 6. FECHAS DE EMISIÓN REALES (AniList y TVmaze)
+// ============================================================
+const AIRING_REFRESH_MS = 6 * 3600000;
+async function refreshAiring({ silent = false } = {}) {
+    const list = appData.works.filter(w => isActive(w) && (Number(w.anilistId) || Number(w.tvmazeId)));
+    if (!list.length) { if (!silent) showToast('📺 Usa “Rellenar datos por el título” en tus series y animes para poder consultar sus próximos episodios.', 'info', 6000); return; }
+    if (!navigator.onLine) { if (!silent) showToast('📶 Sin conexión', 'error'); return; }
+    const info = await fetchNextEpisodes(list);
+    appData.settings.airingCheckedAt = Date.now();
+    const changed = list.filter(w => w.id in info && JSON.stringify(w.nextAiring || null) !== JSON.stringify(info[w.id]));
+    if (changed.length) mutate(() => changed.forEach(w => { if (info[w.id]) w.nextAiring = info[w.id]; else delete w.nextAiring; }), silent ? null : `🔄 Próximos episodios actualizados (${changed.length})`, { undo: false });
+    else { saveData(); if (!silent) showToast('👌 Todo al día'); }
+    renderNextAiring();
+}
+function airingWhen(at, now = Date.now()) {
+    const d = new Date(at);
+    const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(new Date(now).getFullYear(), new Date(now).getMonth(), new Date(now).getDate())) / 86400000);
+    const time = d.toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit' });
+    if (at < now) return `ya disponible (salió ${days === 0 ? 'hoy' : days === -1 ? 'ayer' : 'el ' + fmtDate(at)})`;
+    if (days === 0) return `hoy a las ${time}`;
+    if (days === 1) return `mañana a las ${time}`;
+    return `${d.toLocaleDateString(APP_LOCALE, { weekday: 'long', day: 'numeric', month: 'short' })}, ${time} (en ${days} días)`;
+}
+function renderNextAiring() {
+    const box = $('nextAiring');
+    if (!box) return;
+    const now = Date.now();
+    const list = appData.works.filter(w => isActive(w) && w.nextAiring && w.nextAiring.at > now - 3 * 86400000).sort((a, b) => a.nextAiring.at - b.nextAiring.at);
+    box.hidden = !list.length;
+    box.innerHTML = list.length ? `<div class="section-header"><h3 class="section-title">🗓️ Próximos episodios</h3><small class="muted">${appData.settings.airingCheckedAt ? 'Actualizado ' + esc(relativeTime(appData.settings.airingCheckedAt)) : ''}</small></div>
+        <div class="pace-list">${list.map(w => `<button class="pace-item ${w.nextAiring.at < now ? 'is-out' : ''}" data-open="${w.id}"><span class="thumb">${img(w.image, w.type, w.title)}</span>
+        <span class="info"><b>${esc(w.title)}</b><small>${w.nextAiring.season ? `T${w.nextAiring.season} · ` : ''}Ep ${w.nextAiring.episode} · ${esc(airingWhen(w.nextAiring.at, now))}</small></span></button>`).join('')}</div>` : '';
+}
+FEATURE_ACTIONS['airing-refresh'] = () => refreshAiring();
+/** Al abrir el Centro de Emisión, se actualiza solo si hace más de 6 horas. */
+function maybeRefreshAiring() {
+    if (navigator.onLine && Date.now() - (Number(appData.settings.airingCheckedAt) || 0) > AIRING_REFRESH_MS && appData.works.some(w => isActive(w) && (Number(w.anilistId) || Number(w.tvmazeId)))) refreshAiring({ silent: true }).catch(() => {});
+}
+
 if (typeof module !== 'undefined' && module.exports) module.exports = {};

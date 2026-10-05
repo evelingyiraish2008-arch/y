@@ -1023,6 +1023,7 @@ function collectWorkForm() {
         const wrap = el.closest('[data-types]');
         if (wrap && wrap.hidden) return;
         const f = el.dataset.field;
+        if (el.type === 'hidden' && el.value === '') return; // ids de AniList/TVmaze: solo si se buscaron datos
         if (el.type === 'checkbox') data[f] = el.checked;
         else if ('num' in el.dataset) data[f] = el.value === '' ? (f === 'year' ? '' : 0) : Number(el.value);
         else data[f] = el.value.trim();
@@ -1653,6 +1654,8 @@ function renderEmission() {
           ${items.map(w => `<button class="week-event" data-open="${w.id}" style="border-left-color:${TYPE_META[w.type].color}">${esc(w.title)}<small>${esc(getProgressText(w))}</small></button>`).join('') || '<div class="week-empty">—</div>'}
         </div>`;
     }).join('');
+    renderNextAiring();
+    maybeRefreshAiring();
     const unscheduled = active.filter(w => getAirDay(w) === null);
     $('unscheduledSection').hidden = !unscheduled.length;
     $('unscheduledGrid').innerHTML = unscheduled.map(w => workCard(w, { compact: true, showType: true })).join('');

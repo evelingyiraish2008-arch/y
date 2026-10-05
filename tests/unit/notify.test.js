@@ -71,3 +71,11 @@ describe('descubrimientos y sugerencias', () => {
         assert.match(s[0].reason, /te gustó A|acción/);
     });
 });
+
+describe('episodio nuevo según la fecha real', () => {
+    it('avisa cuando ya ha salido', () => {
+        const w = [{ id: 'x', type: 'anime', title: 'Frieren', status: 'viendo', nextAiring: { at: NOW - 3600000, episode: 12 } }];
+        const due = n.dueNotifications({ works: w, settings: { notify: { enabled: true, daily: { on: false }, weekly: { on: false }, streak: { on: false }, inactivity: { on: false } } } }, NOW);
+        assert.deepEqual(due.map(d => [d.id, d.body]), [['newep:x:12', 'Episodio 12 disponible.']]);
+    });
+});

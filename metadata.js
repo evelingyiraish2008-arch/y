@@ -66,7 +66,7 @@ function parseGoogleBooks(json) {
 }
 function parseTvmaze(json) {
     return (json || []).map(({ show: s }) => s && ({
-        source: 'tvmaze', sourceLabel: 'TVmaze', externalId: s.id, title: s.name, year: yearOf(s.premiered),
+        source: 'tvmaze', sourceLabel: 'TVmaze', externalId: s.id, tvmazeId: s.id, title: s.name, year: yearOf(s.premiered),
         synopsis: stripHtml(s.summary).slice(0, 1500),
         platform: (s.webChannel && s.webChannel.name) || (s.network && s.network.name) || '',
         country: COUNTRY_ES[((s.network || s.webChannel || {}).country || {}).name] || ((s.network || s.webChannel || {}).country || {}).name || '',
@@ -127,7 +127,7 @@ function parseAniList(json, type) {
         const g = genreFields([...(m.genres || []), ...tags]);
         const story = ((m.staff || {}).edges || []).find(e => /story|original/i.test(e.role)) || ((m.staff || {}).edges || [])[0];
         return {
-            source: 'anilist', sourceLabel: 'AniList', externalId: m.id,
+            source: 'anilist', sourceLabel: 'AniList', externalId: m.id, anilistId: m.id,
             title: m.title.english || m.title.romaji, altTitle: m.title.english ? m.title.romaji : '',
             year: (m.startDate || {}).year || '',
             synopsis: stripHtml(m.description).slice(0, 1500),
@@ -211,7 +211,7 @@ async function fetchMetadataDetails(meta, { fetchFn = fetch } = {}) {
 }
 
 /** Campos que se rellenarían: solo los que están vacíos en el formulario (lo que escribiste no se toca). */
-const META_FIELDS = ['title', 'author', 'studio', 'platform', 'country', 'genre', 'year', 'actors', 'directors', 'pages', 'totalEpisodes', 'totalChapters', 'seasons', 'tags', 'synopsis', 'seriesType'];
+const META_FIELDS = ['anilistId', 'tvmazeId', 'title', 'author', 'studio', 'platform', 'country', 'genre', 'year', 'actors', 'directors', 'pages', 'totalEpisodes', 'totalChapters', 'seasons', 'tags', 'synopsis', 'seriesType'];
 function mergeMetadata(current, meta, { overwrite = false } = {}) {
     const patch = {};
     const empty = v => v === undefined || v === null || v === '' || v === 0 || (typeof v === 'number' && isNaN(v));
@@ -225,8 +225,42 @@ function mergeMetadata(current, meta, { overwrite = false } = {}) {
     return patch;
 }
 
+// ---------- Próximos episodios (fechas de emisión reales) ----------
+const ANILIST_AIRING_QUERY = `query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids) { id status nextAiringEpisode { airingAt episode } } } }`;
+/** { anilistId: { at (ms), episode } | null } */
+function parseAniListAiring(json) {
+    const out = {};
+    ((((json || {}).data || {}).Page || {}).media || []).forEach(m => {
+        out[m.id] = m.nextAiringEpisode ? { at: m.nextAiringEpisode.airingAt * 1000, episode: m.nextAiringEpisode.episode } : null;
+    });
+    return out;
+}
+/** /shows/{id}?embed=nextepisode */
+function parseTvmazeNext(json) {
+    const n = ((json || {})._embedded || {}).nextepisode;
+    return n && n.airstamp ? { at: Date.parse(n.airstamp), episode: n.number || 0, season: n.season || 0 } : null;
+}
+/** Pide la fecha del próximo episodio de las obras con id de AniList o TVmaze. Devuelve { workId: info|null }. */
+async function fetchNextEpisodes(works, { fetchFn = fetch } = {}) {
+    const out = {};
+    const ani = works.filter(w => Number(w.anilistId));
+    if (ani.length) {
+        try {
+            const j = await getJson('https://graphql.anilist.co', { fetchFn, method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ query: ANILIST_AIRING_QUERY, variables: { ids: ani.map(w => Number(w.anilistId)) } }) });
+            const map = parseAniListAiring(j);
+            ani.forEach(w => { if (Number(w.anilistId) in map) out[w.id] = map[w.anilistId]; });
+        } catch (e) { /* sin conexión: se deja como estaba */ }
+    }
+    for (const w of works.filter(x => Number(x.tvmazeId))) {
+        try { out[w.id] = parseTvmazeNext(await getJson(`https://api.tvmaze.com/shows/${Number(w.tvmazeId)}?embed=nextepisode`, { fetchFn })); } catch (e) { /* sigue */ }
+    }
+    return out;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        parseAniListAiring, parseTvmazeNext, fetchNextEpisodes,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
         parseItunes, parseAniList, parseJikan, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };

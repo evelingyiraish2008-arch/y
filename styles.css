@@ -1744,3 +1744,6 @@ html[data-ready="true"] .splash { opacity: 0; pointer-events: none; }
 .read-only [data-act="quick-note"], .read-only .card-actions, .read-only .card-actions-list, .read-only [data-act="lock"], .read-only [data-act="duplicate"], .read-only [data-act="select-mode"],
 .read-only .note-composer, .read-only .content-form, .read-only #addPersonBtn, .read-only #addCoupleBtn, .read-only #addCollectionBtn { display: none !important; }
 .read-only .sidebar .logo::after { content: '👀 Solo lectura'; font-size: 10.5px; font-weight: 700; color: var(--accent-text); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; margin-left: auto; }
+.next-airing { margin-bottom: 24px; }
+.next-airing .section-header small { color: var(--text-muted); font-size: 12px; }
+.pace-item.is-out { border-color: color-mix(in srgb, var(--green) 50%, transparent); }

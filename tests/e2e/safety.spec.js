@@ -175,3 +175,14 @@ test('confirmaciones inteligentes: persona con obras y colección con obras', as
     expect(msgs).toHaveLength(2);
     expect(await page.evaluate(() => appData.trash.persons.map(p => p.id))).toEqual(['p3']);
 });
+
+test('editar una obra sin cambiar nada no apunta cambios raros en su historial', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => openWorkModal(null, getWorkById('w2')));
+    await page.fill('#f_title', 'El Nombre del Viento ');
+    await page.fill('#f_title', 'El Nombre del Viento');
+    await page.click('#workSaveBtn');
+    const w = await page.evaluate(() => getWorkById('w2'));
+    expect(w.versions).toBeUndefined();
+    expect('anilistId' in w).toBe(false);
+});
