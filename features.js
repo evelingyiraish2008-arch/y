@@ -182,6 +182,8 @@ function openCoupleDetail(id) {
         const a = getPersonById(c.personA), b = getPersonById(c.personB);
         const related = relatedCouples(c, appData.couples);
         return `
+        <div class="couple-banner ${c.banner ? 'has-banner' : ''}">${bannerBgHtml(c.banner, c.image)}
+            <button class="icon-btn sm detail-banner-btn" data-act="banner-quick" data-kind="couples" data-id="${c.id}" title="${c.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${c.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button></div>
         <div class="couple-detail-hero">${img(c.image, 'couple', c.name)}</div>
         <div class="couple-detail-people">
             ${[a, b].map(p => (p ? `<button class="couple-person" data-person="${p.id}"><span class="avatar">${img(p.image, 'person', p.name)}</span><b>${esc(p.name)}</b></button>` : '')).join('<span class="couple-heart">💕</span>')}
@@ -194,6 +196,8 @@ function openCoupleDetail(id) {
         ${!s.linked ? '<p class="hint" style="text-align:center">Edita la pareja y elige a los dos actores para ver sus obras juntos automáticamente.</p>' : ''}
         ${s.works.length ? `<div class="detail-section-title">Sus obras juntos</div><div class="mini-grid">${s.works.map(miniCard).join('')}</div>` : ''}
         ${related.length ? `<div class="detail-section-title" style="margin-top:16px">Parejas relacionadas</div><div class="tag-list">${related.map(r => `<button class="chip" data-couple="${r.id}">💕 ${esc(r.name)}</button>`).join('')}</div>` : ''}
+        <div class="detail-section-title" style="margin-top:16px">🎨 Moodboard${(c.gallery || []).length ? ' · ' + c.gallery.length : ''}</div>
+        ${moodboardHtml('couples', c)}
         <div class="seg-inline" style="justify-content:center;margin-top:18px">
             <button class="btn btn-secondary btn-sm" data-act="couple-edit" data-id="${c.id}">✏️ Editar</button>
             <button class="btn btn-secondary btn-sm" data-act="couple-fav" data-id="${c.id}">${c.favorite ? '🤍 Quitar de favoritas' : '❤️ Favorita'}</button>

@@ -314,6 +314,7 @@
                     <button class="tab" data-tab="author">✍️ Autores <span class="count" id="personAuthorsTab">0</span></button>
                     <button class="tab" data-tab="director">🎬 Directores <span class="count" id="personDirectorsTab">0</span></button>
                     <button class="tab" data-tab="bl">💖 BL <span class="count" id="personBlTab">0</span></button>
+                    <button class="tab" data-tab="characters">🎭 Personajes <span class="count" id="personCharsTab">0</span></button>
                 </div>
                 <div id="person-general">
                     <div class="stats-grid cols-4">
@@ -558,6 +559,18 @@
                             <div class="panel-title">👤 Tu perfil</div>
                             <label class="field"><span>Tu nombre</span><input type="text" id="settingName" maxlength="30" placeholder="Tu nombre"></label>
                         </div>
+                        <div class="panel-card" id="linkPanel">
+                            <div class="panel-title">🔗 Auto-vinculación de personas</div>
+                            <div id="linkPanelBody"></div>
+                        </div>
+                        <div class="panel-card" id="imageSourcesPanel">
+                            <div class="panel-title">🖼️ Fuentes de imágenes</div>
+                            <div id="imageSourcesBody"></div>
+                        </div>
+                        <div class="panel-card" id="bannerPanel">
+                            <div class="panel-title">🖼️ Banners</div>
+                            <div id="bannerPanelBody"></div>
+                        </div>
                         <div class="panel-card" id="personalizePanel">
                             <div class="panel-title">✨ Más personalización</div>
                             <div id="personalizeBody"></div>
@@ -723,16 +736,18 @@
                             <button type="button" class="btn btn-secondary btn-sm" data-act="meta-search">🔎 Rellenar datos por el título</button>
                             <span class="hint">Busca en AniList, MyAnimeList, Open Library, Google Books y TVmaze. No cambia lo que ya escribiste.</span>
                         </div>
+                        <div class="field span-2"><span class="field-label">Banner <small class="muted">(opcional, se ve en la cabecera de la ficha)</small></span>
+                            <div data-img-mount="f_banner" data-kind="banner" data-field="banner" data-query-from="f_title" data-ctx="works"></div></div>
                         <label class="field"><span>Estado</span><select id="f_status" data-field="status"></select></label>
                         <label class="field" data-types="series"><span>Tipo</span><select data-field="seriesType" data-default="Serie"><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select></label>
-                        <label class="field" data-types="book manhwa"><span>Autor</span><input type="text" data-field="author" placeholder="Autor" list="dlAuthors"></label>
+                        <div class="field" data-types="book manhwa"><span>Autor</span><div data-chip-mount="author" data-placeholder="Escribe el nombre del autor…"></div></div>
                         <label class="field" data-types="anime"><span>Estudio</span><input type="text" data-field="studio" placeholder="MAPPA, Kyoto…" list="dlStudios"></label>
                         <label class="field" data-types="series manhwa"><span>Plataforma</span><input type="text" data-field="platform" placeholder="Netflix, Viki, Webtoon…" list="dlPlatforms"></label>
                         <label class="field" data-types="series anime"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…" list="dlCountries"></label>
                         <label class="field" data-types="book manhwa"><span>Género</span><input type="text" data-field="genre" placeholder="Fantasía, Romance…" list="dlGenres"></label>
                         <label class="field"><span>Año</span><input type="number" data-field="year" data-num placeholder="2026" min="1800" max="2100"></label>
-                        <label class="field span-2" data-types="series"><span>Actores (separados por comas)</span><input type="text" data-field="actors" placeholder="Actor 1, Actor 2…" list="dlActors"></label>
-                        <label class="field span-2" data-types="series"><span>Directores (separados por comas)</span><input type="text" data-field="directors" placeholder="Director 1, Director 2…" list="dlDirectors"></label>
+                        <div class="field span-2" data-types="series"><span>Actores</span><div data-chip-mount="actors" data-placeholder="Escribe un nombre (o pega varios separados por comas)…"></div></div>
+                        <div class="field span-2" data-types="series"><span>Directores</span><div data-chip-mount="directors" data-placeholder="Escribe el nombre del director…"></div></div>
                         <label class="field"><span id="lbl_progress">Progreso</span><input type="number" data-field="progress" data-num min="0" placeholder="0"></label>
                         <label class="field" data-types="book"><span>Total de páginas</span><input type="number" data-field="pages" data-num min="0" placeholder="0"></label>
                         <label class="field" data-types="series anime"><span>Total de episodios</span><input type="number" data-field="totalEpisodes" data-num min="0" placeholder="0"></label>
@@ -784,16 +799,17 @@
             <div class="modal-body">
                 <input type="hidden" id="editPersonId">
                 <div class="form-grid">
-                    <div class="field span-2 cover-picker">
-                        <div class="cover-preview round"><img id="personImagePreview" alt="Foto"></div>
-                        <div class="upload-row">
-                            <input type="text" class="text-input" id="personImage" placeholder="URL de la foto">
-                            <button type="button" class="btn btn-secondary btn-sm" data-upload="personImageFile">📤 Subir</button>
-                            <input type="file" id="personImageFile" accept="image/*" hidden data-target="personImage" data-kind="avatar">
-                        </div>
+                    <div class="field span-2 person-photo-field">
+                        <div data-img-mount="personImage" data-kind="avatar" data-query-from="personName" data-ctx="persons"></div>
                     </div>
                     <label class="field span-2"><span>Nombre *</span><input type="text" id="personName" placeholder="Nombre completo"></label>
-                    <label class="field"><span>Rol</span><select id="personType"><option value="actor">Actor / Actriz</option><option value="author">Autor / Autora</option><option value="director">Director / Directora</option></select></label>
+                    <label class="field"><span>Rol principal</span><select id="personType"><option value="actor">Actor / Actriz</option><option value="author">Autor / Autora</option><option value="director">Director / Directora</option><option value="studio">Estudio</option></select></label>
+                    <div class="field"><span>También es…</span><div class="check-grid compact" id="personRoles">
+                        <label class="checkbox-wrapper"><input type="checkbox" value="actor"> Actor/Actriz</label>
+                        <label class="checkbox-wrapper"><input type="checkbox" value="author"> Autor/a</label>
+                        <label class="checkbox-wrapper"><input type="checkbox" value="director"> Director/a</label></div></div>
+                    <label class="field span-2"><span>También conocida como <small class="muted">(seudónimo, nombre real… separados por comas)</small></span><input type="text" id="personAliases" placeholder="Ej.: Mo Xiang Tong Xiu, MXTX"></label>
+                    <div class="title-hint span-2" id="personNameHint" hidden></div>
                     <label class="field"><span>Nacionalidad</span><input type="text" id="personNationality" placeholder="Corea del Sur"></label>
                     <label class="field"><span>Fecha de nacimiento</span><input type="date" id="personBirthDate"></label>
                     <label class="field"><span>Obras (si no están en tu colección)</span><input type="number" id="personWorks" min="0" placeholder="0"></label>
@@ -802,12 +818,7 @@
                     <label class="field span-2"><span>Redes sociales (enlaces o usuarios, separados por comas)</span><input type="text" id="personSocialLinks" placeholder="https://instagram.com/…, @usuario"></label>
                     <div class="field span-2">
                         <span class="field-label">Banner</span>
-                        <div class="cover-preview wide"><img id="personBannerPreview" alt="Banner"></div>
-                        <div class="upload-row">
-                            <input type="text" class="text-input" id="personBanner" placeholder="URL del banner">
-                            <button type="button" class="btn btn-secondary btn-sm" data-upload="personBannerFile">📤 Subir</button>
-                            <input type="file" id="personBannerFile" accept="image/*" hidden data-target="personBanner" data-kind="banner">
-                        </div>
+                        <div data-img-mount="personBanner" data-kind="banner" data-query-from="personName" data-ctx="persons"></div>
                     </div>
                     <div class="field span-2 checks"><label class="checkbox-wrapper"><input type="checkbox" id="personBl"> 💖 Relacionada con BL</label></div>
                 </div>
@@ -846,6 +857,8 @@
                         <div class="pick-list couple-works-picker" id="coupleWorksPicker"></div>
                         <span class="hint">Las obras donde salen los dos en el reparto se marcan solas.</span>
                     </div>
+                    <div class="field span-2"><span class="field-label">Banner <small class="muted">(cabecera de la pareja)</small></span>
+                        <div data-img-mount="coupleBanner" data-kind="banner" data-query-from="coupleName" data-ctx="couples"></div></div>
                     <label class="field"><span>Obras juntos (si no las vinculas)</span><input type="number" id="coupleWorks" min="0" placeholder="0"></label>
                     <div class="field checks" style="align-self:end;padding-bottom:10px"><label class="checkbox-wrapper"><input type="checkbox" id="coupleFavorite"> ❤️ Favorita</label></div>
                     <div class="field span-2"><div class="sliders"><div class="slider-group"><span class="slider-label">⭐ Valoración</span><input type="range" class="rating" min="0" max="5" step="0.5" id="coupleRating" data-out="out_coupleRating"><output class="slider-value" id="out_coupleRating">–</output></div></div></div>
@@ -870,6 +883,8 @@
                 <div class="form-grid">
                     <label class="field span-2"><span>Nombre *</span><input type="text" id="collectionName" placeholder="Ej: Para maratonear"></label>
                     <label class="field span-2"><span>Descripción</span><textarea id="collectionDesc" placeholder="¿Qué hay en esta colección?"></textarea></label>
+                    <div class="field span-2"><span class="field-label">Banner <small class="muted">(si no pones uno, se usa la portada de la primera obra)</small></span>
+                        <div data-img-mount="collectionBanner" data-kind="banner" data-query-from="collectionName" data-ctx="collections"></div></div>
                     <div class="field span-2">
                         <label class="checkbox-wrapper"><input type="checkbox" id="collectionSmart"> ✨ Colección inteligente (se llena sola con una búsqueda)</label>
                         <div id="collectionSmartBox" hidden>
@@ -904,6 +919,65 @@
             <div class="modal-body" id="sheetBody"></div>
             <footer class="modal-footer" id="sheetFooter">
                 <button class="btn btn-primary" data-close>Listo</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ===== BUSCADOR DE IMÁGENES (panel lateral) ===== -->
+    <div class="modal-overlay side-overlay" id="imgSearchModal" role="dialog" aria-modal="true" aria-labelledby="imgSearchTitle">
+        <aside class="side-panel">
+            <header class="modal-header">
+                <h2 class="modal-title" id="imgSearchTitle">🔍 Buscar imágenes</h2>
+                <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
+            </header>
+            <div class="side-body" id="imgSearchScroll">
+                <div class="img-notice" id="imgSearchNotice" hidden>📜 Las imágenes son de sus autores. Úsalas solo para tu colección personal y, si puedes, guarda el enlace de origen.
+                    <button type="button" class="link-btn" data-act="img-notice-off">No volver a mostrar</button></div>
+                <form class="img-search-form" id="imgSearchForm" role="search">
+                    <input type="search" class="text-input" id="imgSearchQ" placeholder="¿Qué imagen buscas?" autocomplete="off" aria-label="Buscar imágenes">
+                    <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
+                </form>
+                <div class="tag-list img-suggest" id="imgSearchSuggest"></div>
+                <div class="img-search-tabs" id="imgSearchTabs" role="tablist"></div>
+                <div class="img-search-filters">
+                    <select class="filter-select" id="imgSearchOrient" aria-label="Orientación"><option value="all">Cualquier forma</option><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option><option value="square">Cuadrada</option></select>
+                    <small class="hint">Toca una imagen para elegirla. ¿Tienes una copiada? Pégala con Ctrl+V.</small>
+                </div>
+                <div id="imgSearchStatus"></div>
+                <div class="img-results" id="imgSearchResults"></div>
+                <button type="button" class="btn btn-secondary btn-sm img-more" id="imgSearchMore" data-act="img-search-more" hidden>Cargar más</button>
+            </div>
+            <footer class="img-search-bar" id="imgSearchBar" hidden></footer>
+        </aside>
+    </div>
+
+    <!-- ===== EDITOR DE RECORTE ===== -->
+    <div class="modal-overlay" id="cropModal" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+        <div class="modal modal-lg crop-modal">
+            <header class="modal-header">
+                <h2 class="modal-title" id="cropTitle">✂️ Recortar</h2>
+                <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
+            </header>
+            <div class="modal-body">
+                <div class="crop-stage" id="cropStage">
+                    <div class="crop-frame" id="cropFrameBox"><canvas id="cropCanvas" aria-label="Arrastra para mover la imagen"></canvas><div class="crop-grid" id="cropGrid"></div></div>
+                </div>
+                <div class="crop-tools">
+                    <div class="slider-group"><span class="slider-label">🔍 Zoom</span><input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom"></div>
+                    <div class="seg-inline wrap">
+                        <button type="button" class="btn btn-secondary btn-sm" data-act="crop-rotate">⟳ Girar 90°</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-act="crop-flip" data-id="h">⇋ Voltear</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-act="crop-flip" data-id="v">⇵ Voltear</button>
+                        <select class="filter-select" id="cropRatio" aria-label="Proporción"></select>
+                        <button type="button" class="btn btn-secondary btn-sm is-on" data-act="crop-grid" id="cropGridBtn">▦ Cuadrícula</button>
+                        <button type="button" class="btn btn-ghost btn-sm" data-act="crop-reset">↺ Restablecer</button>
+                    </div>
+                    <p class="hint"><span id="cropInfo"></span> · Arrastra la imagen para moverla (o usa las flechas). Rueda del ratón o el control para acercar.</p>
+                </div>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn-secondary" data-close>Cancelar</button>
+                <button class="btn btn-primary" data-act="crop-save">✂️ Guardar recorte</button>
             </footer>
         </div>
     </div>
@@ -943,6 +1017,12 @@
     <script src="alerts.js"></script>
     <script src="manage.js"></script>
     <script src="content.js"></script>
+    <script src="mediakit.js"></script>
+    <script src="peoplekit.js"></script>
+    <script src="media.js"></script>
+    <script src="imagefind.js"></script>
+    <script src="people.js"></script>
+    <script src="moodboard.js"></script>
     <script src="play.js"></script>
     <script src="app.js"></script>
 </body>

@@ -241,13 +241,10 @@ const getWorkById = id => appData.works.find(w => w.id === id);
 const getPersonById = id => appData.persons.find(p => p.id === id);
 const getCoupleById = id => appData.couples.find(c => c.id === id);
 const getCollectionById = id => appData.collections.find(c => c.id === id);
-function worksForPerson(p) {
-    const n = norm(p.name);
-    if (!n) return [];
-    return appData.works.filter(w => ['author', 'actors', 'directors', 'studio'].some(f => splitList(w[f]).some(x => norm(x) === n)));
-}
+/** Obras de una persona: las vinculadas por id y las que la nombran (por su nombre o seudónimo). */
+function worksForPerson(p) { return p && p.name ? worksOfPerson(p, appData.works) : []; }
 function personWorkCount(p) { return Math.max(worksForPerson(p).length, Number(p.works) || 0); }
-function findPersonByName(name) { const n = norm(name); return appData.persons.find(p => norm(p.name) === n); }
+function findPersonByName(name) { return appData.persons.find(p => personHasName(p, name)); }
 // ============================================================
 // 4. COMPONENTES DE RENDER
 // ============================================================
@@ -534,6 +531,7 @@ function renderHero(inProgress) {
     const w = inProgress.slice().sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || lastTouched(b) - lastTouched(a))[0];
     if (!w) {
         bg.style.backgroundImage = 'none';
+        bg.classList.remove('is-banner');
         content.innerHTML = `
             <div class="hero-info">
                 <span class="hero-badge">✨ Bienvenida</span>
@@ -543,7 +541,9 @@ function renderHero(inProgress) {
             </div>`;
         return;
     }
-    bg.style.backgroundImage = cssUrl(imageSrc(w.image, w.type));
+    const banner = resolveImageSrc(w.banner || '');
+    bg.style.backgroundImage = cssUrl(banner || imageSrc(w.image, w.type));
+    bg.classList.toggle('is-banner', !!banner);
     const p = getProgress(w), total = getTotal(w);
     const step = TYPE_META[w.type].step;
     content.innerHTML = `
@@ -880,10 +880,12 @@ const modalBaselines = {};
 function modalSnapshot(id) {
     return [...$(id).querySelectorAll('input:not([type=file]), select, textarea')].map(el => (el.type === 'checkbox' ? el.checked : el.value)).join('\u0001');
 }
+let modalLayer = 0;
 function openModal(id) {
     lastFocus = document.activeElement;
     $('vizTip').classList.remove('show');
     $(id).classList.add('active');
+    $(id).style.zIndex = 1100 + (++modalLayer); // el último abierto queda siempre encima
     if (DIRTY_MODALS.includes(id)) modalBaselines[id] = modalSnapshot(id);
     const first = $(id).querySelector('input:not([type=hidden]):not([type=file]), select, textarea, button');
     setTimeout(() => first && first.focus({ preventScroll: true }), 60);
@@ -896,6 +898,9 @@ function closeModal(id, { force = false } = {}) {
     }
     delete modalBaselines[id];
     $(id).classList.remove('active');
+    $(id).style.zIndex = '';
+    if (!document.querySelector('.modal-overlay.active')) modalLayer = 0;
+    if (id === 'workModal') setTimeout(checkFormOrphans, 0);
     if (id === 'sheetModal') sheetRefresh = null;
     if (id === 'personDetailOverlay') currentPersonId = null;
     if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
@@ -903,7 +908,7 @@ function closeModal(id, { force = false } = {}) {
 }
 function topOpenModal() {
     const open = [...document.querySelectorAll('.modal-overlay.active')];
-    return open[open.length - 1];
+    return open.sort((a, b) => (Number(a.style.zIndex) || 0) - (Number(b.style.zIndex) || 0))[open.length - 1];
 }
 let sheetRefresh = null;
 function openSheet(title, renderBody) {
@@ -952,6 +957,7 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     document.querySelectorAll('#workTypeTabs .seg-btn').forEach(b => b.disabled = !!work && b.dataset.type !== work.type);
     fillAutocomplete();
     applyFormFieldVisibility();
+    personsCreatedInForm = new Set();
     fillWorkForm(work || preset);
     updateAirDayHint();
     const draft = !work && !preset.title ? readDraft() : null;
@@ -963,6 +969,7 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     }
     openModal('workModal');
     setTimeout(() => $('f_title').focus(), 60);
+    offerPendingOrphans();
 }
 function fillWorkForm(src) {
     workForm.querySelectorAll('[data-field]').forEach(el => {
@@ -975,6 +982,8 @@ function fillWorkForm(src) {
     });
     updateRangeOutputs(workForm);
     updateWorkPreview();
+    refreshImgFields(workForm);
+    refreshChipInputs();
     if ($('workImagePreview').src === '' || !$('f_image').value) $('workImagePreview').src = PH[formType];
     renderSeasonsEditor(src.seasonsList);
     updateTitleHint();
@@ -1039,6 +1048,8 @@ function saveWork() {
     if (total && data.progress > total) data.progress = total;
     if (data.endDate && data.startDate && data.endDate < data.startDate) { showToast('⚠️ La fecha de fin es anterior a la de inicio', 'error'); return; }
     const editing = editingWorkId;
+    data.personIds = formPersonIds(data);
+    if (!data.personIds.length) delete data.personIds;
     // Fechas automáticas: al empezar o terminar se apunta el día de hoy si no hay otra fecha
     if ((data.status === 'leyendo' || data.status === 'viendo' || data.status === 'terminado') && !data.startDate) data.startDate = todayISO();
     if (data.status === 'terminado' && !data.endDate) data.endDate = todayISO();
@@ -1052,6 +1063,7 @@ function saveWork() {
         if (editing) {
             const w = getWorkById(editing);
             const before = { progress: Number(w.progress) || 0, status: w.status };
+            if (!data.personIds) delete w.personIds;
             Object.assign(w, data, { updatedAt: Date.now() });
             if (!hasSeasons(w)) delete w.seasonsList;
             syncSeasonAggregates(w);
@@ -1065,6 +1077,7 @@ function saveWork() {
             if ((Number(w.progress) || 0) > 0) bumpActivity(w);
             appData.works.push(w);
         }
+        (data.personIds || []).forEach(id => { const p = getPersonById(id); if (p) { delete p.linkPending; personsCreatedInForm.delete(id); } });
     }, editing ? '✅ Obra actualizada' : '✅ Obra agregada', { label: editing ? `Editar “${data.title}”` : `Agregar “${data.title}”` });
     if (ok) { if (!editing) clearDraft(); closeModal('workModal', { force: true }); }
 }
@@ -1132,14 +1145,14 @@ const FIELD_LABELS = {
     studio: 'Estudio', platform: 'Plataforma', country: 'País', genre: 'Género', year: 'Año', actors: 'Actores', directors: 'Directores',
     pages: 'Páginas', totalEpisodes: 'Episodios', totalChapters: 'Capítulos', seasons: 'Temporadas', season: 'Temporada',
     airDay: 'Día de emisión', startDate: 'Inicio', endDate: 'Fin', tags: 'Etiquetas', synopsis: 'Sinopsis', spicy: 'Spicy',
-    sadness: 'Tristeza', image: 'Portada', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
+    sadness: 'Tristeza', image: 'Portada', banner: 'Banner', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
 };
 function fieldValueText(field, v) {
     if (v === null || v === undefined || v === '') return '—';
     if (typeof v === 'boolean') return v ? 'Sí' : 'No';
     if (field === 'status') return getStatusLabel(v);
     if (field === 'type') return getTypeLabel(v);
-    if (field === 'image') return 'imagen';
+    if (field === 'image' || field === 'banner') return 'imagen';
     if (field === 'rating') return Number(v) ? '★ ' + ratingText(v) : '—';
     if (field === 'airDay') return (WEEK.find(d => d.day === Number(v)) || {}).short || '—';
     if (field === 'startDate' || field === 'endDate') return fmtDate(v);
@@ -1222,8 +1235,8 @@ function renderDetail(fresh = false) {
     const p = getProgress(w), total = getTotal(w);
     const inColls = appData.collections.filter(c => collectionHas(c, w.id));
     const rel = [
-        ['Autor', w.author, true], ['Estudio', w.studio], ['Plataforma', w.platform], ['Género', w.genre], ['País', w.country],
-        ['Actores', w.actors, true], ['Directores', w.directors, true],
+        ['Autor', w.author, 'author'], ['Estudio', w.studio], ['Plataforma', w.platform], ['Género', w.genre], ['País', w.country],
+        ['Actores', w.actors, 'actors'], ['Directores', w.directors, 'directors'],
         ['Temporadas', w.type === 'anime' && w.seasons ? w.seasons : ''], ['Temporada', w.type === 'manhwa' && w.season ? w.season : ''],
         ['Emisión', (WEEK.find(d => d.day === getAirDay(w)) || {}).short || '']
     ].filter(r => r[1]);
@@ -1231,8 +1244,9 @@ function renderDetail(fresh = false) {
     const similar = similarWorks(w, appData.works, 6).map(x => x.work);
 
     $('detailPanel').innerHTML = `
-      <div class="detail-header">
-        <div class="bg" style="background-image:${esc(cssUrl(imageSrc(w.image, w.type)))}"></div>
+      <div class="detail-header ${w.banner ? 'has-banner' : ''}">
+        ${bannerBgHtml(w.banner, w.image)}
+        ${isLocked(w) ? '' : `<button class="icon-btn detail-banner-btn" data-act="banner-quick" data-kind="works" data-id="${w.id}" title="${w.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${w.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button>`}
         <button class="icon-btn detail-close" data-detail-close aria-label="Cerrar">✕</button>
       </div>
       <div class="detail-top">
@@ -1289,7 +1303,8 @@ function renderDetail(fresh = false) {
         <details class="expandable" data-key="ficha" ${open.ficha ?? rel.length ? 'open' : ''}>
           <summary>🔗 Ficha</summary>
           <div class="expandable-content">
-            ${rel.length ? `<dl class="kv">${rel.map(([k, v, people]) => `<dt>${k}</dt><dd>${people ? peopleChips(v) : esc(v)}</dd>`).join('')}</dl>` : '<p>Sin información adicional. Edita la obra para añadirla.</p>'}
+            ${rel.length ? `<dl class="kv">${rel.map(([k, v, people]) => `<dt>${k}</dt><dd>${people ? castChipsHtml(w, people) : esc(v)}</dd>`).join('')}</dl>` : '<p>Sin información adicional. Edita la obra para añadirla.</p>'}
+            ${castLinesHtml(w) ? `<div class="detail-section-title" style="margin-top:12px">🎭 Reparto</div>${castLinesHtml(w)}` : ''}
           </div>
         </details>
         ${notesSectionHtml(w, open.notes, composer)}
@@ -1322,7 +1337,7 @@ function renderCollections() {
         const mosaic = works.slice(0, 4);
         return `
         <article class="collection-card" data-coll="${c.id}" tabindex="0">
-          <div class="collection-mosaic">${mosaic.length ? mosaic.map(w => img(w.image, w.type, w.title)).join('') + '<span></span>'.repeat(4 - mosaic.length) : '<div class="ph">🗂️</div>'}</div>
+          <div class="collection-mosaic ${c.banner ? 'has-banner' : ''}">${c.banner ? img(c.banner, 'banner', c.name) : mosaic.length ? mosaic.map(w => img(w.image, w.type, w.title)).join('') + '<span></span>'.repeat(4 - mosaic.length) : '<div class="ph">🗂️</div>'}</div>
           <div class="collection-info">
             <h4><span>${isSmart(c) ? '✨ ' : ''}${esc(c.name)}</span><span class="chip chip-muted">${works.length}</span></h4>
             <p>${esc(c.description || (isSmart(c) ? describeQuery(c.query) : ''))}</p>
@@ -1339,6 +1354,8 @@ function openCollectionModal(c = null, preset = {}) {
     $('editCollectionId').value = c ? c.id : '';
     $('collectionName').value = c ? c.name : '';
     $('collectionDesc').value = c ? (c.description || '') : '';
+    $('collectionBanner').value = c ? (c.banner || '') : '';
+    refreshImgField('collectionBanner');
     $('collectionSmart').checked = c ? isSmart(c) : !!preset.smart;
     $('collectionQuery').value = c ? (c.query || '') : (preset.query || '');
     updateSmartPreview();
@@ -1351,12 +1368,13 @@ function saveCollection() {
     const name = $('collectionName').value.trim();
     if (!name) { showToast('⚠️ El nombre es obligatorio', 'error'); return; }
     const description = $('collectionDesc').value.trim();
+    const banner = $('collectionBanner').value.trim();
     const smart = $('collectionSmart').checked, query = $('collectionQuery').value.trim();
     if (smart && !query) { showToast('⚠️ Escribe la búsqueda de la colección inteligente', 'error'); $('collectionQuery').focus(); return; }
     const extra = smart ? { smart: true, query } : { smart: false, query: '' };
     const ok = mutate(() => {
-        if (id) Object.assign(getCollectionById(id), { name, description, ...extra });
-        else appData.collections.push({ id: generateId(), name, description, ...extra, items: pendingCollectWorkId && !smart ? [pendingCollectWorkId] : [], createdAt: Date.now() });
+        if (id) Object.assign(getCollectionById(id), { name, description, banner, ...extra });
+        else appData.collections.push({ id: generateId(), name, description, banner, ...extra, items: pendingCollectWorkId && !smart ? [pendingCollectWorkId] : [], createdAt: Date.now() });
     }, id ? '✅ Colección actualizada' : (pendingCollectWorkId ? '✅ Colección creada con la obra' : '✅ Colección creada'));
     if (ok) { pendingCollectWorkId = null; closeModal('collectionModal', { force: true }); }
 }
@@ -1412,17 +1430,18 @@ function personCard(p) {
 function renderPersons() {
     const q = norm(val('personSearch'));
     const sortBy = val('personSortSelect');
-    let all = appData.persons.filter(p => norm(p.name).includes(q));
+    let all = appData.persons.filter(p => personNames(p).some(n => norm(n).includes(q)));
     if (sortBy === 'works') all.sort((a, b) => personWorkCount(b) - personWorkCount(a));
     else if (sortBy === 'rating') all.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     else all.sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
-    const byType = t => appData.persons.filter(p => p.type === t).length;
+    const byType = t => appData.persons.filter(p => personRoles(p).includes(t)).length;
     $('personTotal').textContent = appData.persons.length;
     $('personActors').textContent = $('personActorsTab').textContent = byType('actor');
     $('personAuthors').textContent = $('personAuthorsTab').textContent = byType('author');
     $('personDirectors').textContent = $('personDirectorsTab').textContent = byType('director');
     $('personBlTab').textContent = appData.persons.filter(p => p.bl).length;
+    $('personCharsTab').textContent = allCharacters(appData.works, appData.persons).length;
     document.querySelectorAll('#personTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === personTab));
     $('person-general').hidden = personTab !== 'general';
     $('person-list').hidden = personTab === 'general';
@@ -1443,7 +1462,12 @@ function renderPersons() {
               ${p.rating ? `<div class="ranking-rating">★ ${ratingText(p.rating)}</div>` : ''}
             </button>`).join('') : '<p class="panel-desc" style="margin:0">Sin datos todavía.</p>';
     } else {
-        const list = personTab === 'bl' ? all.filter(p => p.bl) : all.filter(p => p.type === personTab);
+        if (personTab === 'characters') {
+            $('personsGrid').innerHTML = charactersListHtml(q);
+            $('personsGrid').classList.remove('is-album');
+            return;
+        }
+        const list = personTab === 'bl' ? all.filter(p => p.bl) : all.filter(p => personRoles(p).includes(personTab));
         $('personsGrid').innerHTML = people(list);
         $('personsGrid').classList.toggle('is-album', album);
     }
@@ -1479,13 +1503,14 @@ function renderPersonDetail() {
     const focused = document.activeElement && document.activeElement.id;
     const caret = focused === 'pdSearch' ? document.activeElement.selectionStart : null;
     $('personDetailCard').innerHTML = `
-        <div class="person-detail-banner" style="${resolveImageSrc(p.banner) ? 'background-image:' + esc(cssUrl(resolveImageSrc(p.banner))) : ''}"></div>
+        <div class="person-detail-banner ${p.banner ? 'has-banner' : ''}">${bannerBgHtml(p.banner, p.image)}
+          <button class="icon-btn sm detail-banner-btn" data-act="banner-quick" data-kind="persons" data-id="${p.id}" title="${p.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${p.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button></div>
         <button class="icon-btn sm person-detail-close" data-close aria-label="Cerrar">✕</button>
         <img class="person-detail-avatar" src="${esc(imageSrc(p.image, 'person'))}" alt="${esc(p.name)}" data-ph="person">
         <div class="person-detail-content">
           <div class="person-detail-name">${esc(p.name)}</div>
           <div class="person-detail-meta">
-            <span style="color:var(--accent-text);font-weight:600">${esc(PERSON_TYPE_LABEL[p.type] || p.type)}</span>
+            <span style="color:var(--accent-text);font-weight:600">${esc(personRoles(p).map(r => PERSON_TYPE_LABEL[r] || r).join(' · '))}</span>
             ${p.nationality ? `<span>🌍 ${esc(p.nationality)}</span>` : ''}
             ${p.birthDate ? `<span>🎂 ${fmtDate(p.birthDate)}${age}</span>` : ''}
           </div>
@@ -1494,6 +1519,7 @@ function renderPersonDetail() {
             ${p.rating ? `<span class="chip chip-orange">★ ${ratingText(p.rating)}</span>` : ''}
             ${p.bl ? '<span class="chip chip-pink">💖 BL</span>' : ''}
           </div>
+          ${p.aliases ? `<p class="person-aka">También conocida como <b>${esc(splitList(p.aliases).join(', '))}</b></p>` : ''}
           ${p.bio ? `<div class="person-bio">${esc(p.bio)}</div>` : ''}
           ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(c.name)}</button>`).join('')}</div>` : ''}
           ${social ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${social}</div>` : ''}
@@ -1501,7 +1527,7 @@ function renderPersonDetail() {
             <button class="btn btn-secondary btn-sm" data-act="person-edit" data-id="${p.id}">✏️ Editar</button>
             <button class="btn btn-secondary btn-sm" data-act="person-duplicate" data-id="${p.id}">⧉ Duplicar</button>
           </div>
-          <div class="detail-section-title">📚 Obras en tu colección (${totalLinked})</div>
+          <div class="detail-section-title">📚 Obras asociadas (${totalLinked})</div>
           ${totalLinked ? `
           <div class="work-filter-row">
             <input type="search" class="text-input" id="pdSearch" placeholder="Buscar obra…" value="${esc($('pdSearch') ? $('pdSearch').value : '')}">
@@ -1511,11 +1537,11 @@ function renderPersonDetail() {
           </div>
           ${works.length ? `<div class="mini-grid">${works.map(miniCard).join('')}</div>` : '<p class="panel-desc">Ninguna obra coincide.</p>'}`
           : `<p class="panel-desc">Aún no hay obras vinculadas. Escribe “${esc(p.name)}” como autor, actor o director en una obra y aparecerá aquí.</p>`}
+          <div class="detail-section-title" style="margin-top:22px">🎨 Moodboard${(p.gallery || []).length ? ' · ' + p.gallery.length : ''}</div>
+          ${moodboardHtml('persons', p)}
         </div>`;
     if (focused === 'pdSearch' && $('pdSearch')) { $('pdSearch').focus(); $('pdSearch').setSelectionRange(caret, caret); }
 }
-const updatePersonPreview = bindPreview('personImage', 'personImagePreview', 'person');
-const updateBannerPreview = bindPreview('personBanner', 'personBannerPreview', 'banner');
 function openPersonModal(p = null) {
     $('editPersonId').value = p ? p.id : '';
     $('personName').value = p ? p.name : '';
@@ -1531,23 +1557,36 @@ function openPersonModal(p = null) {
     $('personBl').checked = p ? !!p.bl : false;
     $('personModalTitle').textContent = p ? '✏️ Editar persona' : '＋ Agregar persona';
     updateRangeOutputs($('personModal'));
-    updatePersonPreview(); updateBannerPreview();
+    $('personAliases').value = p ? (p.aliases || '') : '';
+    document.querySelectorAll('#personRoles input').forEach(c => { c.checked = !!p && (p.roles || []).includes(c.value); });
+    updatePersonNameHint();
+    refreshImgField('personImage'); refreshImgField('personBanner');
     openModal('personModal');
 }
 function savePerson() {
     const id = $('editPersonId').value;
     const name = $('personName').value.trim();
     if (!name) { showToast('⚠️ El nombre es obligatorio', 'error'); $('personName').focus(); return; }
-    const dup = appData.persons.find(p => norm(p.name) === norm(name) && p.id !== id);
+    const dup = appData.persons.find(p => personHasName(p, name) && p.id !== id);
     if (dup && !confirm(`Ya existe “${dup.name}”. ¿Guardar de todas formas?`)) return;
+    const sim = !dup && !id && similarPersons(name, appData.persons)[0];
+    if (sim && !confirm(`Se parece mucho a “${sim.name}”, que ya tienes. ¿Es otra persona distinta?`)) return;
+    const type = $('personType').value;
+    const roles = [...document.querySelectorAll('#personRoles input:checked')].map(c => c.value).filter(r => r !== type);
     const data = {
         name, type: $('personType').value, works: Number($('personWorks').value) || 0, rating: Number($('personRating').value) || 0,
         nationality: $('personNationality').value.trim(), birthDate: $('personBirthDate').value, bio: $('personBio').value.trim(),
         socialLinks: $('personSocialLinks').value.trim(), image: $('personImage').value.trim(), banner: $('personBanner').value.trim(),
-        bl: $('personBl').checked
+        bl: $('personBl').checked, aliases: $('personAliases').value.trim(), roles
     };
+    data.type = type;
+    if (!roles.length) delete data.roles;
+    const old = id && getPersonById(id);
+    const renamed = old && old.name !== name ? old.name : null;
     const ok = mutate(() => {
-        if (id) Object.assign(getPersonById(id), data, { updatedAt: Date.now() });
+        // Si cambias el nombre, también cambia en las obras donde aparece
+        if (renamed) renamePersonInWorks(appData.works.filter(w => workHasPerson(w, old)), old, renamed, name);
+        if (id) { Object.assign(old, data, { updatedAt: Date.now() }); if (!roles.length) delete old.roles; if (!data.aliases) delete old.aliases; }
         else appData.persons.push({ id: generateId(), ...data, createdAt: Date.now() });
     }, id ? '✅ Persona actualizada' : '✅ Persona agregada');
     if (ok) closeModal('personModal', { force: true });
@@ -1557,8 +1596,12 @@ function deletePerson(id) {
     if (!p) return;
     const n = worksForPerson(p).length;
     if (n && !confirm(`${p.name} aparece en ${n} ${n === 1 ? 'obra' : 'obras'} de tu colección (las obras no se borran).\n\nSe enviará a la papelera. ¿Continuar?`)) return;
+    const clean = n && confirm(`¿Quitar también a ${p.name} de esas ${n} ${n === 1 ? 'obra' : 'obras'}?\n\nAceptar: se borra su nombre del reparto.\nCancelar: su nombre se queda escrito en las obras.`);
     if (currentPersonId === id) closeModal('personDetailOverlay');
-    mutate(() => { trashRecord(appData, 'persons', id, Date.now(), { from: 'Personas' }); }, `🗑️ ${p.name} enviada a la papelera`, { label: `Eliminar a ${p.name}` });
+    mutate(() => {
+        if (clean) removePersonFromWorks(appData.works, p);
+        trashRecord(appData, 'persons', id, Date.now(), { from: 'Personas' });
+    }, `🗑️ ${p.name} enviada a la papelera`, { label: `Eliminar a ${p.name}` });
 }
 
 // ============================================================
@@ -1602,6 +1645,8 @@ function openCoupleModal(c = null) {
     $('coupleWorks').value = c ? (c.works || '') : '';
     $('coupleRating').value = c ? (c.rating || 0) : 0;
     $('coupleImage').value = c ? (c.image || '') : '';
+    $('coupleBanner').value = c ? (c.banner || '') : '';
+    refreshImgField('coupleBanner');
     $('coupleFavorite').checked = c ? !!c.favorite : false;
     $('coupleModalTitle').textContent = c ? '✏️ Editar pareja' : '＋ Añadir pareja BL';
     fillCoupleLinks(c);
@@ -1617,7 +1662,7 @@ function saveCouple() {
     // Si no escribes nombre, se usa "A & B"
     const name = $('coupleName').value.trim() || (a && b ? `${a.name} & ${b.name}` : '');
     if (!name) { showToast('⚠️ Escribe un nombre o elige a los dos actores', 'error'); $('coupleName').focus(); return; }
-    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), favorite: $('coupleFavorite').checked, ...links };
+    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), banner: $('coupleBanner').value.trim(), favorite: $('coupleFavorite').checked, ...links };
     const ok = mutate(() => {
         if (id) Object.assign(getCoupleById(id), data);
         else appData.couples.push({ id: generateId(), ...data, createdAt: Date.now() });
@@ -1874,6 +1919,7 @@ function applySettings() {
     // Color de la barra del sistema (móvil y app instalada)
     document.querySelector('meta[name=theme-color]').content = dark ? '#0b0b13' : '#fbfbfe';
     applyPersonalization();
+    applyProfileBanner();
     root.classList.toggle('read-only', !!s.readOnly);
     if (detectLang(s.lang) !== currentLang || currentLang !== 'es') applyLanguage(s.lang);
 }
@@ -1895,6 +1941,9 @@ function renderSettings() {
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
     $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
     renderPersonalizePanel();
+    renderBannerPanel();
+    renderLinkPanel();
+    renderImageSourcesPanel();
     $('fontSizeSlider').value = s.fontSize;
     $('fontSizeValue').textContent = s.fontSize + 'px';
     $('btnContain').classList.toggle('is-on', s.imageFit !== 'cover');
@@ -2240,7 +2289,6 @@ document.addEventListener('input', e => {
     if (onImportInput(t)) return;
     if (t.id === 'collectionQuery' || t.id === 'collectionSmart') updateSmartPreview();
     if (t.id === 'queryTry') { updateQueryTry(); return; }
-    if (t.id === 'galleryInput') { onGalleryUploaded(t); return; }
     if (t.dataset.notify && t.type !== 'checkbox' && t.tagName !== 'SELECT') return; // la hora se guarda al terminar de elegirla
     if (onPersonalizeInput(t, 'input')) return;
     if (t.id === 'settingTmdbKey') { appData.settings.tmdbKey = t.value.trim(); saveData(); return; }

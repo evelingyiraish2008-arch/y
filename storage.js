@@ -14,7 +14,10 @@ const LEGACY_KEY = 'mi_mundo_data_v16';
 const LEGACY_BACKUP_KEY = 'mi_mundo_data_v16_respaldo';
 const IMAGE_PREFIX = 'idb:';
 /** Campos que guardan imágenes: [colección, campo, tipo de imagen para comprimir]. */
-const IMAGE_FIELDS = [['works', 'image', 'poster'], ['persons', 'image', 'avatar'], ['persons', 'banner', 'banner'], ['couples', 'image', 'couple']];
+const IMAGE_FIELDS = [
+    ['works', 'image', 'poster'], ['works', 'banner', 'banner'], ['persons', 'image', 'avatar'], ['persons', 'banner', 'banner'],
+    ['couples', 'image', 'couple'], ['couples', 'banner', 'banner'], ['collections', 'banner', 'banner']
+];
 
 const isImageRef = v => typeof v === 'string' && v.startsWith(IMAGE_PREFIX);
 const isEmbeddedImage = v => typeof v === 'string' && v.startsWith('data:image/') && !v.startsWith('data:image/svg');
@@ -52,10 +55,10 @@ function blobToDataUrl(blob) {
 /** Recorre todos los campos de imagen de los datos. */
 function forEachImageField(data, fn) {
     IMAGE_FIELDS.forEach(([store, field, kind]) => allRecords(data, store).forEach(item => fn(item, field, kind)));
-    // Galería de cada obra: una lista de imágenes (se pasa la lista y la posición)
-    allRecords(data, 'works').forEach(w => { if (Array.isArray(w.gallery)) w.gallery.forEach((_, i) => fn(w.gallery, i, 'poster')); });
-    // Imágenes de los ajustes: avatar y fondo
-    if (data.settings) [['avatar', 'avatar'], ['bgImage', 'banner']].forEach(([field, kind]) => fn(data.settings, field, kind));
+    // Moodboard de obras, personas y parejas: una lista de imágenes (se pasa la lista y la posición)
+    ['works', 'persons', 'couples'].forEach(k => allRecords(data, k).forEach(r => { if (Array.isArray(r.gallery)) r.gallery.forEach((_, i) => fn(r.gallery, i, 'gallery')); }));
+    // Imágenes de los ajustes: avatar, fondo y banner del perfil
+    if (data.settings) [['avatar', 'avatar'], ['bgImage', 'banner'], ['profileBanner', 'banner']].forEach(([field, kind]) => fn(data.settings, field, kind));
 }
 /** Registros de una colección, incluidos los que están en la papelera (se guardan en el mismo almacén). */
 function allRecords(data, name) {

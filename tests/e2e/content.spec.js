@@ -23,18 +23,20 @@ test('citas: guardarlas, marcar favorita, cita del día en Inicio y búsqueda', 
     expect(errors).toEqual([]);
 });
 
-test('galería: subir una imagen, verla y usarla de portada; se conserva al limpiar imágenes', async ({ page }) => {
+test('moodboard de una obra: subir varias, ampliar y usar de portada; se conserva al limpiar imágenes', async ({ page }) => {
     await openApp(page);
     await page.evaluate(() => { openDetail('w1'); contentTab = 'gallery'; renderDetail(true); });
     await page.locator('#detailPanel details[data-key="content"] summary').click();
-    await page.setInputFiles('#galleryFile', { name: 'fanart.png', mimeType: 'image/png', buffer: PNG });
-    await expect(page.locator('#detailPanel .gallery-item')).toHaveCount(1);
-    await page.locator('#detailPanel .gallery-open').click();
-    await page.click('[data-act="gallery-cover"]');
+    await page.setInputFiles('#mbFile_works_w1', [{ name: 'fanart.png', mimeType: 'image/png', buffer: PNG }, { name: 'escena.png', mimeType: 'image/png', buffer: PNG }]);
+    await expect(page.locator('#detailPanel .mb-item')).toHaveCount(2);
+    await expect(page.locator('#detailPanel .mb-filters')).toContainText('Cuadradas · 2');
+    await page.locator('#detailPanel .mb-open').first().click();
+    await page.click('[data-act="mb-use"][data-field="image"]');
     const w = await page.evaluate(() => getWorkById('w1'));
     expect(w.image).toBe(w.gallery[0]);
+    expect(w.galleryInfo.map(m => [m.title, m.o])).toEqual([['fanart', 'square'], ['escena', 'square']]);
     await page.evaluate(() => whenSaved().then(() => store.collectGarbage(appData)));
-    expect((await stored(page)).images).toHaveLength(1);
+    expect((await stored(page)).images).toHaveLength(2);
 });
 
 test('personajes, música, premios y curiosidades', async ({ page }) => {

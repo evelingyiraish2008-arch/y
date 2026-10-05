@@ -21,7 +21,7 @@ const READ_STATUSES = ['leyendo', 'terminado', 'quiero leer', 'abandonado'];
 const WATCH_STATUSES = ['viendo', 'terminado', 'quiero ver', 'abandonado'];
 const STATUS_BY_TYPE = { book: READ_STATUSES, manhwa: READ_STATUSES, series: WATCH_STATUSES, anime: WATCH_STATUSES };
 const STATUS_LABEL = { 'leyendo': 'Leyendo', 'viendo': 'Viendo', 'terminado': 'Terminado', 'quiero leer': 'Quiero leer', 'quiero ver': 'Quiero ver', 'abandonado': 'Abandonado' };
-const PERSON_TYPE_LABEL = { actor: 'Actor / Actriz', author: 'Autor / Autora', director: 'Director / Directora' };
+const PERSON_TYPE_LABEL = { actor: 'Actor / Actriz', author: 'Autor / Autora', director: 'Director / Directora', studio: 'Estudio' };
 const WEEK = [
     { day: 1, short: 'Lun' }, { day: 2, short: 'Mar' }, { day: 3, short: 'Mié' }, { day: 4, short: 'Jue' },
     { day: 5, short: 'Vie' }, { day: 6, short: 'Sáb' }, { day: 0, short: 'Dom' }

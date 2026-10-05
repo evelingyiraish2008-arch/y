@@ -35,7 +35,7 @@ test('etiquetas: el formulario sugiere correcciones y etiquetas de obras parecid
     await openApp(page);
     await page.evaluate(() => openWorkModal('book'));
     await page.fill('#f_title', 'El Bosque Oscuro');
-    await page.locator('[data-field="author"]').fill('Liu Cixin');
+    await page.locator('#chip_author').pressSequentially('Liu Cixin,');
     await page.fill('#f_tags', 'ciencia ficcion');
     await expect(page.locator('#tagsHint')).toContainText('¿Quisiste decir');
     await page.locator('#tagsHint [data-act="tag-fix"]').click();
