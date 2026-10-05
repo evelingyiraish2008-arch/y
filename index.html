@@ -139,6 +139,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">📖 Libros</h1><p class="page-subtitle">Tu biblioteca personal de lecturas.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="booksSearch" placeholder="Título, autor o etiqueta…" data-render="books"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="booksFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="book">＋ Agregar</button>
@@ -164,6 +165,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">🎬 Series y Películas</h1><p class="page-subtitle">Explora y organiza todas tus series a tu manera.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="seriesSearch" placeholder="Título, actor o etiqueta…" data-render="series"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="seriesFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="series">＋ Agregar</button>
@@ -199,6 +201,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">🎌 Anime</h1><p class="page-subtitle">Tu colección de animes con seguimiento de episodios.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="animeSearch" placeholder="Título, estudio o etiqueta…" data-render="anime"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="animeFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="anime">＋ Agregar</button>
@@ -224,6 +227,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">📕 Manhwas</h1><p class="page-subtitle">Tu colección de manhwas con seguimiento de capítulos.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="manhwaSearch" placeholder="Título, autor o etiqueta…" data-render="manhwa"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="manhwaFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="manhwa">＋ Agregar</button>
@@ -249,6 +253,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">💖 Solo BL</h1><p class="page-subtitle">Todas tus obras BL, unificadas en un solo lugar.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="blSearch" placeholder="Buscar en BL…" data-render="bl"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="blFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="series" data-bl="1">＋ Agregar BL</button>
@@ -490,6 +495,11 @@
                             <div class="panel-title">🌙 Tema</div>
                             <div class="setting-row"><span>Modo oscuro</span><button class="toggle-switch" id="themeToggle" role="switch" aria-checked="true" aria-label="Modo oscuro"></button></div>
                         </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🔎 Búsqueda de datos</div>
+                            <p class="panel-desc" style="margin:-6px 0 12px">Para series y películas puedes añadir una clave gratuita de TMDB (themoviedb.org → Ajustes → API). Sin ella se usa TVmaze.</p>
+                            <label class="field"><span>Clave de TMDB (opcional)</span><input type="password" class="text-input" id="settingTmdbKey" autocomplete="off" placeholder="Pega aquí tu clave"></label>
+                        </div>
                         <div class="panel-card" id="cloudPanel">
                             <div class="panel-title">☁️ Sincronización en la nube</div>
                             <div id="cloudPanelBody"></div>
@@ -519,6 +529,8 @@
                                 <button class="btn btn-primary btn-sm btn-block" id="exportBtn">📤 Exportar datos (JSON)</button>
                                 <button class="btn btn-secondary btn-sm btn-block" id="importBtn">📥 Importar datos (JSON)</button>
                                 <input type="file" id="importFileInput" accept=".json,application/json" hidden>
+                                <button class="btn btn-secondary btn-sm btn-block" data-act="import-wizard">🌐 Importar de otras apps</button>
+                                <button class="btn btn-secondary btn-sm btn-block" data-act="export-csv">📄 Exportar a CSV (Excel)</button>
                                 <button class="btn btn-danger btn-sm btn-block" id="wipeBtn">🗑️ Borrar todos los datos</button>
                             </div>
                         </div>
@@ -528,6 +540,12 @@
           </div>
         </main>
     </div>
+
+    <!-- ===== SELECCIÓN DE VARIAS OBRAS ===== -->
+    <div class="bulk-bar" id="bulkBar" hidden role="toolbar" aria-label="Acciones con las obras seleccionadas"></div>
+    <input type="file" id="importAnyFile" hidden>
+    <datalist id="dlAuthors"></datalist><datalist id="dlStudios"></datalist><datalist id="dlPlatforms"></datalist>
+    <datalist id="dlCountries"></datalist><datalist id="dlGenres"></datalist><datalist id="dlActors"></datalist><datalist id="dlDirectors"></datalist>
 
     <!-- ===== DETAIL PANEL ===== -->
     <div class="overlay" id="detailOverlay"></div>
@@ -557,6 +575,7 @@
                     <div class="cover-picker">
                         <div class="cover-preview"><img id="workImagePreview" alt="Portada"></div>
                         <button type="button" class="btn btn-secondary btn-sm" data-upload="workImageFile">📤 Subir imagen</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-act="cover-search">🖼️ Buscar portada</button>
                         <input type="file" id="workImageFile" accept="image/*" hidden data-target="f_image" data-kind="poster">
                         <input type="text" class="text-input" id="f_image" data-field="image" placeholder="…o pega una URL" style="border-radius:var(--radius-md)">
                         <span class="hint">Se reduce automáticamente para ahorrar espacio.</span>
@@ -564,16 +583,20 @@
                     <div class="form-grid">
                         <label class="field span-2"><span>Título *</span><input type="text" id="f_title" data-field="title" placeholder="Nombre de la obra" required></label>
                         <div class="title-hint span-2" id="titleHint" hidden></div>
+                        <div class="span-2 meta-actions">
+                            <button type="button" class="btn btn-secondary btn-sm" data-act="meta-search">🔎 Rellenar datos por el título</button>
+                            <span class="hint">Busca en AniList, MyAnimeList, Open Library, Google Books y TVmaze. No cambia lo que ya escribiste.</span>
+                        </div>
                         <label class="field"><span>Estado</span><select id="f_status" data-field="status"></select></label>
                         <label class="field" data-types="series"><span>Tipo</span><select data-field="seriesType" data-default="Serie"><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select></label>
-                        <label class="field" data-types="book manhwa"><span>Autor</span><input type="text" data-field="author" placeholder="Autor" list="personNames"></label>
-                        <label class="field" data-types="anime"><span>Estudio</span><input type="text" data-field="studio" placeholder="MAPPA, Kyoto…"></label>
-                        <label class="field" data-types="series manhwa"><span>Plataforma</span><input type="text" data-field="platform" placeholder="Netflix, Viki, Webtoon…"></label>
-                        <label class="field" data-types="series anime"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…"></label>
-                        <label class="field" data-types="book manhwa"><span>Género</span><input type="text" data-field="genre" placeholder="Fantasía, Romance…"></label>
+                        <label class="field" data-types="book manhwa"><span>Autor</span><input type="text" data-field="author" placeholder="Autor" list="dlAuthors"></label>
+                        <label class="field" data-types="anime"><span>Estudio</span><input type="text" data-field="studio" placeholder="MAPPA, Kyoto…" list="dlStudios"></label>
+                        <label class="field" data-types="series manhwa"><span>Plataforma</span><input type="text" data-field="platform" placeholder="Netflix, Viki, Webtoon…" list="dlPlatforms"></label>
+                        <label class="field" data-types="series anime"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…" list="dlCountries"></label>
+                        <label class="field" data-types="book manhwa"><span>Género</span><input type="text" data-field="genre" placeholder="Fantasía, Romance…" list="dlGenres"></label>
                         <label class="field"><span>Año</span><input type="number" data-field="year" data-num placeholder="2026" min="1800" max="2100"></label>
-                        <label class="field span-2" data-types="series"><span>Actores (separados por comas)</span><input type="text" data-field="actors" placeholder="Actor 1, Actor 2…"></label>
-                        <label class="field span-2" data-types="series"><span>Directores (separados por comas)</span><input type="text" data-field="directors" placeholder="Director 1, Director 2…"></label>
+                        <label class="field span-2" data-types="series"><span>Actores (separados por comas)</span><input type="text" data-field="actors" placeholder="Actor 1, Actor 2…" list="dlActors"></label>
+                        <label class="field span-2" data-types="series"><span>Directores (separados por comas)</span><input type="text" data-field="directors" placeholder="Director 1, Director 2…" list="dlDirectors"></label>
                         <label class="field"><span id="lbl_progress">Progreso</span><input type="number" data-field="progress" data-num min="0" placeholder="0"></label>
                         <label class="field" data-types="book"><span>Total de páginas</span><input type="number" data-field="pages" data-num min="0" placeholder="0"></label>
                         <label class="field" data-types="series anime"><span>Total de episodios</span><input type="number" data-field="totalEpisodes" data-num min="0" placeholder="0"></label>
@@ -582,6 +605,7 @@
                         <label class="field" data-types="manhwa"><span>Temporada</span><input type="number" data-field="season" data-num min="1" placeholder="1" data-default="1"></label>
                         <label class="field" data-types="series anime manhwa"><span>Día de emisión</span>
                             <select data-field="airDay" data-default=""><option value="">Sin asignar</option><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option></select>
+                            <small class="hint" id="airDayHint"></small>
                         </label>
                         <div class="field span-2 seasons-block">
                             <label class="checkbox-wrapper"><input type="checkbox" id="f_multi"> <span id="lbl_multi">Tiene varias temporadas</span></label>
@@ -607,6 +631,7 @@
                 </form>
             </div>
             <footer class="modal-footer">
+                <button class="btn btn-ghost btn-sm footer-left" data-act="quick-from-form" title="Agregar varias obras seguidas solo con el título">⚡ Modo rápido</button>
                 <button class="btn btn-secondary" data-close>Cancelar</button>
                 <button class="btn btn-primary" id="workSaveBtn">Guardar</button>
             </footer>
@@ -749,11 +774,14 @@
     <script src="insights.js"></script>
     <script src="history.js"></script>
     <script src="coherence.js"></script>
+    <script src="metadata.js"></script>
+    <script src="importers.js"></script>
     <script src="charts.js"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
     <script src="cloud.js"></script>
     <script src="features.js"></script>
+    <script src="tools.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

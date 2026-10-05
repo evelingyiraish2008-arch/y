@@ -246,7 +246,7 @@ function workCard(w, opts = {}) {
     const p = getProgress(w);
     const quickPlus = isActive(w) && getTotal(w) && (Number(w.progress) || 0) < getTotal(w);
     return `
-    <article class="card" data-open="${w.id}" data-id="${w.id}" tabindex="0" aria-label="${esc(w.title)}">
+    <article class="card${selection.has(w.id) ? ' is-selected' : ''}" data-open="${w.id}" data-id="${w.id}" tabindex="0" aria-label="${esc(w.title)}">
       <div class="card-cover">
         ${img(w.image, w.type, w.title)}
         <div class="card-top">
@@ -587,6 +587,7 @@ let currentPage = 'home';
 
 function navigateTo(page, { push = true } = {}) {
     if (!RENDERERS[page]) page = 'home';
+    if (selecting && page !== currentPage) { selecting = false; selection.clear(); document.body.classList.remove('is-selecting'); renderBulkBar(); }
     currentPage = page;
     document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.nav === page));
     document.querySelectorAll('.page-view').forEach(el => el.classList.toggle('active', el.id === 'page-' + page));
@@ -685,6 +686,10 @@ function paletteActions() {
         { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
         { icon: '🕓', title: 'Historial de cambios', run: openHistory },
         { icon: '🏷️', title: 'Gestionar etiquetas', run: openTagManager },
+        { icon: '⚡', title: 'Modo rápido: agregar varias obras', run: openQuickAdd },
+        { icon: '🌐', title: 'Importar de Goodreads, MyAnimeList, AniList o CSV', run: openImportWizard },
+        { icon: '📄', title: 'Exportar a CSV (Excel)', run: () => FEATURE_ACTIONS['export-csv']() },
+        { icon: '☑️', title: 'Seleccionar varias obras', run: () => { if (!SELECT_PAGES.includes(currentPage)) navigateTo('books'); setSelecting(true); } },
         { icon: '🗑️', title: 'Abrir papelera', run: openTrash },
         ...(cloud.state === 'signedIn' ? [{ icon: '🔄', title: 'Sincronizar ahora', run: () => cloud.syncNow() }] : [])
     ];
@@ -908,7 +913,9 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     $('f_status').innerHTML = '';
     setFormType(work ? work.type : type);
     document.querySelectorAll('#workTypeTabs .seg-btn').forEach(b => b.disabled = !!work && b.dataset.type !== work.type);
+    fillAutocomplete();
     fillWorkForm(work || preset);
+    updateAirDayHint();
     const draft = !work && !preset.title ? readDraft() : null;
     $('workDraftBar').hidden = !draft;
     if (draft) {
@@ -1824,6 +1831,7 @@ function updateSetting(key, value, msg) {
 function renderSettings() {
     const s = appData.settings;
     if (document.activeElement !== $('settingName')) $('settingName').value = s.userName || '';
+    if (document.activeElement !== $('settingTmdbKey')) $('settingTmdbKey').value = s.tmdbKey || '';
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(s.themeColor).toLowerCase()));
     $('fontSizeSlider').value = s.fontSize;
     $('fontSizeValue').textContent = s.fontSize + 'px';
@@ -2071,6 +2079,11 @@ document.addEventListener('click', e => {
     // Cerrar search al hacer clic fuera
     if (!t.closest('#globalSearchBox')) $('globalSearchResults').classList.remove('active');
 
+    // Modo selección: tocar una tarjeta la marca en vez de abrirla
+    if (selecting) {
+        const card = t.closest('.page-view .card[data-id]');
+        if (card) { e.preventDefault(); toggleSelected(card.dataset.id); return; }
+    }
     const result = t.closest('[data-result]');
     if (result) { openSearchResult(Number(result.dataset.result)); return; }
     const closeBtn = t.closest('[data-close]');
@@ -2163,6 +2176,8 @@ $('detailOverlay').addEventListener('click', closeDetail);
 document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'paletteInput') { renderPalette(); return; }
+    if (onImportInput(t)) return;
+    if (t.id === 'settingTmdbKey') { appData.settings.tmdbKey = t.value.trim(); saveData(); return; }
     if (t.closest && t.closest('#workForm')) {
         if (t.dataset.sfield) toggleAggregateInputs();
         saveDraft();
@@ -2191,6 +2206,9 @@ document.addEventListener('change', e => {
     if (t.id === 'pdType') renderPersonDetail();
     if (t.id === 'fontSizeSlider') saveData();
     if (t.id === 'f_multi') onMultiSeasonToggle();
+    if (t.id === 'importAnyFile') { readImportFile(t.files[0]); t.value = ''; }
+    if (t.id === 'bulkStatus') { onBulkStatus(t); t.value = ''; }
+    if (t.dataset.field === 'airDay' || t.id === 'f_status') updateAirDayHint();
     if (t.closest && t.closest('#workForm')) saveDraft();
     if (t.dataset.tagColor) onTagColorChange(t);
     if (t.id === 'coupleA' || t.id === 'coupleB') renderCoupleWorksPicker();
@@ -2241,6 +2259,7 @@ document.addEventListener('keydown', e => {
         const m = topOpenModal();
         if (m) { closeModal(m.id); return; }
         if (currentDetailId) { closeDetail(); return; }
+        if (selecting) { setSelecting(false); return; }
         $('globalSearchResults').classList.remove('active');
         return;
     }
@@ -2249,6 +2268,7 @@ document.addEventListener('keydown', e => {
         e.target.click();
     }
     if (e.key === 'Enter' && e.target.closest('#workForm') && e.target.tagName === 'INPUT') { e.preventDefault(); saveWork(); }
+    if (e.key === 'Enter' && e.target.closest('.quick-form') && e.target.tagName === 'INPUT') { e.preventDefault(); quickAdd(); }
 });
 
 // Botones con id

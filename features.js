@@ -119,7 +119,9 @@ function updateTagsHint() {
     if (!el || !input) return;
     const fixes = suggestTagFixes(input.value, knownTags());
     const draft = { ...collectWorkForm(), type: formType, id: editingWorkId };
-    const suggested = suggestTagsFor(draft, appData.works, 5);
+    let suggested = suggestTagsFor(draft, appData.works, 5);
+    // Sin pistas todavía: las etiquetas que más usas
+    if (!suggested.length && !splitList(input.value).length) suggested = tagStats(appData.works).slice(0, 6).map(t => t.label);
     el.hidden = !fixes.length && !suggested.length;
     el.innerHTML = [
         fixes.length ? `🤔 ¿Quisiste decir ${fixes.map(f => `<button type="button" class="link-btn" data-act="tag-fix" data-id="${esc(f.typed)}" data-to="${esc(f.suggestion)}">${esc(f.suggestion)}</button>`).join(', ')}?` : '',
