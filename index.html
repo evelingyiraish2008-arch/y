@@ -77,7 +77,8 @@
                     <div class="header-actions">
                         <div class="search-box" id="globalSearchBox">
                             <span aria-hidden="true">🔍</span>
-                            <input type="search" id="globalSearch" placeholder="Buscar en todo tu mundo…" autocomplete="off" aria-label="Búsqueda global">
+                            <input type="search" id="globalSearch" placeholder="Buscar… (prueba: BL nota:5)" autocomplete="off" aria-label="Búsqueda global">
+                            <button class="search-help" data-act="query-help" title="Búsqueda avanzada" aria-label="Ayuda de búsqueda avanzada">?</button>
                             <div class="search-results" id="globalSearchResults" role="listbox"></div>
                         </div>
                         <button class="icon-btn" data-act="pick" title="¿Qué veo hoy?" aria-label="¿Qué veo hoy?">🎲</button>
@@ -155,7 +156,9 @@
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="booksBlFilter" data-render="books"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="booksFavFilter" data-render="books"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="booksDateFilter" data-render="books" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="books"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">📚 Estantería <span class="muted" id="booksCount"></span></h3></div>
                     <div class="card-grid" id="booksGrid"></div>
@@ -189,7 +192,9 @@
                     <select class="filter-select" id="seriesSpicyFilter" data-render="series"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="seriesSadnessFilter" data-render="series"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <label class="checkbox-wrapper"><input type="checkbox" id="seriesFavFilter" data-render="series"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="seriesDateFilter" data-render="series" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="series"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title" id="seriesSectionTitle">❤️ Todas</h3></div>
                     <div class="card-grid" id="seriesGrid"></div>
@@ -217,7 +222,9 @@
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="animeBlFilter" data-render="anime"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="animeFavFilter" data-render="anime"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="animeDateFilter" data-render="anime" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="anime"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">🎌 Tu colección <span class="muted" id="animeCount"></span></h3></div>
                     <div class="card-grid" id="animeGrid"></div>
@@ -245,7 +252,9 @@
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="manhwaBlFilter" data-render="manhwa"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="manhwaFavFilter" data-render="manhwa"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="manhwaDateFilter" data-render="manhwa" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="manhwa"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">📖 Tu colección <span class="muted" id="manhwaCount"></span></h3></div>
                     <div class="card-grid" id="manhwaGrid"></div>
@@ -271,7 +280,9 @@
                     <select class="filter-select" id="blSort" data-render="bl"><option value="recent">Recientes</option><option value="rating">Valoración</option><option value="spicy">Más spicy</option><option value="title">Título A-Z</option></select>
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="blMinRating" data-render="bl"> ⭐ Solo 4+ estrellas</label>
+                    <select class="filter-select" id="blDateFilter" data-render="bl" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="bl"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">💖 Galería BL <span class="muted" id="blCount"></span></h3></div>
                     <div class="card-grid" id="blGrid"></div>
@@ -821,6 +832,21 @@
                 <div class="form-grid">
                     <label class="field span-2"><span>Nombre *</span><input type="text" id="collectionName" placeholder="Ej: Para maratonear"></label>
                     <label class="field span-2"><span>Descripción</span><textarea id="collectionDesc" placeholder="¿Qué hay en esta colección?"></textarea></label>
+                    <div class="field span-2">
+                        <label class="checkbox-wrapper"><input type="checkbox" id="collectionSmart"> ✨ Colección inteligente (se llena sola con una búsqueda)</label>
+                        <div id="collectionSmartBox" hidden>
+                            <input type="text" class="text-input" id="collectionQuery" placeholder="Por ejemplo: BL nota:>=4" autocomplete="off" style="margin-top:8px">
+                            <small class="hint" id="collectionQueryHint"></small>
+                            <div class="tag-list" style="margin-top:8px">
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="BL nota:>=4.5">💖 BL de 4,5★ o más</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="estado:pendiente">⏳ Pendientes</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="tristeza:>=4">💧 Para llorar</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="fin:2026">🗓️ Terminadas en 2026</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="estado:activo progreso:>=80">🏁 Casi terminadas</button>
+                                <button type="button" class="chip chip-muted" data-act="query-help">❓ Cómo escribir búsquedas</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <footer class="modal-footer">
@@ -860,6 +886,7 @@
     <script src="utils.js"></script>
     <script src="insights.js"></script>
     <script src="history.js"></script>
+    <script src="query.js"></script>
     <script src="coherence.js"></script>
     <script src="metadata.js"></script>
     <script src="importers.js"></script>
@@ -874,6 +901,7 @@
     <script src="ux.js"></script>
     <script src="statsplus.js"></script>
     <script src="alerts.js"></script>
+    <script src="manage.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

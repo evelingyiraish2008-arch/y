@@ -174,8 +174,11 @@ function tagCounts(works) {
 }
 
 function filterWorks(list, f) {
-    const q = norm(f.search);
+    // Búsqueda avanzada (query.js): "BL nota:5", "estado:pendiente año:>2020"…
+    const advanced = f.search && typeof isAdvancedQuery === 'function' && isAdvancedQuery(f.search) ? parseQuery(f.search) : null;
+    const q = advanced ? '' : norm(f.search);
     return list.filter(w => {
+        if (advanced && !matchQuery(w, advanced)) return false;
         if (q) {
             const hay = norm([w.title, w.author, w.studio, w.platform, w.actors, w.directors, w.tags, w.genre].join(' '));
             if (!hay.includes(q)) return false;

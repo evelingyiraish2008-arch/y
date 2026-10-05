@@ -1608,3 +1608,19 @@ body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-in
 .disc-item > span:nth-child(2) { flex: 1; }
 .disc-icon { font-size: 20px; width: 34px; height: 34px; display: grid; place-items: center; background: var(--bg-surface); border-radius: 10px; flex-shrink: 0; }
 .disc-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 16px 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* ===== BÚSQUEDA AVANZADA, VISTAS GUARDADAS Y COLECCIONES ===== */
+.search-help { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--text-muted); border: 1px solid var(--border-medium); display: grid; place-items: center; }
+.search-help:hover { color: var(--accent-text); border-color: var(--accent); }
+code { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: .92em; background: var(--bg-elevated); padding: 1px 5px; border-radius: 5px; }
+.saved-views { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 16px; align-items: center; }
+.saved-view { display: inline-flex; align-items: center; }
+.saved-view .chip { border-top-right-radius: 0; border-bottom-right-radius: 0; cursor: pointer; }
+.saved-view-x { font-size: 10px; padding: 4px 8px; background: var(--bg-elevated); color: var(--text-muted); border-radius: 0 var(--radius-full) var(--radius-full) 0; }
+.saved-view-x:hover { color: var(--red); }
+.saved-view-add { cursor: pointer; border: 1px dashed var(--border-medium); background: transparent; }
+.coll-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.coll-toolbar .spacer { flex: 1; }
+.pick-item[draggable="true"] { cursor: grab; }
+.pick-item.dragging { opacity: .5; }
+#collectionSmartBox[hidden] { display: none; }

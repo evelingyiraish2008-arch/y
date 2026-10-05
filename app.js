@@ -310,6 +310,8 @@ function renderBooks() {
         search: val('booksSearch'), status: val('booksStatusFilter'), bl: checked('booksBlFilter'), fav: checked('booksFavFilter'),
         spicy: val('booksSpicyFilter'), sadness: val('booksSadnessFilter')
     });
+    list = filterByDate(list, val('booksDateFilter'));
+    renderSavedViews('books');
     renderGrid('booksGrid', sortWorks(list, val('booksSort')), ['📚', 'No hay libros aquí', 'Prueba con otros filtros o agrega un libro nuevo.', 'book'], 'booksCount', 'books');
 }
 
@@ -335,6 +337,8 @@ function renderSeries() {
     document.querySelectorAll('#seriesTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === seriesTab));
     const titles = { all: '❤️ Todas', bl: '💕 BL', viendo: '▶️ Viendo', terminado: '✅ Terminadas', 'quiero ver': '⏳ Pendientes' };
     $('seriesSectionTitle').innerHTML = `${titles[seriesTab]} <span class="muted">${list.length ? '· ' + list.length : ''}</span>`;
+    list = filterByDate(list, val('seriesDateFilter'));
+    renderSavedViews('series');
     renderGrid('seriesGrid', sortWorks(list, val('seriesSort')), ['🎬', 'No hay series aquí', 'Prueba con otra pestaña o agrega una serie.', 'series'], null, 'series');
 }
 function populateYearFilter(selectId, items) {
@@ -349,6 +353,8 @@ function renderAnime() {
         search: val('animeSearch'), status: val('animeStatusFilter'), bl: checked('animeBlFilter'), fav: checked('animeFavFilter'),
         spicy: val('animeSpicyFilter'), sadness: val('animeSadnessFilter')
     });
+    list = filterByDate(list, val('animeDateFilter'));
+    renderSavedViews('anime');
     renderGrid('animeGrid', sortWorks(list, val('animeSort')), ['🎌', 'No hay animes aquí', 'Prueba con otros filtros o agrega un anime.', 'anime'], 'animeCount', 'anime');
 }
 function renderManhwa() {
@@ -356,13 +362,16 @@ function renderManhwa() {
         search: val('manhwaSearch'), status: val('manhwaStatusFilter'), bl: checked('manhwaBlFilter'), fav: checked('manhwaFavFilter'),
         spicy: val('manhwaSpicyFilter'), sadness: val('manhwaSadnessFilter')
     });
+    list = filterByDate(list, val('manhwaDateFilter'));
+    renderSavedViews('manhwa');
     renderGrid('manhwaGrid', sortWorks(list, val('manhwaSort')), ['📕', 'No hay manhwas aquí', 'Prueba con otros filtros o agrega un manhwa.', 'manhwa'], 'manhwaCount', 'manhwa');
 }
 function renderBL() {
     let list = filterWorks(appData.works.filter(w => w.bl), {
         search: val('blSearch'), type: val('blTypeFilter'), status: val('blStatusFilter'), minRating: checked('blMinRating') ? 4 : 0
     });
-    list = sortWorks(list, val('blSort'));
+    list = sortWorks(filterByDate(list, val('blDateFilter')), val('blSort'));
+    renderSavedViews('bl');
     renderGrid('blGrid', list, ['💖', 'No hay obras BL aquí', 'Marca “Es BL” al agregar o editar una obra.', 'series'], 'blCount', 'bl', { showType: true });
 }
 
@@ -626,13 +635,16 @@ function searchAll(raw, limit = 12) {
     const q = norm(raw);
     const results = [];
     if (q.length < 2) return results;
+    if (isAdvancedQuery(raw)) {
+        return searchWorks(appData.works, raw).slice(0, limit).map(w => ({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type }));
+    }
     appData.works.forEach(w => {
         if (norm([w.title, w.tags, w.author, w.actors, w.studio].join(' ')).includes(q))
             results.push({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type });
     });
     appData.persons.forEach(p => { if (norm(p.name).includes(q)) results.push({ kind: 'person', id: p.id, title: p.name, sub: '👤 ' + (PERSON_TYPE_LABEL[p.type] || p.type), image: p.image, ph: 'person' }); });
     appData.couples.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'couple', id: c.id, title: c.name, sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
-    appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `🗂️ Colección · ${c.items.length} obras`, icon: '🗂️' }); });
+    appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `${isSmart(c) ? '✨ Colección inteligente' : '🗂️ Colección'} · ${collectionWorks(c).length} obras`, icon: isSmart(c) ? '✨' : '🗂️' }); });
     appData.notes.forEach(n => { if (norm(n.content + ' ' + n.workTitle).includes(q)) results.push({ kind: 'note', id: n.workId, title: n.workTitle || 'Nota', sub: '📝 ' + n.content.slice(0, 50), icon: '📝' }); });
     return results.slice(0, limit);
 }
@@ -686,6 +698,8 @@ function paletteActions() {
         { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
         { icon: '🕓', title: 'Historial de cambios', run: openHistory },
         { icon: '🏷️', title: 'Gestionar etiquetas', run: openTagManager },
+        { icon: '🔎', title: 'Ayuda de búsqueda avanzada', sub: 'BL nota:5 · estado:pendiente año:>2020…', run: openQueryHelp },
+        { icon: '✨', title: 'Nueva colección inteligente', run: () => openCollectionModal(null, { smart: true }) },
         { icon: '⚡', title: 'Modo rápido: agregar varias obras', run: openQuickAdd },
         { icon: '🌐', title: 'Importar de Goodreads, MyAnimeList, AniList o CSV', run: openImportWizard },
         { icon: '📄', title: 'Exportar a CSV (Excel)', run: () => FEATURE_ACTIONS['export-csv']() },
@@ -706,6 +720,7 @@ function renderPalette() {
     const match = t => !q || norm(t).includes(q);
     const groups = [];
     const found = searchAll(raw, 8).map(r => ({ icon: r.icon || '', image: r.image, ph: r.ph, title: r.title, sub: r.sub, run: () => openResult(r) }));
+    if (isAdvancedQuery(raw)) found.unshift({ icon: '🔎', title: `Ver todos (${searchWorks(appData.works, raw).length})`, sub: describeQuery(raw), run: () => showQueryResults(raw) });
     if (found.length) groups.push(['Resultados', found]);
     const actions = paletteActions().filter(a => match(a.title));
     if (actions.length) groups.push(['Acciones', actions]);
@@ -1034,7 +1049,7 @@ function deleteWork(id) {
     const w = getWorkById(id);
     if (!w || isLocked(w)) return;
     // Solo se pregunta si se van a perder relaciones: lo demás se puede deshacer o recuperar de la papelera
-    const colls = appData.collections.filter(c => c.items.includes(id)).length;
+    const colls = manualCollections().filter(c => c.items.includes(id)).length;
     const notes = appData.notes.filter(n => n.workId === id).length;
     if (colls || notes) {
         const parts = [colls ? `está en ${colls} ${colls === 1 ? 'colección' : 'colecciones'}` : '', notes ? `tiene ${notes} ${notes === 1 ? 'nota' : 'notas'}` : ''].filter(Boolean);
@@ -1182,7 +1197,7 @@ function renderDetail(fresh = false) {
     if (!sameWork) { editingNoteId = null; noteFilter = 'all'; }
     detailRenderedId = w.id;
     const p = getProgress(w), total = getTotal(w);
-    const inColls = appData.collections.filter(c => c.items.includes(w.id));
+    const inColls = appData.collections.filter(c => collectionHas(c, w.id));
     const rel = [
         ['Autor', w.author, true], ['Estudio', w.studio], ['Plataforma', w.platform], ['Género', w.genre], ['País', w.country],
         ['Actores', w.actors, true], ['Directores', w.directors, true],
@@ -1190,10 +1205,7 @@ function renderDetail(fresh = false) {
         ['Emisión', (WEEK.find(d => d.day === getAirDay(w)) || {}).short || '']
     ].filter(r => r[1]);
     const tags = splitList(w.tags);
-    const wTags = tags.map(t => t.toLowerCase());
-    const similar = appData.works.filter(o => o.id !== w.id)
-        .map(o => ({ o, score: splitList(o.tags).filter(t => wTags.includes(t.toLowerCase())).length + (o.bl && w.bl ? 0.5 : 0) + (o.type === w.type ? 0.25 : 0) }))
-        .filter(x => x.score >= 1).sort((a, b) => b.score - a.score).slice(0, 6).map(x => x.o);
+    const similar = similarWorks(w, appData.works, 6).map(x => x.work);
 
     $('detailPanel').innerHTML = `
       <div class="detail-header">
@@ -1260,7 +1272,7 @@ function renderDetail(fresh = false) {
         <details class="expandable" data-key="similar" ${open.similar ?? similar.length ? 'open' : ''}>
           <summary>🔍 Obras similares</summary>
           <div class="expandable-content">
-            ${similar.length ? `<div class="mini-grid">${similar.map(miniCard).join('')}</div>` : `<p>${tags.length ? 'No hay obras con etiquetas en común.' : 'Añade etiquetas a esta obra para ver recomendaciones.'}</p>`}
+            ${similar.length ? `<div class="mini-grid">${similar.map(miniCard).join('')}</div><button class="btn btn-secondary btn-sm" data-act="similar" data-id="${w.id}" style="margin-top:10px">🔍 Ver todas las parecidas y por qué</button>` : `<p>${tags.length ? 'No hay obras parecidas todavía.' : 'Añade etiquetas, autor o reparto para ver recomendaciones.'}</p>`}
           </div>
         </details>
         <details class="expandable" data-key="history" ${open.history ? 'open' : ''}>
@@ -1280,14 +1292,14 @@ function renderCollections() {
         return;
     }
     list.innerHTML = appData.collections.map(c => {
-        const works = c.items.map(getWorkById).filter(Boolean);
+        const works = collectionWorks(c);
         const mosaic = works.slice(0, 4);
         return `
         <article class="collection-card" data-coll="${c.id}" tabindex="0">
           <div class="collection-mosaic">${mosaic.length ? mosaic.map(w => img(w.image, w.type, w.title)).join('') + '<span></span>'.repeat(4 - mosaic.length) : '<div class="ph">🗂️</div>'}</div>
           <div class="collection-info">
-            <h4><span>${esc(c.name)}</span><span class="chip chip-muted">${works.length}</span></h4>
-            <p>${esc(c.description || '')}</p>
+            <h4><span>${isSmart(c) ? '✨ ' : ''}${esc(c.name)}</span><span class="chip chip-muted">${works.length}</span></h4>
+            <p>${esc(c.description || (isSmart(c) ? describeQuery(c.query) : ''))}</p>
             <div class="collection-actions">
               <button class="btn btn-secondary btn-sm" data-act="coll-open" data-id="${c.id}">📂 Abrir</button>
               <button class="btn btn-secondary btn-sm" data-act="coll-edit" data-id="${c.id}">✏️</button>
@@ -1297,10 +1309,13 @@ function renderCollections() {
         </article>`;
     }).join('');
 }
-function openCollectionModal(c = null) {
+function openCollectionModal(c = null, preset = {}) {
     $('editCollectionId').value = c ? c.id : '';
     $('collectionName').value = c ? c.name : '';
     $('collectionDesc').value = c ? (c.description || '') : '';
+    $('collectionSmart').checked = c ? isSmart(c) : !!preset.smart;
+    $('collectionQuery').value = c ? (c.query || '') : (preset.query || '');
+    updateSmartPreview();
     $('collectionModalTitle').textContent = c ? '✏️ Editar colección' : '＋ Nueva colección';
     openModal('collectionModal');
 }
@@ -1310,16 +1325,19 @@ function saveCollection() {
     const name = $('collectionName').value.trim();
     if (!name) { showToast('⚠️ El nombre es obligatorio', 'error'); return; }
     const description = $('collectionDesc').value.trim();
+    const smart = $('collectionSmart').checked, query = $('collectionQuery').value.trim();
+    if (smart && !query) { showToast('⚠️ Escribe la búsqueda de la colección inteligente', 'error'); $('collectionQuery').focus(); return; }
+    const extra = smart ? { smart: true, query } : { smart: false, query: '' };
     const ok = mutate(() => {
-        if (id) Object.assign(getCollectionById(id), { name, description });
-        else appData.collections.push({ id: generateId(), name, description, items: pendingCollectWorkId ? [pendingCollectWorkId] : [], createdAt: Date.now() });
+        if (id) Object.assign(getCollectionById(id), { name, description, ...extra });
+        else appData.collections.push({ id: generateId(), name, description, ...extra, items: pendingCollectWorkId && !smart ? [pendingCollectWorkId] : [], createdAt: Date.now() });
     }, id ? '✅ Colección actualizada' : (pendingCollectWorkId ? '✅ Colección creada con la obra' : '✅ Colección creada'));
     if (ok) { pendingCollectWorkId = null; closeModal('collectionModal', { force: true }); }
 }
 function deleteCollection(id) {
     const c = getCollectionById(id);
     if (!c) return;
-    const n = c.items.filter(getWorkById).length;
+    const n = isSmart(c) ? 0 : c.items.filter(getWorkById).length;
     if (n && !confirm(`La colección “${c.name}” tiene ${n} ${n === 1 ? 'obra' : 'obras'} (las obras no se borran).\n\nSe enviará a la papelera. ¿Continuar?`)) return;
     mutate(() => { trashRecord(appData, 'collections', id, Date.now(), { from: 'Colecciones' }); }, `🗑️ Colección “${c.name}” enviada a la papelera`, { label: `Eliminar colección “${c.name}”` });
 }
@@ -1327,15 +1345,8 @@ function openCollectionView(id) {
     openSheet((getCollectionById(id) || {}).name || 'Colección', () => {
         const c = getCollectionById(id);
         if (!c) return '<p>Colección no encontrada.</p>';
-        $('sheetTitle').textContent = '🗂️ ' + c.name;
-        const works = c.items.map(getWorkById).filter(Boolean);
-        if (!works.length) return emptyState('📭', 'Colección vacía', 'Abre cualquier obra y pulsa “📂 Colecciones” para añadirla aquí.');
-        return `<div class="pick-list">${works.map(w => `
-            <div class="pick-item">
-              <div class="thumb">${img(w.image, w.type, w.title)}</div>
-              <button class="info" style="text-align:left" data-open="${w.id}"><b>${esc(w.title)}</b><small>${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))} · ${esc(getStatusLabel(w.status))}</small></button>
-              <button class="icon-btn sm" data-act="coll-remove" data-id="${c.id}" data-item="${w.id}" title="Quitar de la colección" aria-label="Quitar">✕</button>
-            </div>`).join('')}</div>`;
+        $('sheetTitle').textContent = (isSmart(c) ? '✨ ' : '🗂️ ') + c.name;
+        return collectionViewHtml(c);
     });
 }
 function openCollectionPicker(workId) {
@@ -1344,7 +1355,7 @@ function openCollectionPicker(workId) {
     openSheet('📂 Añadir a colección', () => `
         <p class="panel-desc" style="margin:0 0 12px">Marca las colecciones donde quieres guardar “${esc(w.title)}”.</p>
         <div class="pick-list">
-          ${appData.collections.map(c => `
+          ${manualCollections().map(c => `
             <label class="pick-item" style="cursor:pointer">
               <input type="checkbox" data-pick-coll="${c.id}" data-work="${workId}" ${c.items.includes(workId) ? 'checked' : ''}>
               <span class="info"><b>${esc(c.name)}</b><small>${c.items.length} obras</small></span>
@@ -2194,6 +2205,8 @@ document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'paletteInput') { renderPalette(); return; }
     if (onImportInput(t)) return;
+    if (t.id === 'collectionQuery' || t.id === 'collectionSmart') updateSmartPreview();
+    if (t.id === 'queryTry') { updateQueryTry(); return; }
     if (t.dataset.notify && t.type !== 'checkbox' && t.tagName !== 'SELECT') return; // la hora se guarda al terminar de elegirla
     if (onPersonalizeInput(t, 'input')) return;
     if (t.id === 'settingTmdbKey') { appData.settings.tmdbKey = t.value.trim(); saveData(); return; }
@@ -2226,6 +2239,7 @@ document.addEventListener('change', e => {
     if (t.id === 'fontSizeSlider') saveData();
     if (onPersonalizeInput(t, 'change')) return;
     if (onNotifyInput(t)) return;
+    if (t.dataset.collSort) { onCollectionSort(t); return; }
     if (t.id === 'f_multi') onMultiSeasonToggle();
     if (t.id === 'wrappedYear') { openWrapped(Number(t.value)); return; }
     if (t.id === 'importAnyFile') { readImportFile(t.files[0]); t.value = ''; }
@@ -2293,6 +2307,8 @@ document.addEventListener('keydown', e => {
     }
     if (e.key === 'Enter' && e.target.closest('#workForm') && e.target.tagName === 'INPUT') { e.preventDefault(); saveWork(); }
     if (e.key === 'Enter' && e.target.closest('.quick-form') && e.target.tagName === 'INPUT') { e.preventDefault(); quickAdd(); }
+    if (e.key === 'Enter' && e.target.id === 'queryTry' && e.target.value.trim()) { e.preventDefault(); showQueryResults(e.target.value.trim()); }
+    if (e.key === 'Enter' && e.target.id === 'collectionQuery') { e.preventDefault(); saveCollection(); }
 });
 
 // Botones con id
@@ -2317,7 +2333,7 @@ $('importBtn').addEventListener('click', () => $('importFileInput').click());
 $('wipeBtn').addEventListener('click', wipeData);
 $('optimizeImagesBtn').addEventListener('click', optimizeStoredImages);
 $('globalSearch').addEventListener('focus', () => { if ($('globalSearch').value.trim().length >= 2) runGlobalSearch(); });
-window.addEventListener('hashchange', () => navigateTo(location.hash.slice(1), { push: false }));
+window.addEventListener('hashchange', () => { if (!showSharedCollection(location.hash)) navigateTo(location.hash.slice(1), { push: false }); });
 // Sincroniza si la app está abierta en otra pestaña
 async function reloadFromStore() {
     if (savePending) return; // hay cambios propios sin guardar: no los pisamos
@@ -2462,7 +2478,9 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     renderInstallState();
     renderPersistState();
     updateOnlineState(false);
-    navigateTo(location.hash.slice(1) || 'home', { push: false });
+    const sharedHash = location.hash.startsWith('#compartido=') ? location.hash : '';
+    navigateTo(sharedHash ? 'home' : (location.hash.slice(1) || 'home'), { push: false });
+    if (sharedHash) showSharedCollection(sharedHash);
     // Acceso directo “Agregar obra” del icono de la app
     const startParams = new URLSearchParams(location.search);
     if (startParams.get('accion') === 'agregar') {

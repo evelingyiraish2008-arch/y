@@ -371,7 +371,7 @@ FEATURE_ACTIONS['bulk-export'] = () => {
 FEATURE_ACTIONS['bulk-export-csv'] = () => { downloadFile(`mi-mundo-seleccion-${todayISO()}.csv`, '﻿' + worksToCSV(selectedWorks()), 'text/csv'); closeModal('sheetModal'); };
 FEATURE_ACTIONS['bulk-export-json'] = () => { downloadFile(`mi-mundo-seleccion-${todayISO()}.json`, JSON.stringify({ works: selectedWorks() }, null, 2), 'application/json'); closeModal('sheetModal'); };
 FEATURE_ACTIONS['bulk-coll'] = () => {
-    openSheet('📂 Añadir a una colección', () => `<div class="pick-list">${appData.collections.map(c => `
+    openSheet('📂 Añadir a una colección', () => `<div class="pick-list">${manualCollections().map(c => `
         <button class="pick-item" data-act="bulk-coll-add" data-id="${c.id}"><span class="info"><b>${esc(c.name)}</b><small>${c.items.length} obras</small></span></button>`).join('')
         || '<p class="panel-desc" style="margin:0">Todavía no tienes colecciones.</p>'}
         <button class="pick-item" data-act="bulk-coll-new" style="justify-content:center;color:var(--accent-text);font-weight:600">＋ Nueva colección con estas obras</button></div>`);
