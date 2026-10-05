@@ -63,8 +63,10 @@ async function applyMeta(i) {
     if (!r) return;
     const overwrite = $('metaOverwrite') ? $('metaOverwrite').checked : false;
     closeModal('sheetModal');
-    const details = await fetchMetadataDetails(r);
+    const details = await fetchMetadataDetails(r, { tmdbKey: appData.settings.tmdbKey || '' });
     const meta = { ...r, ...details };
+    // Reparto con fotos y personajes: se usará al guardar para crear sus fichas en Personas
+    rememberMetaPeople(meta.people || []);
     if (meta.seriesType === 'Película') delete meta.totalEpisodes;
     const current = collectWorkForm();
     const patch = mergeMetadata(current, meta, { overwrite });
@@ -230,6 +232,9 @@ function runImport() {
     sheetRefresh();
     // Las portadas de AniList se descargan poco a poco en segundo plano
     downloadImportedCovers();
+    // Autores y reparto de lo importado: se ofrece crear sus fichas en Personas
+    const missing = missingPersons(appData.works, appData.persons).length;
+    if (missing) showToast(`👥 Hay ${missing} ${missing === 1 ? 'nombre' : 'nombres'} sin ficha en Personas`, 'info', 8000, { label: 'Crear fichas', run: () => linkAllWorks({ ask: false }) });
 }
 async function downloadImportedCovers() {
     const pending = appData.works.filter(w => /^https:\/\/s4\.anilist\.co\//.test(w.image || '')).slice(0, 200);

@@ -134,9 +134,53 @@ function initials(name) {
     return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 
+/**
+ * ¿El título de una foto encontrada corresponde a esta persona? Todas las palabras del nombre
+ * deben aparecer (en cualquier orden). Así no se guarda la foto de otra persona por error.
+ */
+function titleMatchesName(title, name) {
+    const words = new Set(nameKey(title).split(' '));
+    const need = nameKey(name).split(' ').filter(w => w.length > 1);
+    return need.length > 0 && need.every(w => words.has(w));
+}
+/**
+ * Nombres de las obras que todavía no tienen ficha en Personas (autor, actores y directores).
+ * Devuelve [{ name, role, works }] sin repetir, con el rol del primer campo donde aparece.
+ */
+function missingPersons(works, persons) {
+    const out = new Map();
+    works.forEach(w => Object.entries(PERSON_FIELDS).forEach(([f, role]) => {
+        if (f === 'studio') return; // los estudios se quedan como texto
+        splitList(w[f]).forEach(name => {
+            if (persons.some(p => personHasName(p, name))) return;
+            const k = nameKey(name);
+            if (!k) return;
+            if (!out.has(k)) out.set(k, { name, role, works: 0 });
+            out.get(k).works++;
+        });
+    }));
+    return [...out.values()].sort((a, b) => b.works - a.works || a.name.localeCompare(b.name, 'es'));
+}
+/**
+ * Personajes que trae una fuente ({ name, character, characterRole }) que la obra aún no tiene.
+ * Se unen a su intérprete con personId. No repite personajes por nombre.
+ */
+function newCharacters(existing, metaPeople, persons, makeId) {
+    const have = new Set((existing || []).map(c => nameKey(c.name)));
+    const out = [];
+    (metaPeople || []).forEach(m => {
+        if (!m.character || have.has(nameKey(m.character))) return;
+        const p = persons.find(x => personHasName(x, m.name));
+        have.add(nameKey(m.character));
+        out.push({ id: makeId(), name: m.character, role: m.characterRole || 'protagonista', ...(p ? { personId: p.id } : {}) });
+    });
+    return out;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         PERSON_FIELDS, PERSON_ROLES, personNames, nameKey, personHasName, personRoles, namesSimilar, matchPersons, similarPersons, splitNames,
-        workHasPerson, worksOfPerson, linkPersonIds, castOf, renamePersonInWorks, removePersonFromWorks, orphanPersons, allCharacters, initials
+        workHasPerson, worksOfPerson, linkPersonIds, castOf, renamePersonInWorks, removePersonFromWorks, orphanPersons, allCharacters, initials,
+        titleMatchesName, missingPersons, newCharacters
     };
 }

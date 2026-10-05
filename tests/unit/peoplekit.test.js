@@ -109,3 +109,29 @@ test('búsquedas sugeridas, enlaces de búsqueda y mezcla de fuentes', () => {
     assert.deepEqual(mix.map(r => r.src), ['a1', 'b1', 'a2']);
     assert.deepEqual(m.filterOrientation([{ o: 'horizontal' }, { o: 'vertical' }, { o: '' }], 'vertical').length, 2);
 });
+
+test('fotos encontradas: solo si el nombre coincide', () => {
+    assert.equal(k.titleMatchesName('Xiao Zhan (actor)', 'Xiao Zhan'), true);
+    assert.equal(k.titleMatchesName('Zhan Xiao', 'Xiao Zhan'), true);
+    assert.equal(k.titleMatchesName('Xiao Long', 'Xiao Zhan'), false);
+    assert.equal(k.titleMatchesName('Cualquier cosa', ''), false);
+});
+
+test('nombres de las obras sin ficha en Personas', () => {
+    const works = [
+        { actors: 'Xiao Zhan, Liu Haikuan, Meng Ziyi', directors: 'Chen Jialin', studio: 'Tencent' },
+        { actors: 'Liu Haikuan', author: 'MXTX' },
+        { author: 'Nueva Autora' }
+    ];
+    assert.deepEqual(k.missingPersons(works, persons()).map(m => [m.name, m.role, m.works]), [
+        ['Liu Haikuan', 'actor', 2], ['Chen Jialin', 'director', 1], ['Meng Ziyi', 'actor', 1], ['Nueva Autora', 'author', 1]
+    ]); // MXTX es un seudónimo que ya existe y los estudios no se cuentan
+});
+
+test('personajes que trae la fuente: unidos a su intérprete y sin repetir', () => {
+    let n = 0;
+    const meta = [{ name: 'Xiao Zhan', character: 'Wei Wuxian' }, { name: 'Nadie', character: 'Lan Zhan' }, { name: 'Wang Yibo', character: 'wei wuxian' }, { name: 'Sin personaje' }];
+    const out = k.newCharacters([{ name: 'Jiang Cheng' }], meta, persons(), () => 'id' + (++n));
+    assert.deepEqual(out, [{ id: 'id1', name: 'Wei Wuxian', role: 'protagonista', personId: 'p1' }, { id: 'id2', name: 'Lan Zhan', role: 'protagonista' }]);
+    assert.deepEqual(k.newCharacters([{ name: 'Wei Wuxian' }], meta.slice(0, 1), persons(), () => 'x'), []);
+});

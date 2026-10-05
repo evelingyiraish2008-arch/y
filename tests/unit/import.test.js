@@ -118,15 +118,32 @@ describe('búsqueda de datos', () => {
     it('TVmaze, AniList (BL y país) y Jikan', () => {
         const tv = md.parseTvmaze([{ show: { id: 7, name: 'The Untamed', premiered: '2019-06-27', summary: '<p>Wuxia</p>', genres: ['Drama', 'Fantasy'], webChannel: { name: 'Tencent', country: { name: 'China' } }, image: { medium: 'http://m', original: 'http://o' } } }]);
         assert.deepEqual([tv[0].platform, tv[0].country, tv[0].coverLarge, tv[0].genre], ['Tencent', 'China', 'https://o', 'Drama, Fantasía']);
-        assert.deepEqual(md.parseTvmazeDetails({ _embedded: { episodes: [{ season: 1 }, { season: 1 }, { season: 2 }], cast: [{ person: { name: 'Xiao Zhan' } }] } }), { totalEpisodes: 3, seasons: 2, actors: 'Xiao Zhan' });
+        assert.deepEqual(md.parseTvmazeDetails({ _embedded: { episodes: [{ season: 1 }, { season: 1 }, { season: 2 }], cast: [{ person: { name: 'Xiao Zhan', image: { medium: 'http://tv/m.jpg', original: 'http://tv/o.jpg' } }, character: { name: 'Wei Wuxian' } }] } }),
+            { totalEpisodes: 3, seasons: 2, actors: 'Xiao Zhan', people: [{ name: 'Xiao Zhan', role: 'actor', image: 'https://tv/o.jpg', character: 'Wei Wuxian', characterRole: 'protagonista' }] });
         const al = md.parseAniList({ data: { Page: { media: [
             { id: 1, countryOfOrigin: 'JP', chapters: 10, title: { romaji: 'A', english: null }, genres: [], tags: [] },
             { id: 2, countryOfOrigin: 'KR', chapters: 80, title: { romaji: 'Jinx', english: 'Jinx' }, genres: ['Drama'], tags: [{ name: 'Boys Love', rank: 90 }], staff: { edges: [{ role: 'Story & Art', node: { name: { full: 'Mingwa' } } }] }, coverImage: { large: 'L' } }
         ] } } }, 'manhwa');
         assert.equal(al[0].title, 'Jinx'); // el coreano primero
         assert.deepEqual([al[0].bl, al[0].author, al[0].country, al[0].totalChapters], [true, 'Mingwa', 'Corea del Sur', 80]);
+        assert.deepEqual(al[0].people, [{ name: 'Mingwa', role: 'author', image: '' }]);
         const jk = md.parseJikan({ data: [{ mal_id: 5, title: 'Shingeki', title_english: 'Attack on Titan', year: 2013, episodes: 25, synopsis: 'Titanes. [Written by MAL Rewrite]', studios: [{ name: 'WIT' }], genres: [{ name: 'Action' }], images: { jpg: { image_url: 'i', large_image_url: 'I' } } }] });
         assert.deepEqual([jk[0].title, jk[0].synopsis, jk[0].studio, jk[0].tags], ['Attack on Titan', 'Titanes.', 'WIT', 'acción']);
+    });
+    it('reparto con fotos y personajes: AniList (seiyuus), TMDB, Jikan y Open Library', () => {
+        const an = md.parseAniList({ data: { Page: { media: [{ id: 9, title: { romaji: 'Given' }, characters: { edges: [
+            { role: 'MAIN', node: { name: { full: 'Mafuyu Satou' } }, voiceActors: [{ name: { full: 'Shougo Yano' }, image: { large: 'https://s4/yano.png' } }] },
+            { role: 'SUPPORTING', node: { name: { full: 'Otro' } }, voiceActors: [{ name: { full: 'X' }, image: {} }] },
+            { role: 'MAIN', node: { name: { full: 'Sin voz' } }, voiceActors: [] }
+        ] } }] } } }, 'anime');
+        assert.deepEqual(an[0].people, [{ name: 'Shougo Yano', role: 'actor', image: 'https://s4/yano.png', character: 'Mafuyu Satou', characterRole: 'protagonista' }]);
+        const tm = md.parseTmdbCredits({ cast: [{ name: 'Gong Jun', profile_path: '/g.jpg', character: 'Wen Kexing / Zhou' }], crew: [{ name: 'Ma Hua Gan', job: 'Director', profile_path: null }, { name: 'Otro', job: 'Writer' }] });
+        assert.deepEqual([tm.actors, tm.directors], ['Gong Jun', 'Ma Hua Gan']);
+        assert.deepEqual(tm.people.map(p => [p.name, p.role, p.image, p.character || '']), [['Gong Jun', 'actor', 'https://image.tmdb.org/t/p/h632/g.jpg', 'Wen Kexing'], ['Ma Hua Gan', 'director', '', '']]);
+        const jc = md.parseJikanCharacters({ data: [{ role: 'Main', character: { name: 'Satou, Mafuyu' }, voice_actors: [{ language: 'English', person: { name: 'Smith, John' } }, { language: 'Japanese', person: { name: 'Yano, Shougo', images: { jpg: { image_url: 'https://cdn/y.jpg' } } } }] }, { role: 'Supporting', character: { name: 'B' }, voice_actors: [] }] });
+        assert.deepEqual(jc, [{ name: 'Shougo Yano', role: 'actor', image: 'https://cdn/y.jpg', character: 'Mafuyu Satou', characterRole: 'protagonista' }]);
+        const ol = md.parseOpenLibrary({ docs: [{ key: '/works/1', title: 'Dune', author_name: ['Frank Herbert'], author_key: ['OL79034A'] }] });
+        assert.deepEqual(ol[0].people, [{ name: 'Frank Herbert', role: 'author', image: 'https://covers.openlibrary.org/a/olid/OL79034A-L.jpg?default=false' }]);
     });
     it('rellena solo lo que está vacío', () => {
         const patch = md.mergeMetadata({ title: 'Dune', author: 'Yo', pages: 0, synopsis: '' }, { title: 'Dune (1965)', author: 'Frank Herbert', pages: 412, synopsis: 'Arena', year: 1965, bl: false });

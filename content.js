@@ -51,7 +51,8 @@ function contentSectionHtml(w, openState) {
         body = `<div class="content-form grid">
             <input type="text" class="text-input" id="cCharName" placeholder="Nombre del personaje">
             <select class="text-input" id="cCharRole">${Object.entries(CHARACTER_ROLES).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
-            <select class="text-input" id="cCharPerson"><option value="">Interpretado por… (opcional)</option>${characterPersonOptions(w)}</select>
+            <select class="text-input" id="cCharPerson"><option value="">Interpretado por… (opcional)</option>${characterPersonOptions(w)}<option value="__new">＋ Otra persona (nueva)…</option></select>
+            <input type="text" class="text-input" id="cCharNewPerson" placeholder="Nombre del actor, actriz o seiyuu" hidden>
             <input type="text" class="text-input" id="cCharNote" placeholder="¿Por qué te encanta?">
             <button class="btn btn-primary btn-sm" data-act="content-add" data-id="${w.id}">＋ Añadir personaje</button></div>
             <div class="content-list">${list.map(c => { const p = getPersonById(c.personId); return `<div class="pick-item character-item">
@@ -95,14 +96,31 @@ FEATURE_ACTIONS['content-add'] = id => {
     if (!w) return;
     const now = Date.now();
     const val = x => ($(x) ? $(x).value.trim() : '');
-    let item, kind = contentTab, msg;
+    let item, kind = contentTab, msg, newPerson = null;
     if (kind === 'quotes') { if (!val('cQuoteText')) { showToast('✍️ Escribe la cita', 'error'); return; } item = { id: generateId(), text: val('cQuoteText'), context: val('cQuoteCtx'), date: todayISO() }; msg = '❝ Cita guardada'; }
-    else if (kind === 'characters') { if (!val('cCharName')) { showToast('✍️ Escribe el nombre del personaje', 'error'); return; } item = { id: generateId(), name: val('cCharName'), role: val('cCharRole'), personId: val('cCharPerson'), note: val('cCharNote') }; msg = '🎭 Personaje añadido'; }
+    else if (kind === 'characters') {
+        if (!val('cCharName')) { showToast('✍️ Escribe el nombre del personaje', 'error'); return; }
+        item = { id: generateId(), name: val('cCharName'), role: val('cCharRole'), personId: val('cCharPerson'), note: val('cCharNote') };
+        msg = '🎭 Personaje añadido';
+        // Intérprete nuevo: se crea su ficha en Personas (o se usa la que ya existe con ese nombre)
+        if (item.personId === '__new') {
+            const name = val('cCharNewPerson');
+            if (!name) { showToast('✍️ Escribe el nombre de quien lo interpreta', 'error'); return; }
+            const found = resolvePersonName(name);
+            newPerson = found ? null : { id: generateId(), name, type: 'actor', autoCreated: true, createdAt: Date.now() };
+            item.personId = found ? found.id : newPerson.id;
+        }
+    }
     else if (kind === 'soundtrack') { if (!val('cSongTitle')) { showToast('✍️ Escribe el título de la canción', 'error'); return; } item = { id: generateId(), kind: val('cSongKind'), title: val('cSongTitle'), artist: val('cSongArtist'), url: safeUrl(val('cSongUrl')) }; msg = '🎵 Canción añadida'; }
     else if (kind === 'awards') { if (!val('cAwardName')) { showToast('✍️ Escribe el premio', 'error'); return; } item = { id: generateId(), name: val('cAwardName'), year: Number(val('cAwardYear')) || '' }; msg = '🏆 Premio añadido'; }
     else { if (!val('cTrivia')) { showToast('✍️ Escribe la curiosidad', 'error'); return; } item = { id: generateId(), text: val('cTrivia') }; kind = 'trivia'; msg = '💡 Curiosidad añadida'; }
     Object.keys(item).forEach(k => { if (item[k] === '') delete item[k]; });
-    mutate(() => { w[kind] = [...(w[kind] || []), item]; w.updatedAt = now; }, msg, { label: msg.replace(/^\S+\s/, '') });
+    mutate(() => {
+        if (newPerson) { appData.persons.push(newPerson); w.personIds = [...new Set([...(w.personIds || []), newPerson.id])]; }
+        w[kind] = [...(w[kind] || []), item];
+        w.updatedAt = now;
+    }, msg + (newPerson ? ` · 👤 ${newPerson.name} añadida a Personas` : ''), { label: msg.replace(/^\S+\s/, '') });
+    if (newPerson && linkSetting('photoOnSave')) queuePhotos([newPerson]);
 };
 FEATURE_ACTIONS['content-del'] = (id, el) => {
     const w = getWorkById(id);

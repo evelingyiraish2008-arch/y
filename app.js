@@ -958,6 +958,7 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     fillAutocomplete();
     applyFormFieldVisibility();
     personsCreatedInForm = new Set();
+    resetFormMeta();
     fillWorkForm(work || preset);
     updateAirDayHint();
     const draft = !work && !preset.title ? readDraft() : null;
@@ -1048,8 +1049,8 @@ function saveWork() {
     if (total && data.progress > total) data.progress = total;
     if (data.endDate && data.startDate && data.endDate < data.startDate) { showToast('⚠️ La fecha de fin es anterior a la de inicio', 'error'); return; }
     const editing = editingWorkId;
-    data.personIds = formPersonIds(data);
-    if (!data.personIds.length) delete data.personIds;
+    let createdPeople = [];
+    const newPeople = createFormPeople({ dry: true }).length;
     // Fechas automáticas: al empezar o terminar se apunta el día de hoy si no hay otra fecha
     if ((data.status === 'leyendo' || data.status === 'viendo' || data.status === 'terminado') && !data.startDate) data.startDate = todayISO();
     if (data.status === 'terminado' && !data.endDate) data.endDate = todayISO();
@@ -1060,6 +1061,10 @@ function saveWork() {
         if (sim && !confirm(`Se parece mucho a “${sim.work.title}” (${getTypeLabel(sim.work.type)}). ¿Agregarla de todas formas?`)) return;
     }
     const ok = mutate(() => {
+        // Los nombres nuevos se convierten en fichas de Personas (y se unen a la obra por su id)
+        createdPeople = createFormPeople();
+        data.personIds = formPersonIds(data);
+        if (!data.personIds.length) delete data.personIds;
         if (editing) {
             const w = getWorkById(editing);
             const before = { progress: Number(w.progress) || 0, status: w.status };
@@ -1070,16 +1075,22 @@ function saveWork() {
             if ((Number(w.progress) || 0) > before.progress || (w.status !== before.status && !isPlanned(w))) bumpActivity(w);
             if (w.rereading && w.status === 'terminado' && before.status !== 'terminado') finishWork(w);
             appData.notes.forEach(n => { if (n.workId === w.id) n.workTitle = w.title; });
+            addMetaCharacters(w);
         } else {
             const w = { id: generateId(), type: formType, ...data, createdAt: Date.now(), updatedAt: Date.now() };
             if (!hasSeasons(w)) delete w.seasonsList;
             syncSeasonAggregates(w);
             if ((Number(w.progress) || 0) > 0) bumpActivity(w);
+            addMetaCharacters(w);
             appData.works.push(w);
         }
         (data.personIds || []).forEach(id => { const p = getPersonById(id); if (p) { delete p.linkPending; personsCreatedInForm.delete(id); } });
-    }, editing ? '✅ Obra actualizada' : '✅ Obra agregada', { label: editing ? `Editar “${data.title}”` : `Agregar “${data.title}”` });
-    if (ok) { if (!editing) clearDraft(); closeModal('workModal', { force: true }); }
+    }, (editing ? '✅ Obra actualizada' : '✅ Obra agregada') + (newPeople ? ` · 👥 ${newPeople} ${newPeople === 1 ? 'persona nueva' : 'personas nuevas'} en Personas` : ''), { label: editing ? `Editar “${data.title}”` : `Agregar “${data.title}”` });
+    if (ok) {
+        if (!editing) clearDraft();
+        closeModal('workModal', { force: true });
+        if (createdPeople.length && linkSetting('photoOnSave')) queuePhotos(createdPeople);
+    }
 }
 function deleteWork(id) {
     const w = getWorkById(id);
@@ -1444,6 +1455,7 @@ function renderPersons() {
     $('personCharsTab').textContent = allCharacters(appData.works, appData.persons).length;
     document.querySelectorAll('#personTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === personTab));
     $('person-general').hidden = personTab !== 'general';
+    $('personLinkBanner').innerHTML = linkBannerHtml();
     $('person-list').hidden = personTab === 'general';
 
     const emptyPersons = `<div class="empty-state"><div class="big">👥</div><h4>No hay personas aquí</h4><p>Agrega actores, autores o directores para ver sus obras.</p><button class="btn btn-primary btn-sm" data-act="person-new">＋ Agregar persona</button></div>`;

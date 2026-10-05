@@ -43,6 +43,8 @@ function parseOpenLibrary(json) {
         pages: d.number_of_pages_median || 0,
         cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '',
         coverLarge: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : '',
+        // Foto del autor (default=false: si no tiene, da error en vez de una imagen vacía)
+        people: (d.author_name || []).slice(0, 2).map((n, i) => metaPerson(n, 'author', (d.author_key || [])[i] ? `https://covers.openlibrary.org/a/olid/${d.author_key[i]}-L.jpg?default=false` : '')),
         ...genreFields((d.subject || []).slice(0, 4))
     }));
 }
@@ -75,15 +77,44 @@ function parseTvmaze(json) {
         ...genreFields(s.genres)
     })).filter(Boolean);
 }
+/**
+ * Personas que trae una fuente, con su foto y el personaje que interpretan:
+ * [{ name, role: 'actor' | 'author' | 'director', image, character, characterRole }]
+ */
+const metaPerson = (name, role, image, extra = {}) => ({ name: String(name || '').trim(), role, image: httpsUrl(image), ...extra });
 /** /shows/{id}?embed[]=episodes&embed[]=cast */
 function parseTvmazeDetails(json) {
     const emb = json._embedded || {};
     const eps = emb.episodes || [];
+    const cast = (emb.cast || []).filter(c => c.person && c.person.name).slice(0, 6);
     return {
         totalEpisodes: eps.length || 0,
         seasons: eps.length ? new Set(eps.map(e => e.season)).size : 0,
-        actors: (emb.cast || []).slice(0, 4).map(c => c.person && c.person.name).filter(Boolean).join(', ')
+        actors: cast.slice(0, 4).map(c => c.person.name).join(', '),
+        people: cast.slice(0, 4).map(c => metaPerson(c.person.name, 'actor', (c.person.image || {}).original || (c.person.image || {}).medium,
+            c.character && c.character.name ? { character: c.character.name, characterRole: 'protagonista' } : {}))
     };
+}
+/** /tv/{id}/credits o /movie/{id}/credits de TMDB */
+function parseTmdbCredits(json) {
+    const img = p => (p ? `https://image.tmdb.org/t/p/h632${p}` : '');
+    const cast = ((json || {}).cast || []).slice(0, 4);
+    const dirs = ((json || {}).crew || []).filter(c => c.job === 'Director').slice(0, 2);
+    return {
+        actors: cast.map(c => c.name).join(', '),
+        directors: dirs.map(c => c.name).join(', '),
+        people: [...cast.map(c => metaPerson(c.name, 'actor', img(c.profile_path), c.character ? { character: c.character.split(' / ')[0], characterRole: 'protagonista' } : {})),
+            ...dirs.map(c => metaPerson(c.name, 'director', img(c.profile_path)))]
+    };
+}
+/** /anime/{id}/characters de Jikan: personajes principales con su seiyuu japonés. */
+function parseJikanCharacters(json) {
+    return ((json || {}).data || []).filter(c => c.role === 'Main').slice(0, 6).map(c => {
+        const va = (c.voice_actors || []).find(v => v.language === 'Japanese');
+        if (!va || !va.person) return null;
+        const name = String(va.person.name || '').split(', ').reverse().join(' '); // MAL escribe "Apellido, Nombre"
+        return metaPerson(name, 'actor', (((va.person.images || {}).jpg) || {}).image_url, { character: String(c.character.name || '').split(', ').reverse().join(' '), characterRole: 'protagonista' });
+    }).filter(Boolean);
 }
 function parseTmdb(json) {
     return (json.results || []).filter(r => r.media_type !== 'person').map(r => ({
@@ -116,7 +147,8 @@ const ANILIST_QUERY = `query ($q: String, $type: MediaType) {
       tags { name rank }
       coverImage { large extraLarge }
       studios(isMain: true) { nodes { name } }
-      staff(perPage: 4) { edges { role node { name { full } } } }
+      staff(perPage: 4) { edges { role node { name { full } image { large } } } }
+      characters(perPage: 6, sort: [ROLE, RELEVANCE]) { edges { role node { name { full } } voiceActors(language: JAPANESE) { name { full } image { large } } } }
     }
   }
 }`;
@@ -126,6 +158,10 @@ function parseAniList(json, type) {
         const tags = (m.tags || []).filter(t => t.rank >= 70).map(t => t.name);
         const g = genreFields([...(m.genres || []), ...tags]);
         const story = ((m.staff || {}).edges || []).find(e => /story|original/i.test(e.role)) || ((m.staff || {}).edges || [])[0];
+        const people = type === 'anime'
+            ? ((m.characters || {}).edges || []).filter(e => e.role === 'MAIN' && (e.voiceActors || [])[0]).slice(0, 4)
+                .map(e => metaPerson(e.voiceActors[0].name.full, 'actor', (e.voiceActors[0].image || {}).large, { character: e.node.name.full, characterRole: 'protagonista' }))
+            : (story && story.node ? [metaPerson(story.node.name.full, 'author', (story.node.image || {}).large)] : []);
         return {
             source: 'anilist', sourceLabel: 'AniList', externalId: m.id, anilistId: m.id,
             title: m.title.english || m.title.romaji, altTitle: m.title.english ? m.title.romaji : '',
@@ -137,6 +173,7 @@ function parseAniList(json, type) {
                 ? { totalEpisodes: m.episodes || 0, studio: (((m.studios || {}).nodes || [])[0] || {}).name || '' }
                 : { totalChapters: m.chapters || 0, author: story && story.node ? story.node.name.full : '' }),
             ...g,
+            people: people.filter(p => p.name).map(p => (/default\.jpg$/.test(p.image) ? { ...p, image: '' } : p)),
             countryCode: m.countryOfOrigin
         };
     }).sort((a, b) => (type === 'manhwa' ? (b.countryCode === 'KR') - (a.countryCode === 'KR') : 0));
@@ -173,7 +210,7 @@ function metadataSources(type, { tmdbKey = '', seriesType = 'Serie', fetchFn = f
     }).then(j => parseAniList(j, type));
     const tmdb = q => getJson(`https://api.themoviedb.org/3/search/multi?api_key=${enc(tmdbKey)}&language=es-ES&include_adult=false&query=${enc(q)}`, opts).then(parseTmdb);
     if (type === 'book') return [
-        { id: 'openlibrary', label: 'Open Library', run: q => getJson(`https://openlibrary.org/search.json?limit=8&fields=key,title,author_name,first_publish_year,cover_i,number_of_pages_median,subject&q=${enc(q)}`, opts).then(parseOpenLibrary) },
+        { id: 'openlibrary', label: 'Open Library', run: q => getJson(`https://openlibrary.org/search.json?limit=8&fields=key,title,author_name,author_key,first_publish_year,cover_i,number_of_pages_median,subject&q=${enc(q)}`, opts).then(parseOpenLibrary) },
         { id: 'googlebooks', label: 'Google Books', run: q => getJson(`https://www.googleapis.com/books/v1/volumes?maxResults=8&q=${enc(q)}`, opts).then(parseGoogleBooks) }
     ];
     if (type === 'anime') return [
@@ -201,9 +238,11 @@ async function searchMetadata(type, query, opts = {}) {
     for (let i = 0; i < 8; i++) bySource.forEach(list => { if (list[i]) mixed.push(list[i]); });
     return { results: mixed, errors };
 }
-/** Datos extra que solo se piden al elegir un resultado (episodios y reparto, sinopsis del libro…). */
-async function fetchMetadataDetails(meta, { fetchFn = fetch } = {}) {
+/** Datos extra que solo se piden al elegir un resultado (episodios, reparto con fotos y personajes, sinopsis del libro…). */
+async function fetchMetadataDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}) {
     try {
+        if (meta.source === 'tmdb' && tmdbKey) return parseTmdbCredits(await getJson(`https://api.themoviedb.org/3/${meta.externalId}/credits?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }));
+        if (meta.source === 'jikan') return { people: parseJikanCharacters(await getJson(`https://api.jikan.moe/v4/anime/${enc(meta.externalId)}/characters`, { fetchFn })) };
         if (meta.source === 'tvmaze') return parseTvmazeDetails(await getJson(`https://api.tvmaze.com/shows/${enc(meta.externalId)}?embed[]=episodes&embed[]=cast`, { fetchFn }));
         if (meta.source === 'openlibrary' && !meta.synopsis) return parseOpenLibraryWork(await getJson(`https://openlibrary.org${meta.externalId}.json`, { fetchFn }));
     } catch (e) { /* los detalles son opcionales */ }
@@ -262,6 +301,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseAniListAiring, parseTvmazeNext, fetchNextEpisodes,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
-        parseItunes, parseAniList, parseJikan, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
+        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseJikanCharacters, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };
 }
