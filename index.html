@@ -49,6 +49,7 @@
                 <button class="nav-item" data-nav="collections"><span class="icon">🗂️</span><span class="label">Colecciones</span></button>
                 <button class="nav-item" data-nav="stats"><span class="icon">📊</span><span class="label">Estadísticas</span></button>
                 <button class="nav-item" data-nav="notes"><span class="icon">📝</span><span class="label">Notas</span></button>
+                <button class="nav-item" data-nav="extras"><span class="icon">✨</span><span class="label">Extras</span></button>
             </nav>
             <div class="nav-divider"></div>
             <nav class="nav-section">
@@ -93,7 +94,9 @@
                 </div>
 
                 <div class="today-grid" id="todayGrid"></div>
+                <div class="tip-card welcome-card" id="welcomeCard" hidden></div>
                 <div class="quote-of-day" id="quoteOfDay" hidden></div>
+                <div class="tip-card" id="tipOfDay" hidden></div>
 
                 <div class="stats-grid">
                     <button class="stat-card" data-nav="books"><div class="stat-icon">📚</div><div><div class="stat-value" id="statBooks">0</div><div class="stat-label">Libros</div></div></button>
@@ -365,6 +368,7 @@
             <section class="page-view" id="page-emission">
                 <div class="page-header">
                     <div><h1 class="page-title">📡 Centro de Emisión</h1><p class="page-subtitle">Todo lo que estás siguiendo, organizado por día de emisión.</p></div>
+                    <div class="header-actions"><button class="btn btn-secondary" data-act="export-ics">📅 Añadir a mi calendario (.ics)</button></div>
                 </div>
                 <div class="stats-grid cols-4">
                     <div class="stat-card"><div class="stat-icon">📺</div><div><div class="stat-value" id="emissionToday">0</div><div class="stat-label">Hoy</div></div></div>
@@ -507,6 +511,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">🗂️ Colecciones</h1><p class="page-subtitle">Crea listas personalizadas para organizar tus obras.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="coll-templates">📋 Plantillas</button>
                         <button class="btn btn-primary" id="addCollectionBtn">＋ Nueva colección</button>
                     </div>
                 </div>
@@ -528,6 +533,16 @@
                 <div class="notes-grid" id="notesList"></div>
             </section>
 
+            <!-- EXTRAS -->
+            <section class="page-view" id="page-extras">
+                <div class="page-header">
+                    <div><h1 class="page-title">✨ Extras</h1><p class="page-subtitle">Tu historia, juegos, retos y curiosidades sobre tu colección.</p></div>
+                    <div class="header-actions"><button class="btn btn-secondary" data-act="present-favs">▶️ Presentar favoritas</button></div>
+                </div>
+                <div class="tabs" id="extrasTabs"></div>
+                <div class="panel-card" id="extrasBody"></div>
+            </section>
+
             <!-- PERSONALIZAR -->
             <section class="page-view" id="page-settings">
                 <div class="page-header">
@@ -545,6 +560,19 @@
                         <div class="panel-card" id="personalizePanel">
                             <div class="panel-title">✨ Más personalización</div>
                             <div id="personalizeBody"></div>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🌍 Idioma</div>
+                            <select class="text-input" id="settingLang" aria-label="Idioma"><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option><option value="auto">Automático (el del navegador)</option></select>
+                            <div class="setting-row" style="margin-top:12px"><span>👀 Solo lectura (para enseñar tu colección sin que se cambie nada)</span><button class="toggle-switch" data-act="readonly-toggle" id="readOnlyToggle" role="switch" aria-checked="false" aria-label="Solo lectura"></button></div>
+                            <div class="seg-inline wrap" style="margin-top:12px">
+                                <button class="btn btn-secondary btn-sm" data-act="tour">🧭 Tour guiado</button>
+                                <button class="btn btn-secondary btn-sm" data-act="shortcuts">⌨️ Atajos</button>
+                            </div>
+                            <div class="clipper">
+                                <p class="panel-desc" style="margin:12px 0 8px">📎 <b>Guardar desde otras webs:</b> arrastra este botón a la barra de marcadores. En una página de Netflix, Goodreads, Webtoon… púlsalo y se abrirá Mi Mundo con el título y la portada.</p>
+                                <a class="btn btn-primary btn-sm" id="clipperLink" href="#">➕ Mi Mundo</a>
+                            </div>
                         </div>
                         <div class="panel-card">
                             <div class="panel-title">🏷️ Etiquetas</div>
@@ -637,6 +665,11 @@
     <!-- ===== TU AÑO (HISTORIA) ===== -->
     <div class="wrapped" id="wrapped" hidden role="dialog" aria-modal="true" aria-label="Tu año en Mi Mundo"></div>
 
+    <!-- ===== PRESENTACIÓN ===== -->
+    <div class="present-mode" id="presentMode" hidden role="dialog" aria-modal="true" aria-label="Presentación"></div>
+    <!-- ===== PANTALLA DE CARGA ===== -->
+    <div class="splash" id="splash" aria-hidden="true"><div class="splash-logo">📚</div><div class="splash-name">Mi Mundo</div><div class="splash-bar"><span></span></div></div>
+
     <!-- ===== MODO FOCO ===== -->
     <div class="focus-mode" id="focusMode" hidden role="dialog" aria-modal="true" aria-label="Modo foco"></div>
 
@@ -675,6 +708,7 @@
                         <div class="cover-preview"><img id="workImagePreview" alt="Portada"></div>
                         <button type="button" class="btn btn-secondary btn-sm" data-upload="workImageFile">📤 Subir imagen</button>
                         <button type="button" class="btn btn-secondary btn-sm" data-act="cover-search">🖼️ Buscar portada</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-act="scan-isbn" id="scanIsbnBtn" hidden>📷 Escanear ISBN</button>
                         <input type="file" id="workImageFile" accept="image/*" hidden data-target="f_image" data-kind="poster">
                         <input type="text" class="text-input" id="f_image" data-field="image" placeholder="…o pega una URL" style="border-radius:var(--radius-md)">
                         <span class="hint">Se reduce automáticamente para ahorrar espacio.</span>
@@ -888,6 +922,8 @@
     <script src="insights.js"></script>
     <script src="history.js"></script>
     <script src="query.js"></script>
+    <script src="extras.js"></script>
+    <script src="i18n.js"></script>
     <script src="coherence.js"></script>
     <script src="metadata.js"></script>
     <script src="importers.js"></script>
@@ -904,6 +940,7 @@
     <script src="alerts.js"></script>
     <script src="manage.js"></script>
     <script src="content.js"></script>
+    <script src="play.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

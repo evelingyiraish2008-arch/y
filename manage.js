@@ -39,6 +39,7 @@ function collectionViewHtml(c) {
         ${isSmart(c) ? `<span class="chip">✨ Inteligente: ${esc(c.query)}</span>` : ''}
         <select class="filter-select" data-coll-sort="${c.id}" aria-label="Ordenar">${COLL_SORTS.filter(([k]) => k !== 'manual' || !isSmart(c)).map(([k, l]) => `<option value="${k}" ${sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <span class="spacer"></span>
+        <button class="btn btn-secondary btn-sm" data-act="present-coll" data-id="${c.id}">▶️ Presentar</button>
         <button class="btn btn-secondary btn-sm" data-act="coll-share" data-id="${c.id}">📤 Compartir</button>
     </div>`;
     if (!works.length) return head + emptyState(isSmart(c) ? '✨' : '📭', isSmart(c) ? 'Ninguna obra cumple la búsqueda' : 'Colección vacía', isSmart(c) ? 'Cuando alguna obra la cumpla, aparecerá aquí sola.' : 'Abre cualquier obra y pulsa “📂 Colecciones” para añadirla aquí.');

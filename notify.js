@@ -105,7 +105,7 @@ function pruneSent(sent, now = Date.now()) {
 // DESCUBRIMIENTOS Y SUGERENCIAS
 // ============================================================
 const avgOf = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
-const fmt1 = n => (Math.round(n * 10) / 10).toLocaleString('es-ES');
+const fmt1 = n => (Math.round(n * 10) / 10).toLocaleString(APP_LOCALE);
 /** Frases sobre tus gustos y hábitos, calculadas a partir de tus datos (solo las que tienen datos suficientes). */
 function discoveries(works) {
     const out = [];

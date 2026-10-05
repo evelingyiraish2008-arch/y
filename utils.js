@@ -7,6 +7,9 @@
 // ============================================================
 // 1. CONSTANTES
 // ============================================================
+/** Idioma y formato regional de fechas y números (lo cambia i18n.js). */
+let APP_LOCALE = 'es-ES';
+function setAppLocale(loc) { APP_LOCALE = loc; }
 const DEFAULT_SETTINGS = { themeColor: '#8b5cf6', fontSize: 14, imageFit: 'contain', darkMode: true, userName: 'Sara', yearGoal: 0 };
 const TYPE_META = {
     book:   { label: 'Libro',  icon: '📚', color: '#8b5cf6', progressLabel: 'Página actual',   unit: 'págs', step: 10 },
@@ -43,7 +46,7 @@ function formatBytes(n) {
 function fmtDate(d) {
     if (!d) return '–';
     const date = typeof d === 'number' ? new Date(d) : new Date(d + (String(d).length === 10 ? 'T00:00:00' : ''));
-    return isNaN(date) ? '–' : date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+    return isNaN(date) ? '–' : date.toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 function todayISO() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
 
@@ -214,6 +217,8 @@ function sortWorks(list, key) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        APP_LOCALE,
+        setAppLocale,
         DEFAULT_SETTINGS,
         TYPE_META,
         READ_STATUSES,

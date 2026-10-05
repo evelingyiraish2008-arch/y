@@ -93,7 +93,7 @@ function renderStatsPlus(now = Date.now()) {
     const ns = notesStats(appData.notes, now);
     $('statsNotesKpis').innerHTML = `
         <div><b>${ns.count}</b><small>notas</small></div>
-        <div><b>${ns.totalWords.toLocaleString('es-ES')}</b><small>palabras</small></div>
+        <div><b>${ns.totalWords.toLocaleString(APP_LOCALE)}</b><small>palabras</small></div>
         <div><b>${Math.round(ns.avgWords)}</b><small>palabras de media</small></div>
         ${ns.longest ? `<button class="longest-note" data-open="${esc(ns.longest.note.workId)}"><small>La más larga (${ns.longest.words} palabras)</small><b>${esc(ns.longest.note.workTitle || 'Nota')}</b></button>` : ''}`;
     $('statsNotesMonthly').innerHTML = ns.perMonth.some(m => m.count)
@@ -123,7 +123,7 @@ function wrappedSlides(s) {
     if (s.topPerson) slides.push({ icon: '👤', big: esc(s.topPerson), text: 'la persona que más apareció en tu año' });
     if (s.bestMonth) slides.push({ icon: '📅', big: s.bestMonth, text: `tu mejor mes: ${s.bestMonthCount} terminadas` });
     if (s.bestStreak) slides.push({ icon: '🔥', big: `${s.bestStreak} días`, text: 'tu mejor racha' });
-    if (s.notes) slides.push({ icon: '📝', big: String(s.notes), text: `notas escritas (${s.words.toLocaleString('es-ES')} palabras)` });
+    if (s.notes) slides.push({ icon: '📝', big: String(s.notes), text: `notas escritas (${s.words.toLocaleString(APP_LOCALE)} palabras)` });
     if (s.bl) slides.push({ icon: '💖', big: String(s.bl), text: s.bl === 1 ? 'obra BL terminada' : 'obras BL terminadas' });
     if (s.rereads) slides.push({ icon: '🔁', big: String(s.rereads), text: 'veces que repetiste algo que amas' });
     slides.push({ icon: '💜', big: '¡Gracias!', text: s.total ? 'Por otro año lleno de historias.' : 'Este año apenas empieza: ¡a por él!', final: true });

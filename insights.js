@@ -68,7 +68,7 @@ function finishedByMonth(works, months = 12, now = Date.now()) {
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         out.push({
             key,
-            label: d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', ''),
+            label: d.toLocaleDateString(APP_LOCALE, { month: 'short' }).replace('.', ''),
             year: d.getFullYear(),
             byType: { book: 0, series: 0, anime: 0, manhwa: 0 }
         });

@@ -7,7 +7,7 @@
  */
 'use strict';
 
-const fmtNum = n => (Math.round(n * 10) / 10).toLocaleString('es-ES');
+const fmtNum = n => (Math.round(n * 10) / 10).toLocaleString(APP_LOCALE);
 
 /** Divide el eje en 3–5 valores redondos. */
 function niceTicks(max) {
@@ -142,12 +142,12 @@ function activityCalendar(byDay, { weeks = 26, now = Date.now(), caption = '' } 
     const days = [];
     for (let i = 0; i < weeks * 7; i++) days.push(addDays(start, i));
     const max = Math.max(1, ...days.map(d => byDay.get(dayKey(d)) || 0));
-    const fmt = d => d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+    const fmt = d => d.toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
     const months = [];
     for (let w = 0; w < weeks; w++) {
         const d = days[w * 7];
         const prev = w ? days[(w - 1) * 7] : null;
-        months.push(!prev || prev.getMonth() !== d.getMonth() ? d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') : '');
+        months.push(!prev || prev.getMonth() !== d.getMonth() ? d.toLocaleDateString(APP_LOCALE, { month: 'short' }).replace('.', '') : '');
     }
     const cell = d => {
         const v = byDay.get(dayKey(d)) || 0;

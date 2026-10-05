@@ -290,7 +290,7 @@ const cloud = {
         if (this.busy || s.state === 'syncing') return '🔄 Sincronizando…';
         if (s.state === 'offline') return `📡 Sin conexión${this.pending ? ` · ${this.pending} cambios esperando` : ''}`;
         if (s.state === 'error') return `⚠️ No se pudo sincronizar: ${(s.error && (s.error.message || s.error)) || 'error'}${this.pending ? ` · ${this.pending} cambios esperando` : ''}`;
-        if (s.state === 'ok') return `✅ Sincronizado a las ${new Date(s.at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+        if (s.state === 'ok') return `✅ Sincronizado a las ${new Date(s.at).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit' })}`;
         return '';
     },
     render() {

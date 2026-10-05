@@ -254,9 +254,9 @@ const SHORTCUTS = [
     ['E', 'Editar la obra abierta'], ['D', 'Duplicar la obra abierta'], ['F', 'Modo foco con la obra abierta'],
     ['Ctrl + Z', 'Deshacer'], ['Ctrl + Shift + Z', 'Rehacer'], ['Ctrl + S', 'Guardar el formulario'], ['Esc', 'Cerrar'],
     ['G y luego H', 'Ir a Inicio'], ['G L / G S / G A / G M / G B', 'Libros, Series, Anime, Manhwas, BL'],
-    ['G P / G J / G C / G E / G N / G T', 'Personas, Parejas, Colecciones, Estadísticas, Notas, Personalizar'], ['?', 'Ver esta ayuda']
+    ['G P / G J / G C / G E / G N / G X / G T', 'Personas, Parejas, Colecciones, Estadísticas, Notas, Extras, Personalizar'], ['?', 'Ver esta ayuda']
 ];
-const GO_KEYS = { h: 'home', l: 'books', s: 'series', a: 'anime', m: 'manhwa', b: 'bl', p: 'persons', j: 'couples', r: 'emission', c: 'collections', e: 'stats', n: 'notes', t: 'settings' };
+const GO_KEYS = { x: 'extras', h: 'home', l: 'books', s: 'series', a: 'anime', m: 'manhwa', b: 'bl', p: 'persons', j: 'couples', r: 'emission', c: 'collections', e: 'stats', n: 'notes', t: 'settings' };
 let goPending = 0;
 function openShortcuts() {
     openSheet('⌨️ Atajos de teclado', () => `<dl class="shortcut-list">${SHORTCUTS.map(([k, d]) => `<dt>${k.split(/(\s\+\s|\s+o\s+|\s\/\s|\s)/).map(part => (/^\s|^\/$/.test(part) || !part.trim() ? esc(part) : `<kbd>${esc(part)}</kbd>`)).join('')}</dt><dd>${esc(d)}</dd>`).join('')}</dl>`);

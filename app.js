@@ -97,6 +97,10 @@ function runAfterSaves(fn) {
  * si cambió alguna obra, en el historial de versiones de esa obra.
  */
 function mutate(fn, msg, opts = {}) {
+    if (appData.settings.readOnly && !opts.allowReadOnly) {
+        showToast('👀 Estás en modo solo lectura. Desactívalo en Personalizar para hacer cambios.', 'error', 4000);
+        return false;
+    }
     const before = indexRecords(appData);
     const cBefore = celebrationStats();
     fn();
@@ -161,6 +165,8 @@ function openHistory() {
             ${redoStack.length ? `<button class="pick-item" data-act="redo" style="justify-content:center;font-weight:600">↪️ Rehacer “${esc(redoStack[redoStack.length - 1].label)}”</button>` : ''}
         </div>` : emptyState('🕓', 'Sin cambios todavía', 'Aquí aparecerá lo que hagas en esta sesión, para deshacerlo si te equivocas.'));
 }
+/** Fecha relativa si es de la última semana ("hace 2 días"), si no la fecha. */
+function relDate(ts) { return ts && Date.now() - ts < 7 * 86400000 ? relativeTime(ts) : fmtDate(ts); }
 /** "hace 5 min", "ayer", "hace 3 días"… */
 function relativeTime(ts, now = Date.now()) {
     const s = Math.round((now - ts) / 1000);
@@ -266,6 +272,7 @@ function workCard(w, opts = {}) {
           ${rereadBadge(w) ? `<span class="pill">${esc(rereadBadge(w))}</span>` : ''}
           <div class="card-actions">
             ${quickPlus ? `<button class="card-act" data-act="progress" title="Avanzar progreso" aria-label="Avanzar progreso">＋</button>` : ''}
+            <button class="card-act" data-act="quick-note" title="Nota rápida" aria-label="Nota rápida">📝</button>
             <button class="card-act" data-act="edit" title="Editar" aria-label="Editar">✎</button>
             <button class="card-act danger" data-act="delete" title="Eliminar" aria-label="Eliminar">✕</button>
           </div>
@@ -381,18 +388,18 @@ function renderBL() {
 // ============================================================
 function renderHome() {
     const s = appData.settings;
-    $('statBooks').textContent = getWorksByType('book').length;
-    $('statSeries').textContent = getWorksByType('series').length;
-    $('statAnime').textContent = getWorksByType('anime').length;
-    $('statManhwa').textContent = getWorksByType('manhwa').length;
-    $('statPersons').textContent = appData.persons.length;
+    animateCount($('statBooks'), getWorksByType('book').length);
+    animateCount($('statSeries'), getWorksByType('series').length);
+    animateCount($('statAnime'), getWorksByType('anime').length);
+    animateCount($('statManhwa'), getWorksByType('manhwa').length);
+    animateCount($('statPersons'), appData.persons.length);
 
     const h = new Date().getHours();
     const hello = h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
     $('homeGreeting').textContent = `${hello}, ${s.userName || 'Sara'} 💜`;
     const now = new Date();
-    const dateStr = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    $('home-date').textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    const dateStr = now.toLocaleDateString(APP_LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    $('home-date').textContent = `${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · ${welcomePhrase(now)}`;
 
     const inProgress = appData.works.filter(isActive).sort((a, b) => lastTouched(b) - lastTouched(a));
     $('homeContinueWatching').innerHTML = inProgress.length
@@ -412,6 +419,8 @@ function renderHome() {
     renderHero(inProgress);
     renderToday();
     renderQuoteOfDay();
+    renderTip();
+    renderWelcome();
     renderBell();
 }
 
@@ -447,13 +456,14 @@ const SEEN_KEY = 'mi_mundo_avisos_vistos';
 function seenNotifications() {
     try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch (e) { return new Set(); }
 }
-function bellItems() { return [...reminderBellItems(), ...computeNotifications(appData.works, appData.settings)]; }
+function bellItems() { return [...reminderBellItems(), ...computeNotifications(appData.works, appData.settings), ...rateReminderItems()]; }
 function renderBell() {
     const list = bellItems();
     const seen = seenNotifications();
     const unseen = list.filter(n => !seen.has(n.id)).length;
     $('bellBadge').hidden = !unseen;
     $('bellBadge').textContent = unseen > 9 ? '9+' : unseen;
+    updateFavicon(unseen);
 }
 function openNotifications() {
     const list = bellItems();
@@ -593,10 +603,11 @@ function changeProgress(id, delta) {
 const RENDERERS = {
     home: renderHome, books: renderBooks, series: renderSeries, anime: renderAnime, manhwa: renderManhwa,
     bl: renderBL, persons: renderPersons, couples: renderCouples, emission: renderEmission, stats: renderStats,
-    collections: renderCollections, notes: renderNotes, settings: renderSettings
+    collections: renderCollections, notes: renderNotes, settings: renderSettings, extras: renderExtras
 };
 let currentPage = 'home';
 
+function translateIfNeeded() { if (currentLang !== 'es') translateUI(document.body); }
 function navigateTo(page, { push = true } = {}) {
     if (!RENDERERS[page]) page = 'home';
     if (selecting && page !== currentPage) { selecting = false; selection.clear(); document.body.classList.remove('is-selecting'); renderBulkBar(); }
@@ -607,6 +618,7 @@ function navigateTo(page, { push = true } = {}) {
     $('main').scrollTop = 0;
     if (window.innerWidth <= 760) window.scrollTo(0, 0);
     RENDERERS[page]();
+    translateIfNeeded();
 }
 function refreshView() {
     RENDERERS[currentPage]();
@@ -614,6 +626,7 @@ function refreshView() {
     if (currentDetailId) renderDetail();
     if ($('personDetailOverlay').classList.contains('active') && currentPersonId) renderPersonDetail();
     if ($('sheetModal').classList.contains('active') && sheetRefresh) sheetRefresh();
+    translateIfNeeded();
 }
 function renderSidebar() {
     const counts = { bl: appData.works.filter(w => w.bl).length };
@@ -681,7 +694,7 @@ function openSearchResult(i) {
 const PAGE_NAMES = {
     home: '🏠 Inicio', books: '📖 Libros', series: '🎬 Series y Películas', anime: '🎌 Anime', manhwa: '📕 Manhwas', bl: '💖 Solo BL',
     persons: '👥 Personas', couples: '💕 Parejas BL', emission: '📡 Centro de Emisión', collections: '🗂️ Colecciones',
-    stats: '📊 Estadísticas', notes: '📝 Notas', settings: '⚙️ Personalizar'
+    stats: '📊 Estadísticas', notes: '📝 Notas', extras: '✨ Extras', settings: '⚙️ Personalizar'
 };
 let paletteItems = [], paletteIndex = 0;
 function paletteActions() {
@@ -696,6 +709,12 @@ function paletteActions() {
         { icon: isDarkNow() ? '☀️' : '🌙', title: isDarkNow() ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => { const d = isDarkNow(); appData.settings.themeAuto = false; updateSetting('darkMode', !d); } },
         { icon: '⌨️', title: 'Ver atajos de teclado', sub: '?', run: openShortcuts },
         { icon: '🎁', title: 'Tu año en Mi Mundo (resumen)', run: () => openWrapped() },
+        { icon: '▶️', title: 'Presentar mis favoritas', run: () => FEATURE_ACTIONS['present-favs']() },
+        { icon: '🧭', title: 'Tour guiado', run: startTour },
+        { icon: '💭', title: '¿Cómo te sientes hoy?', run: () => { extrasTab = 'mood'; navigateTo('extras'); } },
+        { icon: '🎮', title: 'Adivina por la portada', run: () => { extrasTab = 'guess'; navigateTo('extras'); } },
+        { icon: '📅', title: 'Exportar emisiones al calendario (.ics)', run: () => FEATURE_ACTIONS['export-ics']() },
+        { icon: '👀', title: appData.settings.readOnly ? 'Salir del modo solo lectura' : 'Modo solo lectura', run: () => FEATURE_ACTIONS['readonly-toggle']() },
         { icon: '📤', title: 'Exportar copia de seguridad', run: exportData },
         { icon: '↩️', title: 'Deshacer último cambio', sub: 'Ctrl + Z', run: undo },
         { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
@@ -1237,8 +1256,10 @@ function renderDetail(fresh = false) {
           <button class="btn btn-secondary btn-sm ${w.reminder ? 'is-on' : ''}" data-act="reminder" data-id="${w.id}" title="${w.reminder ? 'Te lo recuerdo ' + esc(reminderText(w.reminder)) : 'Recordarme'}">${w.reminder ? '🔔 Recordatorio' : '🔔 Recordarme'}</button>
           <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
           <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
+          <button class="btn btn-secondary btn-sm" data-act="share-work" data-id="${w.id}" title="Compartir">📤</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
+        ${suggestionsHtml(w)}
         ${total ? `
         <div class="detail-progress">
           <div class="detail-progress-row"><span>${esc(getProgressText(w))}</span>
@@ -1667,7 +1688,7 @@ function renderStats() {
         kpi('🗃️ Obras', works.length, `${addedThisMonth} agregadas este mes`),
         kpi(`✅ Terminadas en ${year}`, doneYear, donePrev || doneYear ? (diff === 0 ? `Igual que en ${year - 1}` : `${diff > 0 ? '▲' : '▼'} ${Math.abs(diff)} ${diff > 0 ? 'más' : 'menos'} que en ${year - 1}`) : '', diff > 0 ? 'up' : diff < 0 ? 'down' : ''),
         kpi('🔥 Racha actual', `${st.current} ${st.current === 1 ? 'día' : 'días'}`, `Mejor racha: ${st.best} ${st.best === 1 ? 'día' : 'días'}`),
-        kpi('⏱️ Horas estimadas', `${Math.round(totalHours).toLocaleString('es-ES')} h`, `≈ ${Math.round(totalHours / 24)} días seguidos`),
+        kpi('⏱️ Horas estimadas', `${Math.round(totalHours).toLocaleString(APP_LOCALE)} h`, `≈ ${Math.round(totalHours / 24)} días seguidos`),
         kpi('⭐ Valoración media', avg ? avg.toFixed(1) : '–', `${rated.length} ${rated.length === 1 ? 'obra valorada' : 'obras valoradas'}`)
     ].join('');
 
@@ -1703,7 +1724,7 @@ function renderStats() {
     ], { caption: 'Obras por estado' });
 
     $('statsTime').innerHTML = proportionBar(TYPE_ORDER.map(t => ({
-        name: TYPE_PLURAL[t], value: hours[t], color: TYPE_META[t].color, display: `${Math.round(hours[t]).toLocaleString('es-ES')} h`
+        name: TYPE_PLURAL[t], value: hours[t], color: TYPE_META[t].color, display: `${Math.round(hours[t]).toLocaleString(APP_LOCALE)} h`
     })), { caption: 'Horas estimadas por tipo' });
 
     const pworks = worksInPeriod(works, statsPeriod, now);
@@ -1823,7 +1844,7 @@ function renderNotes() {
           <div class="thumb" ${w ? `data-open="${w.id}"` : ''}>${img(w && w.image, w ? w.type : 'book', n.workTitle)}</div>
           <div class="body">
             <h4>${esc(n.workTitle || (w && w.title) || 'Nota')}</h4>
-            <div class="date">${NOTE_TYPES[noteType(n)].icon} ${NOTE_TYPES[noteType(n)].label}${n.pinned ? ' · 📌' : ''} · ${lastTouched(n) > (n.createdAt || 0) + 60000 ? 'Editada ' + fmtDate(n.updatedAt) : fmtDate(n.createdAt)}${noteType(n) === 'resena' && reviewAverage(n.scores) ? ` · ★ ${ratingText(Math.round(reviewAverage(n.scores) * 10) / 10)}` : ''}</div>
+            <div class="date">${NOTE_TYPES[noteType(n)].icon} ${NOTE_TYPES[noteType(n)].label}${n.pinned ? ' · 📌' : ''} · ${lastTouched(n) > (n.createdAt || 0) + 60000 ? 'Editada ' + relDate(n.updatedAt) : relDate(n.createdAt)}${noteType(n) === 'resena' && reviewAverage(n.scores) ? ` · ★ ${ratingText(Math.round(reviewAverage(n.scores) * 10) / 10)}` : ''}</div>
             <div class="content">${esc(n.content)}</div>
             <div class="actions">
               ${w ? `<button class="btn btn-secondary btn-sm" data-open="${w.id}">✏️ Abrir</button>` : ''}
@@ -1850,6 +1871,8 @@ function applySettings() {
     // Color de la barra del sistema (móvil y app instalada)
     document.querySelector('meta[name=theme-color]').content = dark ? '#0b0b13' : '#fbfbfe';
     applyPersonalization();
+    root.classList.toggle('read-only', !!s.readOnly);
+    if (detectLang(s.lang) !== currentLang || currentLang !== 'es') applyLanguage(s.lang);
 }
 if (typeof matchMedia !== 'undefined') matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (appData.settings.themeAuto) applySettings(); });
 function updateSetting(key, value, msg) {
@@ -1863,6 +1886,9 @@ function renderSettings() {
     const s = appData.settings;
     if (document.activeElement !== $('settingName')) $('settingName').value = s.userName || '';
     if (document.activeElement !== $('settingTmdbKey')) $('settingTmdbKey').value = s.tmdbKey || '';
+    $('settingLang').value = s.lang || 'es';
+    $('readOnlyToggle').setAttribute('aria-checked', String(!!s.readOnly));
+    $('clipperLink').href = clipperBookmarklet();
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
     $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
     renderPersonalizePanel();
@@ -2244,6 +2270,8 @@ document.addEventListener('change', e => {
     if (t.id === 'fontSizeSlider') saveData();
     if (onPersonalizeInput(t, 'change')) return;
     if (onNotifyInput(t)) return;
+    if (t.id === 'settingLang') { appData.settings.lang = t.value; saveData(); applySettings(); renderSettings(); return; }
+    if (t.id === 'diaryDate') { diaryDate = t.value && t.value <= todayISO() ? t.value : todayISO(); renderExtras(); return; }
     if (t.dataset.collSort) { onCollectionSort(t); return; }
     if (t.id === 'f_multi') onMultiSeasonToggle();
     if (t.id === 'wrappedYear') { openWrapped(Number(t.value)); return; }
@@ -2270,7 +2298,8 @@ document.addEventListener('change', e => {
 
 // Teclado
 document.addEventListener('keydown', e => {
-    if (onWrappedKey(e)) { e.preventDefault(); return; }
+    if (onWrappedKey(e) || onPresentKey(e)) { e.preventDefault(); return; }
+    if (tourStep >= 0 && e.key === 'Escape') { FEATURE_ACTIONS['tour-end'](); return; }
     if (e.target.id !== 'paletteInput' && handleShortcut(e)) { e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -2490,13 +2519,17 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     const startParams = new URLSearchParams(location.search);
     if (startParams.get('accion') === 'agregar') {
         history.replaceState(null, '', location.pathname + location.hash);
-        openWorkModal('book');
+        // Desde el marcador "➕ Mi Mundo" llegan el título, la portada y el enlace
+        const clip = presetFromParams(startParams);
+        openWorkModal(clip.type, null, clip.preset);
     } else if (startParams.get('obra') && getWorkById(startParams.get('obra'))) {
         // Abierta desde un aviso
         history.replaceState(null, '', location.pathname + location.hash);
         openDetail(startParams.get('obra'));
     } else offerSessionRecovery();
+    $('scanIsbnBtn').hidden = !canScan();
     document.documentElement.dataset.ready = 'true';
+    setTimeout(() => { const sp = $('splash'); if (sp) sp.remove(); }, 450);
     cloud.init();
     checkNotifications().catch(() => {});
     if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
