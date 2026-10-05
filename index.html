@@ -374,6 +374,9 @@
             <section class="page-view" id="page-stats">
                 <div class="page-header">
                     <div><h1 class="page-title">📊 Estadísticas</h1><p class="page-subtitle">Descubre tu progreso y tus hábitos.</p></div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" data-act="wrapped">🎁 Tu año en Mi Mundo</button>
+                    </div>
                 </div>
                 <div class="kpi-grid" id="statsKpis"></div>
                 <div class="stats-layout">
@@ -384,6 +387,65 @@
                     <div class="viz-card span-4">
                         <div class="viz-head"><div><div class="viz-title">🎯 Reto anual</div><div class="viz-sub">Obras terminadas este año</div></div></div>
                         <div id="statsGoal"></div>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">📅 Comparativas</div><div class="viz-sub">Obras terminadas frente al periodo anterior</div></div></div>
+                        <div class="cmp-tiles" id="statsCompareTiles"></div>
+                    </div>
+                    <div class="viz-card span-8">
+                        <div class="viz-head"><div><div class="viz-title">📈 Este año frente al anterior</div><div class="viz-sub">Terminadas cada mes</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsYearCompare"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">🗓️ Tus temporadas</div><div class="viz-sub" id="statsSeasonSub"></div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsSeason"></div>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">🚀 Ritmo y proyección</div><div class="viz-sub">A tu ritmo actual, cuándo terminarás lo que estás viendo y leyendo</div></div></div>
+                        <div id="statsPace"></div>
+                    </div>
+                    <div class="period-bar span-12" role="group" aria-label="Periodo de las estadísticas">
+                        <span class="filter-label">Rankings y distribuciones de:</span>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="12m" data-stats-period="12m">Últimos 12 meses</button>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="year" data-stats-period="year">Este año</button>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="prev" data-stats-period="prev">Año pasado</button>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="all" data-stats-period="all">Siempre</button>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">🏅 Tus rankings</div><div class="viz-sub">Lo mejor de cada categoría</div></div></div>
+                        <div class="rank-grid" id="statsRankings"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">🎚️ Notas por tipo</div><div class="viz-sub">Cada punto es una obra; la raya marca la mediana</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsSpread"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">🕰️ ¿De qué época son?</div><div class="viz-sub">Por década de publicación</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsDecades"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">⭐ Lo que más valoras</div><div class="viz-sub">Media de los criterios de tus reseñas</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsCriteria"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">🔁 Lo que más repites</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsRevisited"></div>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">📝 Tus notas</div></div></div>
+                        <div class="pace-kpis notes-kpis" id="statsNotesKpis"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">✍️ Notas por mes</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsNotesMonthly"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">💬 Tus palabras</div><div class="viz-sub">Las que más usas</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsWords"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">🕐 Cuándo escribes</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsWriting"></div>
                     </div>
                     <div class="viz-card span-8">
                         <div class="viz-head"><div><div class="viz-title">✅ Terminadas por mes</div><div class="viz-sub">Últimos 12 meses, por tipo (según la fecha de fin)</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
@@ -551,6 +613,9 @@
           </div>
         </main>
     </div>
+
+    <!-- ===== TU AÑO (HISTORIA) ===== -->
+    <div class="wrapped" id="wrapped" hidden role="dialog" aria-modal="true" aria-label="Tu año en Mi Mundo"></div>
 
     <!-- ===== MODO FOCO ===== -->
     <div class="focus-mode" id="focusMode" hidden role="dialog" aria-modal="true" aria-label="Modo foco"></div>
@@ -790,6 +855,7 @@
     <script src="coherence.js"></script>
     <script src="metadata.js"></script>
     <script src="importers.js"></script>
+    <script src="analytics.js"></script>
     <script src="charts.js"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
@@ -797,6 +863,7 @@
     <script src="features.js"></script>
     <script src="tools.js"></script>
     <script src="ux.js"></script>
+    <script src="statsplus.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

@@ -25,6 +25,8 @@ const APP_SHELL = [
     './features.js',
     './tools.js',
     './ux.js',
+    './analytics.js',
+    './statsplus.js',
     './charts.js',
     './storage.js',
     './sync.js',

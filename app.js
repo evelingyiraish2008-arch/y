@@ -679,6 +679,7 @@ function paletteActions() {
         { icon: '🔔', title: 'Ver avisos', run: openNotifications },
         { icon: isDarkNow() ? '☀️' : '🌙', title: isDarkNow() ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => { const d = isDarkNow(); appData.settings.themeAuto = false; updateSetting('darkMode', !d); } },
         { icon: '⌨️', title: 'Ver atajos de teclado', sub: '?', run: openShortcuts },
+        { icon: '🎁', title: 'Tu año en Mi Mundo (resumen)', run: () => openWrapped() },
         { icon: '📤', title: 'Exportar copia de seguridad', run: exportData },
         { icon: '↩️', title: 'Deshacer último cambio', sub: 'Ctrl + Z', run: undo },
         { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
@@ -1688,9 +1689,12 @@ function renderStats() {
         name: TYPE_PLURAL[t], value: hours[t], color: TYPE_META[t].color, display: `${Math.round(hours[t]).toLocaleString('es-ES')} h`
     })), { caption: 'Horas estimadas por tipo' });
 
-    const hist = ratingHistogram(works);
-    $('statsRatingSub').textContent = rated.length ? `Media ${avg.toFixed(1)} · la más repetida: ${ratingText(hist.reduce((a, b) => (b.count > a.count ? b : a)).rating)} ★` : 'Cuántas obras tienen cada nota';
-    $('statsRatings').innerHTML = rated.length ? columnChart({
+    const pworks = worksInPeriod(works, statsPeriod, now);
+    const hist = ratingHistogram(pworks);
+    const prated = pworks.filter(w => Number(w.rating) > 0);
+    const pavg = prated.length ? prated.reduce((a, w) => a + Number(w.rating), 0) / prated.length : 0;
+    $('statsRatingSub').textContent = prated.length ? `Media ${pavg.toFixed(1)} · la más repetida: ${ratingText(hist.reduce((a, b) => (b.count > a.count ? b : a)).rating)} ★` : 'Cuántas obras tienen cada nota';
+    $('statsRatings').innerHTML = prated.length ? columnChart({
         categories: hist.map(b => (b.rating % 1 ? (b.rating === 0.5 ? '½' : `${Math.floor(b.rating)}½`) : String(b.rating))),
         series: [{ name: 'Obras', color: 'var(--gold)' }],
         values: hist.map(b => [b.count]),
@@ -1698,17 +1702,18 @@ function renderStats() {
         caption: 'Obras por valoración'
     }) : '<p class="viz-empty">Valora tus obras con estrellas para ver esto.</p>';
 
-    $('statsMood').innerHTML = heatGrid(moodGrid(works), {
+    $('statsMood').innerHTML = heatGrid(moodGrid(pworks), {
         rows: ['5', '4', '3', '2', '1'], cols: ['1', '2', '3', '4', '5'],
         rowTitle: '💧 Tristeza', colTitle: '🌶️ Spicy', caption: 'Obras según spicy y tristeza', cellAction: 'mood'
     });
-    $('statsGenresChart').innerHTML = barList(tagCounts(works).slice(0, 10).map(([label, value]) => ({ label, value })),
+    $('statsGenresChart').innerHTML = barList(tagCounts(pworks).slice(0, 10).map(([label, value]) => ({ label, value })),
         { caption: 'Etiquetas más usadas', empty: 'Añade etiquetas para ver estadísticas de géneros.' });
-    $('statsCountries').innerHTML = barList(topValues(works, 'country').map(x => ({ label: x.label, value: x.count })),
+    $('statsCountries').innerHTML = barList(topValues(pworks, 'country').map(x => ({ label: x.label, value: x.count })),
         { caption: 'Obras por país', empty: 'Añade el país a tus series y animes.' });
-    $('statsPlatforms').innerHTML = barList(topValues(works, 'platform').map(x => ({ label: x.label, value: x.count })),
+    $('statsPlatforms').innerHTML = barList(topValues(pworks, 'platform').map(x => ({ label: x.label, value: x.count })),
         { caption: 'Obras por plataforma', empty: 'Añade la plataforma a tus series y manhwas.' });
     renderAchievements();
+    renderStatsPlus(now);
 }
 function renderGoal(done, year, now) {
     const goal = Number(appData.settings.yearGoal) || 0;
@@ -2216,6 +2221,7 @@ document.addEventListener('change', e => {
     if (t.id === 'fontSizeSlider') saveData();
     if (onPersonalizeInput(t, 'change')) return;
     if (t.id === 'f_multi') onMultiSeasonToggle();
+    if (t.id === 'wrappedYear') { openWrapped(Number(t.value)); return; }
     if (t.id === 'importAnyFile') { readImportFile(t.files[0]); t.value = ''; }
     if (t.id === 'bulkStatus') { onBulkStatus(t); t.value = ''; }
     if (t.dataset.field === 'airDay' || t.id === 'f_status') updateAirDayHint();
@@ -2239,6 +2245,7 @@ document.addEventListener('change', e => {
 
 // Teclado
 document.addEventListener('keydown', e => {
+    if (onWrappedKey(e)) { e.preventDefault(); return; }
     if (e.target.id !== 'paletteInput' && handleShortcut(e)) { e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
