@@ -436,15 +436,16 @@ const SEEN_KEY = 'mi_mundo_avisos_vistos';
 function seenNotifications() {
     try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch (e) { return new Set(); }
 }
+function bellItems() { return [...reminderBellItems(), ...computeNotifications(appData.works, appData.settings)]; }
 function renderBell() {
-    const list = computeNotifications(appData.works, appData.settings);
+    const list = bellItems();
     const seen = seenNotifications();
     const unseen = list.filter(n => !seen.has(n.id)).length;
     $('bellBadge').hidden = !unseen;
     $('bellBadge').textContent = unseen > 9 ? '9+' : unseen;
 }
 function openNotifications() {
-    const list = computeNotifications(appData.works, appData.settings);
+    const list = bellItems();
     const seen = seenNotifications();
     openSheet('🔔 Avisos', () => list.length ? `<div class="pick-list">${list.map(n => `
         <button class="notif-item ${seen.has(n.id) ? '' : 'is-new'}" ${n.workId ? `data-open="${n.workId}"` : 'data-nav="stats"'}>
@@ -1218,6 +1219,7 @@ function renderDetail(fresh = false) {
           <button class="btn btn-secondary btn-sm ${myList() && myList().items.includes(w.id) ? 'is-on' : ''}" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ Mi lista' : '＋ Mi lista'}</button>
           <button class="btn btn-secondary btn-sm" data-act="collect" data-id="${w.id}">📂 Colecciones${inColls.length ? ' · ' + inColls.length : ''}</button>
           <button class="btn btn-secondary btn-sm" data-act="focus" data-id="${w.id}" title="Modo foco (F)">🎯 Foco</button>
+          <button class="btn btn-secondary btn-sm ${w.reminder ? 'is-on' : ''}" data-act="reminder" data-id="${w.id}" title="${w.reminder ? 'Te lo recuerdo ' + esc(reminderText(w.reminder)) : 'Recordarme'}">${w.reminder ? '🔔 Recordatorio' : '🔔 Recordarme'}</button>
           <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
           <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
@@ -1714,6 +1716,7 @@ function renderStats() {
         { caption: 'Obras por plataforma', empty: 'Añade la plataforma a tus series y manhwas.' });
     renderAchievements();
     renderStatsPlus(now);
+    renderDiscoveries();
 }
 function renderGoal(done, year, now) {
     const goal = Number(appData.settings.yearGoal) || 0;
@@ -1854,6 +1857,7 @@ function renderSettings() {
     $('btnCover').classList.toggle('is-on', s.imageFit === 'cover');
     $('themeToggle').setAttribute('aria-checked', String(isDarkNow(s)));
     renderTrash();
+    renderNotifyPanel();
     updateStorageMeter();
 }
 // ---------- Papelera ----------
@@ -2190,6 +2194,7 @@ document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'paletteInput') { renderPalette(); return; }
     if (onImportInput(t)) return;
+    if (t.dataset.notify && t.type !== 'checkbox' && t.tagName !== 'SELECT') return; // la hora se guarda al terminar de elegirla
     if (onPersonalizeInput(t, 'input')) return;
     if (t.id === 'settingTmdbKey') { appData.settings.tmdbKey = t.value.trim(); saveData(); return; }
     if (t.closest && t.closest('#workForm')) {
@@ -2220,6 +2225,7 @@ document.addEventListener('change', e => {
     if (t.id === 'pdType') renderPersonDetail();
     if (t.id === 'fontSizeSlider') saveData();
     if (onPersonalizeInput(t, 'change')) return;
+    if (onNotifyInput(t)) return;
     if (t.id === 'f_multi') onMultiSeasonToggle();
     if (t.id === 'wrappedYear') { openWrapped(Number(t.value)); return; }
     if (t.id === 'importAnyFile') { readImportFile(t.files[0]); t.value = ''; }
@@ -2327,6 +2333,9 @@ window.addEventListener('storage', e => {
 // Actualiza saludo/fecha cada minuto y limpia la papelera cada hora
 setInterval(() => { if (currentPage === 'home') renderHome(); }, 60000);
 setInterval(() => { if (purgeExpiredTrash(appData)) { saveData(); refreshView(); } }, 3600000);
+// Avisos programados: se comprueban cada minuto y al volver a la app
+setInterval(() => checkNotifications().catch(() => {}), 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNotifications().catch(() => {}); });
 
 // Tooltip de los gráficos: el valor destaca y la etiqueta acompaña (con textContent, nunca HTML).
 const vizTip = $('vizTip');
@@ -2459,7 +2468,14 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     if (startParams.get('accion') === 'agregar') {
         history.replaceState(null, '', location.pathname + location.hash);
         openWorkModal('book');
+    } else if (startParams.get('obra') && getWorkById(startParams.get('obra'))) {
+        // Abierta desde un aviso
+        history.replaceState(null, '', location.pathname + location.hash);
+        openDetail(startParams.get('obra'));
     } else offerSessionRecovery();
     document.documentElement.dataset.ready = 'true';
     cloud.init();
+    checkNotifications().catch(() => {});
+    if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
+    if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-work' && getWorkById(e.data.id)) openDetail(e.data.id); });
 })();

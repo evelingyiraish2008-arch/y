@@ -1595,3 +1595,16 @@ body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-in
 .wrapped-sub { font-size: 14px; margin-top: 12px; opacity: .8; }
 .wrapped-actions { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; justify-content: center; }
 @media (max-width: 520px) { .wrapped-story { border-radius: 0; height: 100dvh; } }
+
+/* ===== AVISOS Y DESCUBRIMIENTOS ===== */
+.notify-list { display: flex; flex-direction: column; gap: 8px; }
+.notify-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+.notify-row:last-child { border-bottom: 0; }
+.notify-row .checkbox-wrapper { flex: 1 1 180px; }
+.notify-time { height: 34px !important; padding: 0 8px !important; border-radius: 8px; width: auto; }
+.notify-row > .notify-time + .notify-time { margin-left: -2px; }
+.disc-list { display: flex; flex-direction: column; gap: 8px; }
+.disc-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-elevated); font-size: 13.5px; }
+.disc-item > span:nth-child(2) { flex: 1; }
+.disc-icon { font-size: 20px; width: 34px; height: 34px; display: grid; place-items: center; background: var(--bg-surface); border-radius: 10px; flex-shrink: 0; }
+.disc-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 16px 0 8px; text-transform: uppercase; letter-spacing: .04em; }

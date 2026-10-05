@@ -27,6 +27,8 @@ const APP_SHELL = [
     './ux.js',
     './analytics.js',
     './statsplus.js',
+    './notify.js',
+    './alerts.js',
     './charts.js',
     './storage.js',
     './sync.js',
@@ -103,6 +105,64 @@ async function cacheFirstImage(request) {
     }
     return response;
 }
+
+// ============================================================
+// Avisos en segundo plano (Chrome/Android con la app instalada)
+// ============================================================
+try { importScripts('./utils.js', './insights.js', './notify.js'); } catch (e) { /* sin avisos en segundo plano */ }
+
+function idbRequest(req) { return new Promise((resolve, reject) => { req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); }); }
+/** Lee las obras y los ajustes de IndexedDB, muestra los avisos que tocan y apunta que ya salieron. */
+async function backgroundNotify() {
+    if (typeof dueNotifications !== 'function') return;
+    const db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('mi_mundo_db');
+        req.onupgradeneeded = () => { req.transaction.abort(); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+    try {
+        if (!db.objectStoreNames.contains('works') || !db.objectStoreNames.contains('meta')) return;
+        const tx = db.transaction(['works', 'meta'], 'readonly');
+        const [works, settings, sent] = await Promise.all([
+            idbRequest(tx.objectStore('works').getAll()),
+            idbRequest(tx.objectStore('meta').get('settings')),
+            idbRequest(tx.objectStore('meta').get('notifSent'))
+        ]);
+        const now = Date.now();
+        const sentMap = pruneSent((sent && sent.value) || {}, now);
+        const due = dueNotifications({ works, settings: (settings && settings.value) || {} }, now, sentMap);
+        for (const n of due.slice(0, 4)) {
+            try {
+                await self.registration.showNotification(n.title, { body: n.body, tag: n.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { workId: n.workId || '' } });
+                sentMap[n.id] = now;
+            } catch (e) { return; } // sin permiso: se intentará la próxima vez
+        }
+        if (due.length) {
+            const wtx = db.transaction('meta', 'readwrite');
+            wtx.objectStore('meta').put({ key: 'notifSent', value: sentMap });
+            await new Promise(r => { wtx.oncomplete = r; wtx.onerror = r; });
+        }
+    } finally { db.close(); }
+}
+self.addEventListener('periodicsync', event => {
+    if (event.tag === 'mi-mundo-avisos') event.waitUntil(backgroundNotify().catch(() => {}));
+});
+// Al tocar un aviso se abre la app (o se enfoca si ya estaba abierta) en esa obra
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const workId = (event.notification.data || {}).workId;
+    event.waitUntil((async () => {
+        const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const client = all.find(c => c.url.startsWith(self.registration.scope));
+        if (client) {
+            await client.focus();
+            if (workId) client.postMessage({ type: 'open-work', id: workId });
+            return;
+        }
+        await self.clients.openWindow(workId ? `./?obra=${encodeURIComponent(workId)}` : './');
+    })());
+});
 
 self.addEventListener('fetch', event => {
     const { request } = event;

@@ -404,6 +404,10 @@
                         <div class="viz-head"><div><div class="viz-title">🚀 Ritmo y proyección</div><div class="viz-sub">A tu ritmo actual, cuándo terminarás lo que estás viendo y leyendo</div></div></div>
                         <div id="statsPace"></div>
                     </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">🔎 Descubrimientos</div><div class="viz-sub">Lo que tus datos dicen de tus gustos</div></div></div>
+                        <div id="statsDiscoveries"></div>
+                    </div>
                     <div class="period-bar span-12" role="group" aria-label="Periodo de las estadísticas">
                         <span class="filter-label">Rankings y distribuciones de:</span>
                         <button class="chip chip-muted" data-act="stats-period" data-id="12m" data-stats-period="12m">Últimos 12 meses</button>
@@ -572,6 +576,10 @@
                             <div class="panel-title">🔎 Búsqueda de datos</div>
                             <p class="panel-desc" style="margin:-6px 0 12px">Para series y películas puedes añadir una clave gratuita de TMDB (themoviedb.org → Ajustes → API). Sin ella se usa TVmaze.</p>
                             <label class="field"><span>Clave de TMDB (opcional)</span><input type="password" class="text-input" id="settingTmdbKey" autocomplete="off" placeholder="Pega aquí tu clave"></label>
+                        </div>
+                        <div class="panel-card" id="notifyPanel">
+                            <div class="panel-title">🔔 Avisos</div>
+                            <div id="notifyBody"></div>
                         </div>
                         <div class="panel-card" id="cloudPanel">
                             <div class="panel-title">☁️ Sincronización en la nube</div>
@@ -856,6 +864,7 @@
     <script src="metadata.js"></script>
     <script src="importers.js"></script>
     <script src="analytics.js"></script>
+    <script src="notify.js"></script>
     <script src="charts.js"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
@@ -864,6 +873,7 @@
     <script src="tools.js"></script>
     <script src="ux.js"></script>
     <script src="statsplus.js"></script>
+    <script src="alerts.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
