@@ -31,7 +31,7 @@
                     <p>Tu universo, organizado.</p>
                 </div>
             </div>
-            <button class="sidebar-search" data-palette title="Buscar o ir a… (Ctrl K)"><span aria-hidden="true">🔍</span><span class="label">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
+            <button class="sidebar-search" data-palette title="Buscar o ir a… (Ctrl K) · Pulsa ? para ver todos los atajos"><span aria-hidden="true">🔍</span><span class="label">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
             <nav class="nav-section">
                 <button class="nav-item active" data-nav="home"><span class="icon">🏠</span><span class="label">Inicio</span></button>
                 <button class="nav-item" data-nav="books"><span class="icon">📖</span><span class="label">Libros</span><span class="nav-count" data-count="book"></span></button>
@@ -146,6 +146,8 @@
                     </div>
                 </div>
                 <div class="filter-bar" id="booksFilterBar">
+                    <span class="view-switch" data-view-switch="books" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="booksStatusFilter" data-render="books"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="booksSort" data-render="books"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="pages">Páginas</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="booksSpicyFilter" data-render="books"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -179,9 +181,7 @@
                     <button class="tab" data-filter="quiero ver">⏳ Pendientes <span class="count" id="seriesCountPlan">0</span></button>
                 </div>
                 <div class="filter-bar" id="seriesFilterBar">
-                    <span class="filter-label">Vista</span>
-                    <button class="btn btn-secondary btn-sm is-on" id="viewGridBtn" data-view="grid">🎴 Tarjetas</button>
-                    <button class="btn btn-secondary btn-sm" id="viewListBtn" data-view="list">📋 Lista</button>
+                    <span class="view-switch" data-view-switch="series" role="group" aria-label="Vista"></span>
                     <span class="filter-sep"></span>
                     <select class="filter-select" id="seriesSort" data-render="series"><option value="rating">Ordenar: mi calificación</option><option value="recent">Más recientes</option><option value="year">Año</option><option value="title">Título A-Z</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="seriesTypeFilter" data-render="series"><option value="all">Tipo: todos</option><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select>
@@ -208,6 +208,8 @@
                     </div>
                 </div>
                 <div class="filter-bar" id="animeFilterBar">
+                    <span class="view-switch" data-view-switch="anime" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="animeStatusFilter" data-render="anime"><option value="all">Estado: todos</option><option value="viendo">Viendo</option><option value="terminado">Terminado</option><option value="quiero ver">Quiero ver</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="animeSort" data-render="anime"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="episodes">Episodios</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="animeSpicyFilter" data-render="anime"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -234,6 +236,8 @@
                     </div>
                 </div>
                 <div class="filter-bar" id="manhwaFilterBar">
+                    <span class="view-switch" data-view-switch="manhwa" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="manhwaStatusFilter" data-render="manhwa"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="manhwaSort" data-render="manhwa"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="chapters">Capítulos</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="manhwaSpicyFilter" data-render="manhwa"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -260,6 +264,8 @@
                     </div>
                 </div>
                 <div class="filter-bar" id="blFilterBar">
+                    <span class="view-switch" data-view-switch="bl" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="blTypeFilter" data-render="bl"><option value="all">Todos los tipos</option><option value="book">Libros</option><option value="series">Series</option><option value="anime">Anime</option><option value="manhwa">Manhwa</option></select>
                     <select class="filter-select" id="blStatusFilter" data-render="bl"><option value="all">Todos los estados</option><option value="active">En curso</option><option value="terminado">Terminado</option><option value="plan">Pendiente</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="blSort" data-render="bl"><option value="recent">Recientes</option><option value="rating">Valoración</option><option value="spicy">Más spicy</option><option value="title">Título A-Z</option></select>
@@ -278,6 +284,7 @@
                     <div><h1 class="page-title">👥 Personas</h1><p class="page-subtitle">Actores, autores, directores y más.</p></div>
                     <div class="header-actions">
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="personSearch" placeholder="Buscar por nombre…" data-render="persons"></div>
+                        <span class="view-switch" role="group" aria-label="Vista"><button class="btn btn-secondary btn-sm is-on" data-act="person-view" data-id="cards" title="Tarjetas">🎴</button><button class="btn btn-secondary btn-sm" data-act="person-view" data-id="album" title="Álbum de fotos">🖼️</button></span>
                         <select class="filter-select" id="personSortSelect" data-render="persons" style="height:40px">
                             <option value="name">Ordenar: nombre</option>
                             <option value="works">Más obras</option>
@@ -457,13 +464,17 @@
                             <div class="panel-title">👤 Tu perfil</div>
                             <label class="field"><span>Tu nombre</span><input type="text" id="settingName" maxlength="30" placeholder="Tu nombre"></label>
                         </div>
+                        <div class="panel-card" id="personalizePanel">
+                            <div class="panel-title">✨ Más personalización</div>
+                            <div id="personalizeBody"></div>
+                        </div>
                         <div class="panel-card">
                             <div class="panel-title">🏷️ Etiquetas</div>
                             <p class="panel-desc" style="margin:-6px 0 12px">Renombra, une, colorea o pon un emoji a tus etiquetas.</p>
                             <button class="btn btn-secondary btn-sm btn-block" data-act="tags">🏷️ Gestionar etiquetas</button>
                         </div>
                         <div class="panel-card">
-                            <div class="panel-title">🎨 Color principal</div>
+                            <div class="panel-title">🎨 Color principal <span class="muted" id="colorModeHint"></span></div>
                             <div class="color-options" id="colorOptions">
                                 <button class="color-option" data-color="#8b5cf6" style="background:#8b5cf6;color:#8b5cf6" aria-label="Violeta"></button>
                                 <button class="color-option" data-color="#3b82f6" style="background:#3b82f6;color:#3b82f6" aria-label="Azul"></button>
@@ -540,6 +551,9 @@
           </div>
         </main>
     </div>
+
+    <!-- ===== MODO FOCO ===== -->
+    <div class="focus-mode" id="focusMode" hidden role="dialog" aria-modal="true" aria-label="Modo foco"></div>
 
     <!-- ===== SELECCIÓN DE VARIAS OBRAS ===== -->
     <div class="bulk-bar" id="bulkBar" hidden role="toolbar" aria-label="Acciones con las obras seleccionadas"></div>
@@ -782,6 +796,7 @@
     <script src="cloud.js"></script>
     <script src="features.js"></script>
     <script src="tools.js"></script>
+    <script src="ux.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

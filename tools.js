@@ -306,11 +306,11 @@ function setSelecting(on) {
 }
 function toggleSelected(id) {
     if (selection.has(id)) selection.delete(id); else selection.add(id);
-    document.querySelectorAll(`.card[data-id="${CSS.escape(id)}"]`).forEach(c => c.classList.toggle('is-selected', selection.has(id)));
+    document.querySelectorAll(`.work-item[data-id="${CSS.escape(id)}"]`).forEach(c => c.classList.toggle('is-selected', selection.has(id)));
     renderBulkBar();
 }
 function visibleWorkIds() {
-    return [...new Set([...document.querySelectorAll(`#page-${currentPage} .card[data-id]`)].map(c => c.dataset.id))];
+    return [...new Set([...document.querySelectorAll(`#page-${currentPage} .work-item[data-id]`)].map(c => c.dataset.id))];
 }
 const BULK_STATUS = [['active', '▶️ En curso'], ['done', '✅ Terminada'], ['plan', '⏳ Pendiente'], ['dropped', '⏸️ Abandonada']];
 function statusFor(kind, type) {

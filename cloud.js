@@ -181,6 +181,8 @@ const cloud = {
         } else {
             await settleSaves();
             await store.clearLocalData();
+            // Los ajustes de la nube ganan a los de un dispositivo recién estrenado (nombre, colores, avatar…)
+            await store.setMeta('settingsUpdatedAt', null);
             const settings = appData.settings;
             appData = emptyData();
             appData.settings = settings;

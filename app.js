@@ -98,12 +98,14 @@ function runAfterSaves(fn) {
  */
 function mutate(fn, msg, opts = {}) {
     const before = indexRecords(appData);
+    const cBefore = celebrationStats();
     fn();
     recordVersions(before, appData);
     const entry = opts.undo === false ? null : pushUndo(opts.label || msg, diffIndex(before, indexRecords(appData)));
     saveData();
     if (msg) showToast(msg, opts.type || 'info', entry ? 5000 : 2800, entry ? { label: 'Deshacer', run: () => undoUntil(entry) } : null);
     refreshView();
+    celebrateChanges(cBefore, celebrationStats());
     return true;
 }
 
@@ -130,6 +132,7 @@ function undo() {
     applyChanges(appData, entry.changes, 'before');
     redoStack.push(entry);
     afterHistoryJump(`↩️ Deshecho: ${entry.label}`);
+    playSound('undo');
 }
 function redo() {
     const entry = redoStack.pop();
@@ -246,11 +249,11 @@ function workCard(w, opts = {}) {
     const p = getProgress(w);
     const quickPlus = isActive(w) && getTotal(w) && (Number(w.progress) || 0) < getTotal(w);
     return `
-    <article class="card${selection.has(w.id) ? ' is-selected' : ''}" data-open="${w.id}" data-id="${w.id}" tabindex="0" aria-label="${esc(w.title)}">
+    <article class="card work-item${selection.has(w.id) ? ' is-selected' : ''}" data-open="${w.id}" data-id="${w.id}" tabindex="0" aria-label="${esc(w.title)}">
       <div class="card-cover">
         ${img(w.image, w.type, w.title)}
         <div class="card-top">
-          <span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span>
+          ${cardHides('status') ? '' : `<span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span>`}
           ${w.bl ? '<span class="pill bl">BL</span>' : ''}
           ${w.locked ? '<span class="pill" title="Bloqueada">🔒</span>' : ''}
           ${opts.showType ? `<span class="pill">${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}</span>` : ''}
@@ -258,7 +261,7 @@ function workCard(w, opts = {}) {
           ${w.rating ? `<span class="pill rating">★ ${ratingText(w.rating)}</span>` : ''}
         </div>
         <div class="card-bottom">
-          ${(isActive(w) || opts.showProgress) && getTotal(w) ? `<span class="pill">${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
+          ${(isActive(w) || opts.showProgress) && getTotal(w) && !cardHides('progress') ? `<span class="pill">${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
           ${rereadBadge(w) ? `<span class="pill">${esc(rereadBadge(w))}</span>` : ''}
           <div class="card-actions">
             ${quickPlus ? `<button class="card-act" data-act="progress" title="Avanzar progreso" aria-label="Avanzar progreso">＋</button>` : ''}
@@ -266,12 +269,12 @@ function workCard(w, opts = {}) {
             <button class="card-act danger" data-act="delete" title="Eliminar" aria-label="Eliminar">✕</button>
           </div>
         </div>
-        ${p > 0 && p < 100 ? `<div class="card-progress"><span style="width:${p}%"></span></div>` : ''}
+        ${p > 0 && p < 100 && !cardHides('progress') ? `<div class="card-progress"><span style="width:${p}%"></span></div>` : ''}
       </div>
       <div class="card-body">
         <h4 class="card-title">${w.favorite ? '<span class="fav">♥</span>' : ''}<span class="t">${esc(w.title)}</span></h4>
-        <div class="card-sub">${esc(getSubtitle(w))}</div>
-        ${opts.compact ? '' : `<div class="card-meta"><span class="stars">${getStars(w.rating)}</span>${w.spicy ? `<span title="Spicy">🌶️${w.spicy}</span>` : ''}${w.sadness ? `<span title="Tristeza">💧${w.sadness}</span>` : ''}</div>`}
+        ${cardHides('subtitle') ? '' : `<div class="card-sub">${esc(getSubtitle(w))}</div>`}
+        ${opts.compact ? '' : `<div class="card-meta">${cardHides('stars') ? '' : `<span class="stars">${getStars(w.rating)}</span>`}${w.spicy && !cardHides('spicy') ? `<span title="Spicy">🌶️${w.spicy}</span>` : ''}${w.sadness && !cardHides('sadness') ? `<span title="Tristeza">💧${w.sadness}</span>` : ''}</div>`}
         <div class="card-actions-list">
           <button class="btn btn-secondary btn-sm" data-act="edit">✎ Editar</button>
           ${quickPlus ? `<button class="btn btn-secondary btn-sm" data-act="progress">＋ Progreso</button>` : ''}
@@ -292,10 +295,11 @@ function emptyState(icon, title, text, addType) {
 // ============================================================
 // 5. FILTROS Y ORDEN
 // ============================================================
-function renderGrid(gridId, list, empty, countId) {
+function renderGrid(gridId, list, empty, countId, page = currentPage, cardOpts = {}) {
     const grid = $(gridId);
     if (countId) $(countId).textContent = list.length ? `· ${list.length}` : '';
-    grid.innerHTML = list.length ? list.map(w => workCard(w)).join('') : emptyState(...empty);
+    if (list.length) renderWorks(grid, list, page, cardOpts);
+    else { grid.className = 'card-grid'; grid.innerHTML = emptyState(...empty); }
 }
 
 // ============================================================
@@ -306,10 +310,10 @@ function renderBooks() {
         search: val('booksSearch'), status: val('booksStatusFilter'), bl: checked('booksBlFilter'), fav: checked('booksFavFilter'),
         spicy: val('booksSpicyFilter'), sadness: val('booksSadnessFilter')
     });
-    renderGrid('booksGrid', sortWorks(list, val('booksSort')), ['📚', 'No hay libros aquí', 'Prueba con otros filtros o agrega un libro nuevo.', 'book'], 'booksCount');
+    renderGrid('booksGrid', sortWorks(list, val('booksSort')), ['📚', 'No hay libros aquí', 'Prueba con otros filtros o agrega un libro nuevo.', 'book'], 'booksCount', 'books');
 }
 
-let seriesTab = 'all', seriesView = 'grid';
+let seriesTab = 'all';
 function renderSeries() {
     const all = getWorksByType('series');
     populateYearFilter('seriesYearFilter', all);
@@ -331,10 +335,7 @@ function renderSeries() {
     document.querySelectorAll('#seriesTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === seriesTab));
     const titles = { all: '❤️ Todas', bl: '💕 BL', viendo: '▶️ Viendo', terminado: '✅ Terminadas', 'quiero ver': '⏳ Pendientes' };
     $('seriesSectionTitle').innerHTML = `${titles[seriesTab]} <span class="muted">${list.length ? '· ' + list.length : ''}</span>`;
-    $('seriesGrid').classList.toggle('is-list', seriesView === 'list');
-    $('viewGridBtn').classList.toggle('is-on', seriesView === 'grid');
-    $('viewListBtn').classList.toggle('is-on', seriesView === 'list');
-    renderGrid('seriesGrid', sortWorks(list, val('seriesSort')), ['🎬', 'No hay series aquí', 'Prueba con otra pestaña o agrega una serie.', 'series']);
+    renderGrid('seriesGrid', sortWorks(list, val('seriesSort')), ['🎬', 'No hay series aquí', 'Prueba con otra pestaña o agrega una serie.', 'series'], null, 'series');
 }
 function populateYearFilter(selectId, items) {
     const select = $(selectId);
@@ -348,23 +349,21 @@ function renderAnime() {
         search: val('animeSearch'), status: val('animeStatusFilter'), bl: checked('animeBlFilter'), fav: checked('animeFavFilter'),
         spicy: val('animeSpicyFilter'), sadness: val('animeSadnessFilter')
     });
-    renderGrid('animeGrid', sortWorks(list, val('animeSort')), ['🎌', 'No hay animes aquí', 'Prueba con otros filtros o agrega un anime.', 'anime'], 'animeCount');
+    renderGrid('animeGrid', sortWorks(list, val('animeSort')), ['🎌', 'No hay animes aquí', 'Prueba con otros filtros o agrega un anime.', 'anime'], 'animeCount', 'anime');
 }
 function renderManhwa() {
     let list = filterWorks(getWorksByType('manhwa'), {
         search: val('manhwaSearch'), status: val('manhwaStatusFilter'), bl: checked('manhwaBlFilter'), fav: checked('manhwaFavFilter'),
         spicy: val('manhwaSpicyFilter'), sadness: val('manhwaSadnessFilter')
     });
-    renderGrid('manhwaGrid', sortWorks(list, val('manhwaSort')), ['📕', 'No hay manhwas aquí', 'Prueba con otros filtros o agrega un manhwa.', 'manhwa'], 'manhwaCount');
+    renderGrid('manhwaGrid', sortWorks(list, val('manhwaSort')), ['📕', 'No hay manhwas aquí', 'Prueba con otros filtros o agrega un manhwa.', 'manhwa'], 'manhwaCount', 'manhwa');
 }
 function renderBL() {
     let list = filterWorks(appData.works.filter(w => w.bl), {
         search: val('blSearch'), type: val('blTypeFilter'), status: val('blStatusFilter'), minRating: checked('blMinRating') ? 4 : 0
     });
     list = sortWorks(list, val('blSort'));
-    $('blCount').textContent = list.length ? `· ${list.length}` : '';
-    $('blGrid').innerHTML = list.length ? list.map(w => workCard(w, { showType: true })).join('')
-        : emptyState('💖', 'No hay obras BL aquí', 'Marca “Es BL” al agregar o editar una obra.', 'series');
+    renderGrid('blGrid', list, ['💖', 'No hay obras BL aquí', 'Marca “Es BL” al agregar o editar una obra.', 'series'], 'blCount', 'bl', { showType: true });
 }
 
 // ============================================================
@@ -573,6 +572,7 @@ function changeProgress(id, delta) {
             if (!w.startDate) w.startDate = todayISO();
         }
     }, msg, { type: finishes ? 'success' : 'info' });
+    if (delta > 0 && !finishes) playSound('tick');
 }
 
 // ============================================================
@@ -608,14 +608,11 @@ function renderSidebar() {
     Object.keys(TYPE_META).forEach(t => counts[t] = getWorksByType(t).length);
     document.querySelectorAll('[data-count]').forEach(el => el.textContent = counts[el.dataset.count] || '');
     const name = appData.settings.userName || 'Sara';
-    const xp = appData.works.length * 10 + appData.works.filter(w => w.status === 'terminado').length * 15 + appData.notes.length * 5;
-    const level = Math.floor(xp / 50) + 1;
-    const ranks = [[1, '🌱 Semilla'], [3, '🌿 Brote'], [6, '⭐ Estrella'], [10, '🔥 Leyenda'], [15, '👑 Supremo']];
-    const rank = ranks.filter(r => level >= r[0]).pop()[1];
+    const { level, rank, pct } = levelInfo();
     $('userName').textContent = name;
-    $('userAvatar').textContent = name.trim().charAt(0).toUpperCase() || '✨';
+    renderAvatar();
     $('userRank').textContent = `${rank} · Nivel ${level}`;
-    $('userLevelBar').style.width = ((xp % 50) / 50 * 100) + '%';
+    $('userLevelBar').style.width = pct + '%';
     $('personNames').innerHTML = appData.persons.map(p => `<option value="${esc(p.name)}">`).join('');
 }
 
@@ -680,7 +677,8 @@ function paletteActions() {
         { icon: '👤', title: 'Agregar persona', run: () => openPersonModal() },
         { icon: '🎲', title: '¿Qué veo hoy?', run: openPicker },
         { icon: '🔔', title: 'Ver avisos', run: openNotifications },
-        { icon: appData.settings.darkMode ? '☀️' : '🌙', title: appData.settings.darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => updateSetting('darkMode', !appData.settings.darkMode) },
+        { icon: isDarkNow() ? '☀️' : '🌙', title: isDarkNow() ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => { const d = isDarkNow(); appData.settings.themeAuto = false; updateSetting('darkMode', !d); } },
+        { icon: '⌨️', title: 'Ver atajos de teclado', sub: '?', run: openShortcuts },
         { icon: '📤', title: 'Exportar copia de seguridad', run: exportData },
         { icon: '↩️', title: 'Deshacer último cambio', sub: 'Ctrl + Z', run: undo },
         { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
@@ -914,6 +912,7 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     setFormType(work ? work.type : type);
     document.querySelectorAll('#workTypeTabs .seg-btn').forEach(b => b.disabled = !!work && b.dataset.type !== work.type);
     fillAutocomplete();
+    applyFormFieldVisibility();
     fillWorkForm(work || preset);
     updateAirDayHint();
     const draft = !work && !preset.title ? readDraft() : null;
@@ -1217,7 +1216,8 @@ function renderDetail(fresh = false) {
           <button class="btn btn-secondary btn-sm ${w.favorite ? 'is-on' : ''}" data-act="fav" data-id="${w.id}">${w.favorite ? '❤️ Favorito' : '🤍 Favorito'}</button>
           <button class="btn btn-secondary btn-sm ${myList() && myList().items.includes(w.id) ? 'is-on' : ''}" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ Mi lista' : '＋ Mi lista'}</button>
           <button class="btn btn-secondary btn-sm" data-act="collect" data-id="${w.id}">📂 Colecciones${inColls.length ? ' · ' + inColls.length : ''}</button>
-          <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar">⧉ Duplicar</button>
+          <button class="btn btn-secondary btn-sm" data-act="focus" data-id="${w.id}" title="Modo foco (F)">🎯 Foco</button>
+          <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
           <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
@@ -1388,8 +1388,12 @@ function renderPersons() {
     $('person-list').hidden = personTab === 'general';
 
     const emptyPersons = `<div class="empty-state"><div class="big">👥</div><h4>No hay personas aquí</h4><p>Agrega actores, autores o directores para ver sus obras.</p><button class="btn btn-primary btn-sm" data-act="person-new">＋ Agregar persona</button></div>`;
+    const album = appData.settings.personView === 'album';
+    document.querySelectorAll('[data-act="person-view"]').forEach(b => b.classList.toggle('is-on', b.dataset.id === (album ? 'album' : 'cards')));
+    const people = list => (!list.length ? emptyPersons : album ? personAlbum(list) : list.map(personCard).join(''));
     if (personTab === 'general') {
-        $('allPersonsGrid').innerHTML = all.length ? all.map(personCard).join('') : emptyPersons;
+        $('allPersonsGrid').innerHTML = people(all);
+        $('allPersonsGrid').classList.toggle('is-album', album);
         const top = appData.persons.slice().sort((a, b) => personWorkCount(b) - personWorkCount(a)).slice(0, 5);
         $('personRanking').innerHTML = top.length ? top.map((p, i) => `
             <button class="ranking-item" data-person="${p.id}">
@@ -1400,7 +1404,8 @@ function renderPersons() {
             </button>`).join('') : '<p class="panel-desc" style="margin:0">Sin datos todavía.</p>';
     } else {
         const list = personTab === 'bl' ? all.filter(p => p.bl) : all.filter(p => p.type === personTab);
-        $('personsGrid').innerHTML = list.length ? list.map(personCard).join('') : emptyPersons;
+        $('personsGrid').innerHTML = people(list);
+        $('personsGrid').classList.toggle('is-album', album);
     }
 }
 let currentPersonId = null;
@@ -1813,14 +1818,17 @@ function renderNotes() {
 function applySettings() {
     const s = appData.settings;
     const root = document.documentElement;
-    root.style.setProperty('--accent', s.themeColor);
-    root.dataset.theme = s.darkMode ? 'dark' : 'light';
+    const dark = isDarkNow(s);
+    root.style.setProperty('--accent', accentNow(s));
+    root.dataset.theme = dark ? 'dark' : 'light';
     document.querySelector('.page-inner').style.zoom = (s.fontSize || 14) / 14;
     document.body.classList.toggle('fit-cover', s.imageFit === 'cover');
-    document.querySelector('meta[name=color-scheme]').content = s.darkMode ? 'dark' : 'light';
+    document.querySelector('meta[name=color-scheme]').content = dark ? 'dark' : 'light';
     // Color de la barra del sistema (móvil y app instalada)
-    document.querySelector('meta[name=theme-color]').content = s.darkMode ? '#0b0b13' : '#fbfbfe';
+    document.querySelector('meta[name=theme-color]').content = dark ? '#0b0b13' : '#fbfbfe';
+    applyPersonalization();
 }
+if (typeof matchMedia !== 'undefined') matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (appData.settings.themeAuto) applySettings(); });
 function updateSetting(key, value, msg) {
     appData.settings[key] = value;
     applySettings();
@@ -1832,12 +1840,14 @@ function renderSettings() {
     const s = appData.settings;
     if (document.activeElement !== $('settingName')) $('settingName').value = s.userName || '';
     if (document.activeElement !== $('settingTmdbKey')) $('settingTmdbKey').value = s.tmdbKey || '';
-    document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(s.themeColor).toLowerCase()));
+    document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
+    $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
+    renderPersonalizePanel();
     $('fontSizeSlider').value = s.fontSize;
     $('fontSizeValue').textContent = s.fontSize + 'px';
     $('btnContain').classList.toggle('is-on', s.imageFit !== 'cover');
     $('btnCover').classList.toggle('is-on', s.imageFit === 'cover');
-    $('themeToggle').setAttribute('aria-checked', String(!!s.darkMode));
+    $('themeToggle').setAttribute('aria-checked', String(isDarkNow(s)));
     renderTrash();
     updateStorageMeter();
 }
@@ -2081,8 +2091,8 @@ document.addEventListener('click', e => {
 
     // Modo selección: tocar una tarjeta la marca en vez de abrirla
     if (selecting) {
-        const card = t.closest('.page-view .card[data-id]');
-        if (card) { e.preventDefault(); toggleSelected(card.dataset.id); return; }
+        const card = t.closest('.page-view .work-item[data-id]');
+        if (card && !t.closest('[data-act="table-sort"]')) { e.preventDefault(); toggleSelected(card.dataset.id); return; }
     }
     const result = t.closest('[data-result]');
     if (result) { openSearchResult(Number(result.dataset.result)); return; }
@@ -2154,14 +2164,12 @@ document.addEventListener('click', e => {
     if (typeBtn && !typeBtn.disabled) { setFormType(typeBtn.dataset.type); return; }
     const seriesTabBtn = t.closest('#seriesTabs .tab');
     if (seriesTabBtn) { seriesTab = seriesTabBtn.dataset.filter; renderSeries(); return; }
-    const viewBtn = t.closest('[data-view]');
-    if (viewBtn) { seriesView = viewBtn.dataset.view; renderSeries(); return; }
     const personTabBtn = t.closest('#personTabs .tab');
     if (personTabBtn) { personTab = personTabBtn.dataset.tab; renderPersons(); return; }
     const coupleTabBtn = t.closest('#coupleTabs .tab');
     if (coupleTabBtn) { coupleFilter = coupleTabBtn.dataset.filter; renderCouples(); return; }
     const color = t.closest('[data-color]');
-    if (color) { updateSetting('themeColor', color.dataset.color, '🎨 Color actualizado'); return; }
+    if (color) { updateSetting(isDarkNow() ? 'themeColor' : 'themeColorLight', color.dataset.color, '🎨 Color actualizado'); return; }
     const fit = t.closest('[data-fit]');
     if (fit) { updateSetting('imageFit', fit.dataset.fit, '🖼️ Ajuste de imagen actualizado'); return; }
 });
@@ -2177,6 +2185,7 @@ document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'paletteInput') { renderPalette(); return; }
     if (onImportInput(t)) return;
+    if (onPersonalizeInput(t, 'input')) return;
     if (t.id === 'settingTmdbKey') { appData.settings.tmdbKey = t.value.trim(); saveData(); return; }
     if (t.closest && t.closest('#workForm')) {
         if (t.dataset.sfield) toggleAggregateInputs();
@@ -2205,6 +2214,7 @@ document.addEventListener('change', e => {
     if (t.id === 'importFileInput') { importData(t.files[0]); t.value = ''; }
     if (t.id === 'pdType') renderPersonDetail();
     if (t.id === 'fontSizeSlider') saveData();
+    if (onPersonalizeInput(t, 'change')) return;
     if (t.id === 'f_multi') onMultiSeasonToggle();
     if (t.id === 'importAnyFile') { readImportFile(t.files[0]); t.value = ''; }
     if (t.id === 'bulkStatus') { onBulkStatus(t); t.value = ''; }
@@ -2229,6 +2239,7 @@ document.addEventListener('change', e => {
 
 // Teclado
 document.addEventListener('keydown', e => {
+    if (e.target.id !== 'paletteInput' && handleShortcut(e)) { e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if ($('paletteModal').classList.contains('active')) closeModal('paletteModal'); else openPalette();
@@ -2279,7 +2290,7 @@ $('collectionSaveBtn').addEventListener('click', saveCollection);
 $('addPersonBtn').addEventListener('click', () => openPersonModal());
 $('addCoupleBtn').addEventListener('click', () => openCoupleModal());
 $('addCollectionBtn').addEventListener('click', () => { pendingCollectWorkId = null; openCollectionModal(); });
-$('themeToggle').addEventListener('click', () => updateSetting('darkMode', !appData.settings.darkMode, appData.settings.darkMode ? '☀️ Modo claro' : '🌙 Modo oscuro'));
+$('themeToggle').addEventListener('click', () => { const dark = isDarkNow(); appData.settings.themeAuto = false; updateSetting('darkMode', !dark, dark ? '☀️ Modo claro' : '🌙 Modo oscuro'); });
 $('resetSettingsBtn').addEventListener('click', () => {
     const name = appData.settings.userName;
     appData.settings = { ...DEFAULT_SETTINGS, userName: name };

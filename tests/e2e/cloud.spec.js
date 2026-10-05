@@ -246,3 +246,20 @@ test('la papelera viaja entre dispositivos y restaurar también', async ({ brows
     await phone.context.close();
     await laptop.context.close();
 });
+
+test('la foto de avatar (guardada en los ajustes) llega al otro dispositivo', async ({ browser }) => {
+    const phone = await newDevice(browser);
+    await signIn(phone.page, { create: true });
+    await phone.page.evaluate(async () => {
+        const c = document.createElement('canvas'); c.width = 40; c.height = 40;
+        c.getContext('2d').fillRect(0, 0, 40, 40);
+        appData.settings.avatar = await store.saveImage(await new Promise(r => c.toBlob(r, 'image/png')));
+        saveData();
+    });
+    await syncNow(phone.page);
+    const laptop = await newDevice(browser);
+    await signIn(laptop.page);
+    await expect(laptop.page.locator('#userAvatar img')).toHaveAttribute('src', /^blob:/);
+    await phone.context.close();
+    await laptop.context.close();
+});

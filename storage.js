@@ -52,6 +52,8 @@ function blobToDataUrl(blob) {
 /** Recorre todos los campos de imagen de los datos. */
 function forEachImageField(data, fn) {
     IMAGE_FIELDS.forEach(([store, field, kind]) => allRecords(data, store).forEach(item => fn(item, field, kind)));
+    // Imágenes de los ajustes: avatar y fondo
+    if (data.settings) [['avatar', 'avatar'], ['bgImage', 'banner']].forEach(([field, kind]) => fn(data.settings, field, kind));
 }
 /** Registros de una colección, incluidos los que están en la papelera (se guardan en el mismo almacén). */
 function allRecords(data, name) {
