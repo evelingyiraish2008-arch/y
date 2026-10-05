@@ -428,6 +428,10 @@
                 <div class="page-header">
                     <div><h1 class="page-title">📝 Notas</h1><p class="page-subtitle">Tus pensamientos, teorías y reseñas.</p></div>
                     <div class="header-actions">
+                        <select class="filter-select" id="notesTypeFilter" data-render="notes" aria-label="Tipo de nota">
+                            <option value="all">Todas</option><option value="comentario">💬 Comentarios</option><option value="resena">⭐ Reseñas</option>
+                            <option value="teoria">🔮 Teorías</option><option value="cita">❝ Citas</option><option value="recordatorio">⏰ Recordatorios</option>
+                        </select>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="notesSearch" placeholder="Buscar en notas…" data-render="notes"></div>
                     </div>
                 </div>
@@ -447,6 +451,11 @@
                         <div class="panel-card">
                             <div class="panel-title">👤 Tu perfil</div>
                             <label class="field"><span>Tu nombre</span><input type="text" id="settingName" maxlength="30" placeholder="Tu nombre"></label>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🏷️ Etiquetas</div>
+                            <p class="panel-desc" style="margin:-6px 0 12px">Renombra, une, colorea o pon un emoji a tus etiquetas.</p>
+                            <button class="btn btn-secondary btn-sm btn-block" data-act="tags">🏷️ Gestionar etiquetas</button>
                         </div>
                         <div class="panel-card">
                             <div class="panel-title">🎨 Color principal</div>
@@ -574,9 +583,14 @@
                         <label class="field" data-types="series anime manhwa"><span>Día de emisión</span>
                             <select data-field="airDay" data-default=""><option value="">Sin asignar</option><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option></select>
                         </label>
+                        <div class="field span-2 seasons-block">
+                            <label class="checkbox-wrapper"><input type="checkbox" id="f_multi"> <span id="lbl_multi">Tiene varias temporadas</span></label>
+                            <div class="seasons-editor" id="seasonsEditor" hidden></div>
+                        </div>
                         <label class="field"><span id="lbl_start">Fecha de inicio</span><input type="date" data-field="startDate"></label>
                         <label class="field"><span>Fecha de fin</span><input type="date" data-field="endDate"></label>
-                        <label class="field span-2"><span>Etiquetas (separadas por comas)</span><input type="text" data-field="tags" placeholder="BL, drama, fantasía…"></label>
+                        <label class="field span-2"><span>Etiquetas (separadas por comas)</span><input type="text" id="f_tags" data-field="tags" placeholder="BL, drama, fantasía…"></label>
+                        <div class="title-hint span-2" id="tagsHint" hidden></div>
                         <label class="field span-2"><span>Sinopsis</span><textarea data-field="synopsis" placeholder="¿De qué trata?"></textarea></label>
                         <div class="field span-2">
                             <div class="sliders">
@@ -662,8 +676,16 @@
                             <input type="file" id="coupleImageFile" accept="image/*" hidden data-target="coupleImage" data-kind="couple">
                         </div>
                     </div>
-                    <label class="field span-2"><span>Nombre *</span><input type="text" id="coupleName" placeholder="Ej: First & Khaotung"></label>
-                    <label class="field"><span>Obras juntos</span><input type="number" id="coupleWorks" min="0" placeholder="0"></label>
+                    <label class="field"><span>Actor / actriz 1</span><select class="text-input" id="coupleA"></select></label>
+                    <label class="field"><span>Actor / actriz 2</span><select class="text-input" id="coupleB"></select></label>
+                    <label class="field span-2"><span>Nombre</span><input type="text" id="coupleName" placeholder="Si lo dejas vacío: “Actor 1 & Actor 2”"></label>
+                    <div class="field span-2">
+                        <span class="field-label-row"><span>Sus obras juntos</span><small class="muted" id="coupleWorksCount"></small></span>
+                        <input type="search" class="text-input" id="coupleWorksSearch" placeholder="Buscar obra…">
+                        <div class="pick-list couple-works-picker" id="coupleWorksPicker"></div>
+                        <span class="hint">Las obras donde salen los dos en el reparto se marcan solas.</span>
+                    </div>
+                    <label class="field"><span>Obras juntos (si no las vinculas)</span><input type="number" id="coupleWorks" min="0" placeholder="0"></label>
                     <div class="field checks" style="align-self:end;padding-bottom:10px"><label class="checkbox-wrapper"><input type="checkbox" id="coupleFavorite"> ❤️ Favorita</label></div>
                     <div class="field span-2"><div class="sliders"><div class="slider-group"><span class="slider-label">⭐ Valoración</span><input type="range" class="rating" min="0" max="5" step="0.5" id="coupleRating" data-out="out_coupleRating"><output class="slider-value" id="out_coupleRating">–</output></div></div></div>
                 </div>
@@ -726,10 +748,12 @@
     <script src="utils.js"></script>
     <script src="insights.js"></script>
     <script src="history.js"></script>
+    <script src="coherence.js"></script>
     <script src="charts.js"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
     <script src="cloud.js"></script>
+    <script src="features.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

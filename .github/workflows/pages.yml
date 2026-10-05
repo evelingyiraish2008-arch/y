@@ -25,7 +25,7 @@ jobs:
       - name: Preparar solo los archivos de la app
         run: |
           mkdir _site
-          cp index.html styles.css utils.js insights.js history.js charts.js storage.js sync.js cloud.js app.js sw.js manifest.webmanifest _site/
+          cp index.html styles.css utils.js insights.js history.js coherence.js features.js charts.js storage.js sync.js cloud.js app.js sw.js manifest.webmanifest _site/
           cp -r vendor _site/
           cp -r icons _site/
           # Cambia la versión del service worker en cada publicación para limpiar cachés antiguas

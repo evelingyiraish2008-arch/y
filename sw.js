@@ -19,6 +19,8 @@ const APP_SHELL = [
     './utils.js',
     './insights.js',
     './history.js',
+    './coherence.js',
+    './features.js',
     './charts.js',
     './storage.js',
     './sync.js',

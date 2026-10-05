@@ -194,12 +194,13 @@ function seedSampleData() {
         { id: 'p2', name: 'Bright Vachirawit', type: 'actor', works: 12, rating: 5, image: 'https://i.pravatar.cc/300?img=11', bl: true, nationality: 'Tailandia', bio: 'Actor y cantante tailandés.', createdAt: now - day * 35 },
         { id: 'p3', name: 'Lee Jong Suk', type: 'actor', works: 28, rating: 4.5, image: 'https://i.pravatar.cc/300?img=12', bl: false, nationality: 'Corea del Sur', bio: 'Actor surcoreano.', createdAt: now - day * 30 },
         { id: 'p4', name: 'Liu Cixin', type: 'author', works: 15, rating: 4.5, image: 'https://i.pravatar.cc/300?img=15', bl: false, nationality: 'China', bio: 'Escritor de ciencia ficción.', createdAt: now - day * 20 },
-        { id: 'p5', name: 'Park Seo Ham', type: 'actor', works: 12, rating: 5, image: 'https://i.pravatar.cc/300?img=13', bl: true, nationality: 'Corea del Sur', bio: 'Actor y modelo.', createdAt: now - day * 15 }
+        { id: 'p5', name: 'Park Seo Ham', type: 'actor', works: 12, rating: 5, image: 'https://i.pravatar.cc/300?img=13', bl: true, nationality: 'Corea del Sur', bio: 'Actor y modelo.', createdAt: now - day * 15 },
+        { id: 'p6', name: 'Park Jae Chan', type: 'actor', works: 6, rating: 4.5, image: 'https://i.pravatar.cc/300?img=14', bl: true, nationality: 'Corea del Sur', bio: 'Actor y cantante (DONGKIZ).', createdAt: now - day * 15 }
     ];
     appData.couples = [
         { id: 'c1', name: 'First & Khaotung', works: 12, rating: 5, image: IMG_E, favorite: true, createdAt: now - day * 25 },
         { id: 'c2', name: 'Bright & Win', works: 8, rating: 4.5, image: IMG_C, favorite: false, createdAt: now - day * 20 },
-        { id: 'c3', name: 'Park Seo Ham & Park Jae Chan', works: 1, rating: 5, image: IMG_E, favorite: true, createdAt: now - day * 10 }
+        { id: 'c3', name: 'Park Seo Ham & Park Jae Chan', works: 1, rating: 5, image: IMG_E, favorite: true, personA: 'p5', personB: 'p6', createdAt: now - day * 10 }
     ];
     appData.collections = [
         { id: 'col1', name: 'Mi lista', description: 'Obras que quiero ver o leer', items: ['w3', 'w8'], createdAt: now - day * 5 },
@@ -257,7 +258,8 @@ function workCard(w, opts = {}) {
           ${w.rating ? `<span class="pill rating">★ ${ratingText(w.rating)}</span>` : ''}
         </div>
         <div class="card-bottom">
-          ${(isActive(w) || opts.showProgress) && getTotal(w) ? `<span class="pill">${esc(getProgressText(w))}</span>` : ''}
+          ${(isActive(w) || opts.showProgress) && getTotal(w) ? `<span class="pill">${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
+          ${rereadBadge(w) ? `<span class="pill">${esc(rereadBadge(w))}</span>` : ''}
           <div class="card-actions">
             ${quickPlus ? `<button class="card-act" data-act="progress" title="Avanzar progreso" aria-label="Avanzar progreso">＋</button>` : ''}
             <button class="card-act" data-act="edit" title="Editar" aria-label="Editar">✎</button>
@@ -547,24 +549,30 @@ function renderHero(inProgress) {
 function changeProgress(id, delta) {
     const w = getWorkById(id);
     if (!w || isLocked(w)) return;
-    const total = getTotal(w);
-    const step = delta * TYPE_META[w.type].step;
-    let next = Math.max(0, (Number(w.progress) || 0) + step);
-    if (total) next = Math.min(next, total);
-    const finishes = total && next >= total && w.status !== 'terminado';
-    const msg = finishes ? `🎉 ¡Terminaste “${w.title}”!` : `⏩ ${w.title}: ${w.type === 'book' ? next + ' págs' : (w.type === 'manhwa' ? 'cap ' : 'ep ') + next}`;
+    // Se calcula en una copia para saber qué mensaje mostrar
+    const sim = JSON.parse(JSON.stringify(w));
+    const seasonStep = hasSeasons(sim) ? advanceSeason(sim, delta) : null;
+    const total = getTotal(sim);
+    if (!seasonStep) {
+        let next = Math.max(0, (Number(sim.progress) || 0) + delta * TYPE_META[w.type].step);
+        if (total) next = Math.min(next, total);
+        sim.progress = next;
+    }
+    const next = Number(sim.progress) || 0;
+    if (next === (Number(w.progress) || 0)) return;
+    const finishes = total && next >= total && (w.status !== 'terminado' || w.rereading);
+    const unit = w.type === 'book' ? next + ' págs' : (w.type === 'manhwa' ? 'cap ' : 'ep ') + next;
+    const msg = finishes ? `🎉 ¡Terminaste “${w.title}”!` : `⏩ ${w.title}: ${seasonStep ? seasonLabel(sim) : unit}`;
     mutate(() => {
-        w.progress = next;
+        if (seasonStep) advanceSeason(w, delta); else w.progress = next;
         w.updatedAt = Date.now();
         if (delta > 0) bumpActivity(w);
-        if (finishes) {
-            w.status = 'terminado';
-            if (!w.endDate) w.endDate = todayISO();
-        } else if (delta > 0 && isPlanned(w)) {
+        if (finishes) finishWork(w);
+        else if (delta > 0 && isPlanned(w)) {
             w.status = STATUS_BY_TYPE[w.type][0];
             if (!w.startDate) w.startDate = todayISO();
         }
-    }, msg);
+    }, msg, { type: finishes ? 'success' : 'info' });
 }
 
 // ============================================================
@@ -632,7 +640,7 @@ function searchAll(raw, limit = 12) {
 function openResult(r) {
     if (r.kind === 'work' || r.kind === 'note') openDetail(r.id);
     else if (r.kind === 'person') openPersonDetail(r.id);
-    else if (r.kind === 'couple') openCoupleModal(getCoupleById(r.id));
+    else if (r.kind === 'couple') openCoupleDetail(r.id);
     else if (r.kind === 'collection') { navigateTo('collections'); openCollectionView(r.id); }
 }
 function runGlobalSearch() {
@@ -676,6 +684,7 @@ function paletteActions() {
         { icon: '↩️', title: 'Deshacer último cambio', sub: 'Ctrl + Z', run: undo },
         { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
         { icon: '🕓', title: 'Historial de cambios', run: openHistory },
+        { icon: '🏷️', title: 'Gestionar etiquetas', run: openTagManager },
         { icon: '🗑️', title: 'Abrir papelera', run: openTrash },
         ...(cloud.state === 'signedIn' ? [{ icon: '🔄', title: 'Sincronizar ahora', run: () => cloud.syncNow() }] : [])
     ];
@@ -880,6 +889,7 @@ function setFormType(type) {
     status.selectedIndex = idx;
     $('lbl_progress').textContent = TYPE_META[type].progressLabel;
     $('lbl_start').textContent = type === 'series' ? 'Fecha de estreno / inicio' : 'Fecha de inicio';
+    if ($('seasonsEditor') && $('workModal').classList.contains('active')) renderSeasonsEditor(readSeasonsEditor());
     const pv = $('workImagePreview');
     if (!$('f_image').value) pv.src = PH[type];
 }
@@ -921,7 +931,9 @@ function fillWorkForm(src) {
     updateRangeOutputs(workForm);
     updateWorkPreview();
     if ($('workImagePreview').src === '' || !$('f_image').value) $('workImagePreview').src = PH[formType];
+    renderSeasonsEditor(src.seasonsList);
     updateTitleHint();
+    updateTagsHint();
 }
 
 // ---------- Borrador del formulario (se guarda solo mientras escribes) ----------
@@ -970,6 +982,7 @@ function collectWorkForm() {
         else if ('num' in el.dataset) data[f] = el.value === '' ? (f === 'year' ? '' : 0) : Number(el.value);
         else data[f] = el.value.trim();
     });
+    if ($('f_multi')) data.seasonsList = readSeasonsEditor();
     return data;
 }
 function saveWork() {
@@ -994,10 +1007,15 @@ function saveWork() {
             const w = getWorkById(editing);
             const before = { progress: Number(w.progress) || 0, status: w.status };
             Object.assign(w, data, { updatedAt: Date.now() });
+            if (!hasSeasons(w)) delete w.seasonsList;
+            syncSeasonAggregates(w);
             if ((Number(w.progress) || 0) > before.progress || (w.status !== before.status && !isPlanned(w))) bumpActivity(w);
+            if (w.rereading && w.status === 'terminado' && before.status !== 'terminado') finishWork(w);
             appData.notes.forEach(n => { if (n.workId === w.id) n.workTitle = w.title; });
         } else {
             const w = { id: generateId(), type: formType, ...data, createdAt: Date.now(), updatedAt: Date.now() };
+            if (!hasSeasons(w)) delete w.seasonsList;
+            syncSeasonAggregates(w);
             if ((Number(w.progress) || 0) > 0) bumpActivity(w);
             appData.works.push(w);
         }
@@ -1110,7 +1128,7 @@ function restoreVersion(id, index) {
 let currentDetailId = null;
 function openDetail(id) {
     if (!getWorkById(id)) return;
-    if (currentDetailId !== id) $('detailPanel').innerHTML = '';
+    if (currentDetailId !== id) { $('detailPanel').innerHTML = ''; detailRenderedId = null; }
     currentDetailId = id;
     rememberSession({ detail: id });
     renderDetail();
@@ -1144,12 +1162,18 @@ function peopleChips(str) {
         return p ? `<button class="chip" data-person="${p.id}">${esc(n)}</button>` : `<span class="chip chip-muted">${esc(n)}</span>`;
     }).join('');
 }
-function renderDetail() {
+let detailRenderedId = null;
+/** Pinta la ficha. Mantiene las secciones abiertas y lo que estuvieras escribiendo (salvo fresh = true). */
+function renderDetail(fresh = false) {
     const w = getWorkById(currentDetailId);
     if (!w) { closeDetail(); return; }
-    const openStates = [...$('detailPanel').querySelectorAll('details')].map(d => d.open);
+    const sameWork = detailRenderedId === w.id;
+    const open = sameWork ? Object.fromEntries([...$('detailPanel').querySelectorAll('details[data-key]')].map(d => [d.dataset.key, d.open])) : {};
+    const composer = sameWork && !fresh ? readNoteComposer() : null;
+    const focusedNote = document.activeElement && document.activeElement.id === 'detailNote';
+    if (!sameWork) { editingNoteId = null; noteFilter = 'all'; }
+    detailRenderedId = w.id;
     const p = getProgress(w), total = getTotal(w);
-    const note = appData.notes.find(n => n.workId === w.id);
     const inColls = appData.collections.filter(c => c.items.includes(w.id));
     const rel = [
         ['Autor', w.author, true], ['Estudio', w.studio], ['Plataforma', w.platform], ['Género', w.genre], ['País', w.country],
@@ -1213,57 +1237,29 @@ function renderDetail() {
           <div class="detail-section-title">Sinopsis</div>
           <p class="detail-text">${esc(w.synopsis || 'Sin sinopsis todavía.')}</p>
         </div>
-        ${tags.length ? `<div class="detail-section"><div class="detail-section-title">Etiquetas</div><div class="tag-list">${tags.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div></div>` : ''}
-        <details class="expandable" ${openStates[0] ?? rel.length ? 'open' : ''}>
+        ${tags.length ? `<div class="detail-section"><div class="detail-section-title">Etiquetas</div><div class="tag-list">${tags.map(tagChip).join('')}</div></div>` : ''}
+        ${seasonsSectionHtml(w, open.seasons)}
+        <details class="expandable" data-key="ficha" ${open.ficha ?? rel.length ? 'open' : ''}>
           <summary>🔗 Ficha</summary>
           <div class="expandable-content">
             ${rel.length ? `<dl class="kv">${rel.map(([k, v, people]) => `<dt>${k}</dt><dd>${people ? peopleChips(v) : esc(v)}</dd>`).join('')}</dl>` : '<p>Sin información adicional. Edita la obra para añadirla.</p>'}
           </div>
         </details>
-        <details class="expandable" ${openStates[1] ?? note ? 'open' : ''}>
-          <summary>📝 Mis notas</summary>
-          <div class="expandable-content">
-            <label class="field"><textarea id="detailNote" placeholder="Escribe tus pensamientos, teorías o reseñas…">${esc(note ? note.content : '')}</textarea></label>
-            <div style="display:flex;gap:8px;margin-top:10px;">
-              <button class="btn btn-primary btn-sm" data-act="note-save" data-id="${w.id}">Guardar nota</button>
-              ${note ? `<button class="btn btn-danger btn-sm" data-act="note-delete" data-id="${w.id}">Eliminar</button>` : ''}
-            </div>
-          </div>
-        </details>
-        <details class="expandable" ${openStates[2] ?? similar.length ? 'open' : ''}>
+        ${notesSectionHtml(w, open.notes, composer)}
+        ${rereadsSectionHtml(w, open.rereads)}
+        <details class="expandable" data-key="similar" ${open.similar ?? similar.length ? 'open' : ''}>
           <summary>🔍 Obras similares</summary>
           <div class="expandable-content">
             ${similar.length ? `<div class="mini-grid">${similar.map(miniCard).join('')}</div>` : `<p>${tags.length ? 'No hay obras con etiquetas en común.' : 'Añade etiquetas a esta obra para ver recomendaciones.'}</p>`}
           </div>
         </details>
-        <details class="expandable" ${openStates[3] ? 'open' : ''}>
+        <details class="expandable" data-key="history" ${open.history ? 'open' : ''}>
           <summary>🕓 Historial${(w.versions || []).length ? ` · ${w.versions.length}` : ''}</summary>
           <div class="expandable-content">${versionsHtml(w)}</div>
         </details>
       </div>`;
+    if (focusedNote && $('detailNote')) { const t = $('detailNote'); t.focus({ preventScroll: true }); t.setSelectionRange(t.value.length, t.value.length); }
 }
-function saveNote(id) {
-    const w = getWorkById(id);
-    const content = $('detailNote').value.trim();
-    if (!w) return;
-    if (!content) { showToast('📝 Escribe algo antes de guardar', 'error'); return; }
-    mutate(() => {
-        const existing = appData.notes.find(n => n.workId === id);
-        if (existing) { existing.content = content; existing.workTitle = w.title; existing.updatedAt = Date.now(); }
-        else appData.notes.push({ id: generateId(), workId: id, workTitle: w.title, content, createdAt: Date.now() });
-        w.note = content;
-    }, '📝 Nota guardada');
-}
-function deleteNote(workId) {
-    const notes = appData.notes.filter(n => n.workId === workId);
-    if (!notes.length) return;
-    mutate(() => {
-        notes.forEach(n => trashRecord(appData, 'notes', n.id, Date.now(), { from: 'Notas' }));
-        const w = getWorkById(workId);
-        if (w) delete w.note;
-    }, '🗑️ Nota enviada a la papelera', { label: 'Eliminar nota' });
-}
-
 // ============================================================
 // 14. COLECCIONES
 // ============================================================
@@ -1447,6 +1443,7 @@ function renderPersonDetail() {
             ${p.bl ? '<span class="chip chip-pink">💖 BL</span>' : ''}
           </div>
           ${p.bio ? `<div class="person-bio">${esc(p.bio)}</div>` : ''}
+          ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(c.name)}</button>`).join('')}</div>` : ''}
           ${social ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${social}</div>` : ''}
           <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
             <button class="btn btn-secondary btn-sm" data-act="person-edit" data-id="${p.id}">✏️ Editar</button>
@@ -1520,10 +1517,10 @@ function renderCouples() {
     const q = norm(val('couplesSearch'));
     let list = appData.couples.filter(c => norm(c.name).includes(q));
     if (coupleFilter === 'favorite') list = list.filter(c => c.favorite);
-    if (coupleFilter === 'rating') list = list.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    if (coupleFilter === 'rating') { const order = rankCouples(list, appData.works, appData.persons).map(r => r.couple); list = order; }
     document.querySelectorAll('#coupleTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === coupleFilter));
     $('coupleCount').textContent = `${list.length} ${list.length === 1 ? 'pareja' : 'parejas'}`;
-    $('couplesGrid').innerHTML = list.length ? list.map(c => `
+    $('couplesGrid').innerHTML = list.length ? list.map(c => { const info = coupleInfo(c); return `
         <article class="couple-card" data-couple="${c.id}" data-id="${c.id}" tabindex="0">
           <div class="couple-image">${img(c.image, 'couple', c.name)}</div>
           <div class="couple-actions">
@@ -1532,18 +1529,18 @@ function renderCouples() {
           </div>
           <div class="couple-info">
             <div class="couple-name">${esc(c.name)}</div>
-            <div class="couple-works">${c.works || 0} ${c.works == 1 ? 'obra' : 'obras'} juntos</div>
-            <div class="couple-rating"><span class="stars">${getStars(c.rating)}</span><span class="value">${ratingText(c.rating)}</span></div>
+            <div class="couple-works">${info.count} ${info.count === 1 ? 'obra' : 'obras'} juntos${info.linked ? ' · 🔗' : ''}</div>
+            <div class="couple-rating"><span class="stars">${getStars(info.avgRating || c.rating)}</span><span class="value">${ratingText(Math.round((info.avgRating || c.rating || 0) * 10) / 10)}</span></div>
           </div>
-        </article>`).join('')
+        </article>`; }).join('')
         : `<div class="empty-state"><div class="big">💕</div><h4>No hay parejas aquí</h4><p>Guarda tus parejas BL favoritas.</p><button class="btn btn-primary btn-sm" data-act="couple-new">＋ Añadir pareja</button></div>`;
-    const top = appData.couples.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 5);
-    $('coupleRanking').innerHTML = top.length ? top.map((c, i) => `
+    const top = rankCouples(appData.couples, appData.works, appData.persons).slice(0, 5);
+    $('coupleRanking').innerHTML = top.length ? top.map(({ couple: c, score, count }, i) => `
         <button class="ranking-item" data-couple="${c.id}">
           <div class="ranking-number ${['gold', 'silver', 'bronze'][i] || ''}">${i + 1}</div>
           <div class="ranking-avatar">${img(c.image, 'couple', c.name)}</div>
-          <div class="ranking-info"><div class="ranking-name">${esc(c.name)}</div><div class="ranking-detail">${c.works || 0} obras${c.favorite ? ' · ❤️' : ''}</div></div>
-          <div class="ranking-rating">★ ${ratingText(c.rating)}</div>
+          <div class="ranking-info"><div class="ranking-name">${esc(c.name)}</div><div class="ranking-detail">${count} obras${c.favorite ? ' · ❤️' : ''}</div></div>
+          <div class="ranking-rating">★ ${ratingText(Math.round(score * 10) / 10)}</div>
         </button>`).join('') : '<p class="panel-desc" style="margin:0">Sin datos todavía.</p>';
 }
 const updateCouplePreview = bindPreview('coupleImage', 'coupleImagePreview', 'couple');
@@ -1555,15 +1552,20 @@ function openCoupleModal(c = null) {
     $('coupleImage').value = c ? (c.image || '') : '';
     $('coupleFavorite').checked = c ? !!c.favorite : false;
     $('coupleModalTitle').textContent = c ? '✏️ Editar pareja' : '＋ Añadir pareja BL';
+    fillCoupleLinks(c);
     updateRangeOutputs($('coupleModal'));
     updateCouplePreview();
     openModal('coupleModal');
 }
 function saveCouple() {
     const id = $('editCoupleId').value;
-    const name = $('coupleName').value.trim();
-    if (!name) { showToast('⚠️ El nombre es obligatorio', 'error'); $('coupleName').focus(); return; }
-    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), favorite: $('coupleFavorite').checked };
+    const links = collectCoupleLinks();
+    if (links.personA && links.personA === links.personB) { showToast('⚠️ Elige dos personas distintas', 'error'); return; }
+    const a = getPersonById(links.personA), b = getPersonById(links.personB);
+    // Si no escribes nombre, se usa "A & B"
+    const name = $('coupleName').value.trim() || (a && b ? `${a.name} & ${b.name}` : '');
+    if (!name) { showToast('⚠️ Escribe un nombre o elige a los dos actores', 'error'); $('coupleName').focus(); return; }
+    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), favorite: $('coupleFavorite').checked, ...links };
     const ok = mutate(() => {
         if (id) Object.assign(getCoupleById(id), data);
         else appData.couples.push({ id: generateId(), ...data, createdAt: Date.now() });
@@ -1776,8 +1778,9 @@ function renderAchievements() {
 // ============================================================
 function renderNotes() {
     const q = norm(val('notesSearch'));
-    const notes = appData.notes.filter(n => !q || norm(n.content + ' ' + n.workTitle).includes(q))
-        .sort((a, b) => lastTouched(b) - lastTouched(a));
+    const type = val('notesTypeFilter') || 'all';
+    const notes = appData.notes.filter(n => (!q || norm(n.content + ' ' + n.workTitle).includes(q)) && (type === 'all' || noteType(n) === type))
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || lastTouched(b) - lastTouched(a));
     $('notesList').innerHTML = notes.length ? notes.map(n => {
         const w = getWorkById(n.workId);
         return `
@@ -1785,15 +1788,16 @@ function renderNotes() {
           <div class="thumb" ${w ? `data-open="${w.id}"` : ''}>${img(w && w.image, w ? w.type : 'book', n.workTitle)}</div>
           <div class="body">
             <h4>${esc(n.workTitle || (w && w.title) || 'Nota')}</h4>
-            <div class="date">${lastTouched(n) > (n.createdAt || 0) + 60000 ? 'Editada ' + fmtDate(n.updatedAt) : fmtDate(n.createdAt)}</div>
+            <div class="date">${NOTE_TYPES[noteType(n)].icon} ${NOTE_TYPES[noteType(n)].label}${n.pinned ? ' · 📌' : ''} · ${lastTouched(n) > (n.createdAt || 0) + 60000 ? 'Editada ' + fmtDate(n.updatedAt) : fmtDate(n.createdAt)}${noteType(n) === 'resena' && reviewAverage(n.scores) ? ` · ★ ${ratingText(Math.round(reviewAverage(n.scores) * 10) / 10)}` : ''}</div>
             <div class="content">${esc(n.content)}</div>
             <div class="actions">
               ${w ? `<button class="btn btn-secondary btn-sm" data-open="${w.id}">✏️ Abrir</button>` : ''}
-              <button class="btn btn-secondary btn-sm" data-act="note-delete" data-id="${esc(n.workId)}">🗑️</button>
+              <button class="btn btn-secondary btn-sm" data-act="note-pin" data-id="${n.id}">${n.pinned ? 'Desfijar' : '📌'}</button>
+              <button class="btn btn-secondary btn-sm" data-act="note-remove" data-id="${esc(n.id)}" aria-label="Eliminar nota">🗑️</button>
             </div>
           </div>
         </article>`;
-    }).join('') : `<div class="empty-state"><div class="big">📝</div><h4>${q ? 'Sin resultados' : 'Aún no tienes notas'}</h4><p>Abre cualquier obra y escribe en “Mis notas”.</p></div>`;
+    }).join('') : `<div class="empty-state"><div class="big">📝</div><h4>${q || type !== 'all' ? 'Sin resultados' : 'Aún no tienes notas'}</h4><p>Abre cualquier obra y escribe en “Mis notas”: comentarios, reseñas, teorías, citas o recordatorios.</p></div>`;
 }
 
 // ============================================================
@@ -2009,7 +2013,6 @@ function handleAction(act, id, el) {
         case 'fav': toggleFavorite(id); break;
         case 'collect': openCollectionPicker(id); break;
         case 'note-save': saveNote(id); break;
-        case 'note-delete': deleteNote(id); break;
         case 'coll-new': pendingCollectWorkId = null; openCollectionModal(); break;
         case 'coll-new-with': pendingCollectWorkId = id; closeModal('sheetModal'); openCollectionModal(); break;
         case 'coll-open': openCollectionView(id); break;
@@ -2059,6 +2062,7 @@ function handleAction(act, id, el) {
             break;
         }
         case 'mood': openMoodCell(id); break;
+        default: if (FEATURE_ACTIONS[act]) FEATURE_ACTIONS[act](id, el);
     }
 }
 
@@ -2115,7 +2119,7 @@ document.addEventListener('click', e => {
     const person = t.closest('[data-person]');
     if (person) { if (currentDetailId && person.closest('#detailPanel')) closeDetail(); openPersonDetail(person.dataset.person); return; }
     const couple = t.closest('[data-couple]');
-    if (couple) { openCoupleModal(getCoupleById(couple.dataset.couple)); return; }
+    if (couple) { if (currentDetailId && couple.closest('#detailPanel')) closeDetail(); if (couple.closest('#personDetailOverlay')) closeModal('personDetailOverlay'); openCoupleDetail(couple.dataset.couple); return; }
     const coll = t.closest('[data-coll]');
     if (coll) { openCollectionView(coll.dataset.coll); return; }
     const scroll = t.closest('[data-scroll]');
@@ -2159,7 +2163,20 @@ $('detailOverlay').addEventListener('click', closeDetail);
 document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'paletteInput') { renderPalette(); return; }
-    if (t.closest && t.closest('#workForm')) { saveDraft(); if (t.id === 'f_title') updateTitleHint(); }
+    if (t.closest && t.closest('#workForm')) {
+        if (t.dataset.sfield) toggleAggregateInputs();
+        saveDraft();
+        if (t.id === 'f_title') updateTitleHint();
+        if (t.id === 'f_tags') updateTagsHint();
+    }
+    if (t.id === 'tagSearch') {
+        tagFilter = t.value;
+        const caret = t.selectionStart;
+        sheetRefresh();
+        $('tagSearch').focus();
+        $('tagSearch').setSelectionRange(caret, caret);
+    }
+    if (t.id === 'coupleWorksSearch') renderCoupleWorksPicker();
     if (t.dataset.render && RENDERERS[t.dataset.render]) RENDERERS[t.dataset.render]();
     if (t.type === 'range' && t.dataset.out) updateRangeOutputs(t.closest('.modal, .panel-card') || document);
     if (t.id === 'pdSearch') renderPersonDetail();
@@ -2173,7 +2190,15 @@ document.addEventListener('change', e => {
     if (t.id === 'importFileInput') { importData(t.files[0]); t.value = ''; }
     if (t.id === 'pdType') renderPersonDetail();
     if (t.id === 'fontSizeSlider') saveData();
+    if (t.id === 'f_multi') onMultiSeasonToggle();
     if (t.closest && t.closest('#workForm')) saveDraft();
+    if (t.dataset.tagColor) onTagColorChange(t);
+    if (t.id === 'coupleA' || t.id === 'coupleB') renderCoupleWorksPicker();
+    if (t.dataset.coupleWork) {
+        if (t.checked) coupleWorkPick.add(t.dataset.coupleWork); else coupleWorkPick.delete(t.dataset.coupleWork);
+        renderCoupleWorksPicker();
+    }
+    if (t.name === 'noteType' && $('reviewCriteria')) $('reviewCriteria').hidden = t.value !== 'resena';
     if (t.dataset.pickColl) {
         const c = getCollectionById(t.dataset.pickColl), wid = t.dataset.work;
         if (!c) return;
