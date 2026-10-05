@@ -24,7 +24,11 @@ Consejo: en **Personalizar → Copias de seguridad** puedes exportar o importar 
 - **📊 Estadísticas:** actividad, reto, comparativas, ritmo y proyección, rankings, distribuciones, notas, descubrimientos y “Tu año en Mi Mundo” para compartir.
 - **🔔 Avisos:** recordatorio diario, episodios de hoy (y fechas reales de AniList/TVmaze), resumen semanal, racha en peligro, inactividad y recordatorios por obra; en Android con la app instalada también en segundo plano.
 - **Búsqueda avanzada** en cualquier buscador: `BL nota:5`, `estado:pendiente año:>2020`, `tag:x tag:y`, `autor:"Mo Xiang"`, `-tag:drama`, `tipo:anime o tipo:manhwa`. Colecciones inteligentes, vistas guardadas, filtro por fechas y obras parecidas.
-- **Contenido de cada obra:** citas, galería, personajes, banda sonora, premios y curiosidades. Colecciones ordenables y compartibles (enlace que caduca o imagen).
+- **🖼️ Banners:** cabecera con banner en obras, personas, parejas, colecciones y tu perfil. Se sube, se pega un enlace o se busca; se recorta solo a 3:1 y hay un editor (zoom, girar, voltear, proporciones, cuadrícula).
+- **🔗 Personas vinculadas:** autor, actores y directores se escriben como chips con sugerencias y nombres parecidos; si no existe se crea al momento (con foto buscada en internet). Seudónimos, varios roles, reparto con personajes, pestaña “Personajes” y limpieza de personas huérfanas.
+- **🔍 Buscador de imágenes:** AniList, TMDB, Wikipedia, Wikimedia Commons, MyAnimeList, Open Library y Google (con tu clave). Pinterest, Google Imágenes y Bing no permiten buscar desde otras apps: se abren en otra pestaña y se pega el enlace de la imagen (o la imagen copiada).
+- **🎨 Moodboards** por obra, persona (Editorial, Casual, Eventos…) y pareja (Oficial, Behind the scenes, Fanart, Moments), con filtros por forma y enlace a su origen.
+- **Contenido de cada obra:** citas, moodboard, personajes, banda sonora, premios y curiosidades. Colecciones ordenables y compartibles (enlace que caduca o imagen).
 - **✨ Extras:** cronología, diario, “¿cómo te sientes hoy?”, adivina por la portada, retos, limpieza y preguntas sobre tus datos.
 - **Más:** español, inglés o portugués; calendario `.ics`; marcador “➕ Mi Mundo” para guardar desde otras webs; escáner de ISBN (navegadores con BarcodeDetector); modo solo lectura y presentación.
 
@@ -73,6 +77,8 @@ Después, ábrela en el navegador y pulsa **Personalizar → 📲 Instalar Mi Mu
 | `coherence.js` | Etiquetas, parejas, temporadas, notas y relecturas (sin DOM) |
 | `metadata.js`, `importers.js` | Búsqueda de datos en servicios públicos e importación de otras apps (sin DOM) |
 | `analytics.js`, `notify.js`, `query.js`, `extras.js` | Estadísticas avanzadas, avisos, búsqueda avanzada y extras (sin DOM) |
+| `mediakit.js`, `peoplekit.js` | Recortes, enlaces, fuentes de imágenes y vínculos de personas (sin DOM) |
+| `media.js`, `imagefind.js`, `people.js`, `moodboard.js` | Banners y editor de recorte, buscador de imágenes, personas con chips y moodboards |
 | `i18n.js` | Idiomas de la interfaz |
 | `features.js`, `tools.js`, `ux.js`, `statsplus.js`, `alerts.js`, `manage.js`, `content.js`, `play.js` | Pantallas de cada grupo de funciones |
 | `app.js` | Estado, renderizado, eventos e inicio |

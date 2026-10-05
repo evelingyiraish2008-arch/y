@@ -55,8 +55,8 @@ function blobToDataUrl(blob) {
 /** Recorre todos los campos de imagen de los datos. */
 function forEachImageField(data, fn) {
     IMAGE_FIELDS.forEach(([store, field, kind]) => allRecords(data, store).forEach(item => fn(item, field, kind)));
-    // Galería de cada obra: una lista de imágenes (se pasa la lista y la posición)
-    allRecords(data, 'works').forEach(w => { if (Array.isArray(w.gallery)) w.gallery.forEach((_, i) => fn(w.gallery, i, 'poster')); });
+    // Moodboard de obras, personas y parejas: una lista de imágenes (se pasa la lista y la posición)
+    ['works', 'persons', 'couples'].forEach(k => allRecords(data, k).forEach(r => { if (Array.isArray(r.gallery)) r.gallery.forEach((_, i) => fn(r.gallery, i, 'gallery')); }));
     // Imágenes de los ajustes: avatar, fondo y banner del perfil
     if (data.settings) [['avatar', 'avatar'], ['bgImage', 'banner'], ['profileBanner', 'banner']].forEach(([field, kind]) => fn(data.settings, field, kind));
 }

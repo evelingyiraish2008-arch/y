@@ -1,13 +1,13 @@
 /*
  * Mi Mundo · content.js
- * Contenido extra de cada obra: citas (y "Cita del día"), galería, personajes favoritos,
+ * Contenido extra de cada obra: citas (y "Cita del día"), moodboard (moodboard.js), personajes favoritos,
  * banda sonora, premios y curiosidades. Se carga antes que app.js.
  */
 'use strict';
 
 const CONTENT_TABS = {
     quotes: { icon: '❝', label: 'Citas' },
-    gallery: { icon: '🖼️', label: 'Galería' },
+    gallery: { icon: '🎨', label: 'Moodboard' },
     characters: { icon: '🎭', label: 'Personajes' },
     soundtrack: { icon: '🎵', label: 'Música' },
     awards: { icon: '🏆', label: 'Premios' },
@@ -46,20 +46,12 @@ function contentSectionHtml(w, openState) {
                 <button class="link-btn" data-act="content-fav" data-id="${w.id}" data-item="${q.id}">${q.fav ? '★ Favorita' : '☆ Favorita'}</button>
                 <button class="link-btn danger" data-act="content-del" data-id="${w.id}" data-item="${q.id}" data-kind="quotes">Quitar</button></footer></blockquote>`).join('')}</div>`;
     } else if (tab === 'gallery') {
-        body = `<div class="content-form inline">
-            <button type="button" class="btn btn-primary btn-sm" data-upload="galleryFile">📤 Subir imagen</button>
-            <input type="file" id="galleryFile" accept="image/*" hidden data-target="galleryInput" data-kind="gallery" data-work="${w.id}">
-            <input type="hidden" id="galleryInput">
-            <input type="url" class="text-input" id="cGalleryUrl" placeholder="…o pega la URL de una imagen">
-            <button class="btn btn-secondary btn-sm" data-act="content-add" data-id="${w.id}">Añadir</button></div>
-            <div class="gallery-grid">${(w.gallery || []).map((src, i) => `<figure class="gallery-item"><button class="gallery-open" data-act="gallery-view" data-id="${w.id}" data-item="${i}">${img(src, 'banner', `Imagen ${i + 1}`)}</button>
-                <button class="icon-btn sm gallery-del" data-act="content-del" data-id="${w.id}" data-item="${i}" data-kind="gallery" aria-label="Quitar imagen">✕</button></figure>`).join('')}</div>`;
+        body = moodboardHtml('works', w);
     } else if (tab === 'characters') {
-        const persons = appData.persons.slice().sort((a, b) => a.name.localeCompare(b.name, 'es'));
         body = `<div class="content-form grid">
             <input type="text" class="text-input" id="cCharName" placeholder="Nombre del personaje">
             <select class="text-input" id="cCharRole">${Object.entries(CHARACTER_ROLES).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
-            <select class="text-input" id="cCharPerson"><option value="">Interpretado por… (opcional)</option>${persons.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+            <select class="text-input" id="cCharPerson"><option value="">Interpretado por… (opcional)</option>${characterPersonOptions(w)}</select>
             <input type="text" class="text-input" id="cCharNote" placeholder="¿Por qué te encanta?">
             <button class="btn btn-primary btn-sm" data-act="content-add" data-id="${w.id}">＋ Añadir personaje</button></div>
             <div class="content-list">${list.map(c => { const p = getPersonById(c.personId); return `<div class="pick-item character-item">
@@ -105,7 +97,6 @@ FEATURE_ACTIONS['content-add'] = id => {
     const val = x => ($(x) ? $(x).value.trim() : '');
     let item, kind = contentTab, msg;
     if (kind === 'quotes') { if (!val('cQuoteText')) { showToast('✍️ Escribe la cita', 'error'); return; } item = { id: generateId(), text: val('cQuoteText'), context: val('cQuoteCtx'), date: todayISO() }; msg = '❝ Cita guardada'; }
-    else if (kind === 'gallery') { const url = safeUrl(val('cGalleryUrl')); if (!url) { showToast('⚠️ Pega una URL que empiece por http', 'error'); return; } addGalleryImage(w, url); return; }
     else if (kind === 'characters') { if (!val('cCharName')) { showToast('✍️ Escribe el nombre del personaje', 'error'); return; } item = { id: generateId(), name: val('cCharName'), role: val('cCharRole'), personId: val('cCharPerson'), note: val('cCharNote') }; msg = '🎭 Personaje añadido'; }
     else if (kind === 'soundtrack') { if (!val('cSongTitle')) { showToast('✍️ Escribe el título de la canción', 'error'); return; } item = { id: generateId(), kind: val('cSongKind'), title: val('cSongTitle'), artist: val('cSongArtist'), url: safeUrl(val('cSongUrl')) }; msg = '🎵 Canción añadida'; }
     else if (kind === 'awards') { if (!val('cAwardName')) { showToast('✍️ Escribe el premio', 'error'); return; } item = { id: generateId(), name: val('cAwardName'), year: Number(val('cAwardYear')) || '' }; msg = '🏆 Premio añadido'; }
@@ -113,23 +104,12 @@ FEATURE_ACTIONS['content-add'] = id => {
     Object.keys(item).forEach(k => { if (item[k] === '') delete item[k]; });
     mutate(() => { w[kind] = [...(w[kind] || []), item]; w.updatedAt = now; }, msg, { label: msg.replace(/^\S+\s/, '') });
 };
-function addGalleryImage(w, src) {
-    if ((w.gallery || []).length >= 30) { showToast('⚠️ Máximo 30 imágenes por obra', 'error'); return; }
-    mutate(() => { w.gallery = [...(w.gallery || []), src]; }, '🖼️ Imagen añadida a la galería', { label: `Galería de “${w.title}”` });
-}
-/** La subida de imágenes deja la referencia en #galleryInput y avisa con 'input'. */
-function onGalleryUploaded(input) {
-    const file = $('galleryFile');
-    const w = getWorkById(file && file.dataset.work);
-    if (w && input.value) addGalleryImage(w, input.value);
-    input.value = '';
-}
 FEATURE_ACTIONS['content-del'] = (id, el) => {
     const w = getWorkById(id);
     const kind = el.dataset.kind || contentTab;
     if (!w || !w[kind]) return;
     mutate(() => {
-        w[kind] = kind === 'gallery' ? w.gallery.filter((_, i) => i !== Number(el.dataset.item)) : w[kind].filter(x => x.id !== el.dataset.item);
+        w[kind] = w[kind].filter(x => x.id !== el.dataset.item);
         if (!w[kind].length) delete w[kind];
     }, '✕ Quitado', { label: 'Quitar contenido' });
 };
@@ -139,25 +119,6 @@ FEATURE_ACTIONS['content-fav'] = (id, el) => {
     const it = w && (w[kind] || []).find(x => x.id === el.dataset.item);
     if (it) mutate(() => { it.fav = !it.fav; }, it.fav ? 'Quitada de favoritas' : '★ Marcada como favorita');
 };
-FEATURE_ACTIONS['gallery-view'] = (id, el) => {
-    const w = getWorkById(id);
-    if (!w) return;
-    let i = Number(el.dataset.item);
-    const show = () => openSheet(`🖼️ ${w.title} · ${i + 1}/${w.gallery.length}`, () => `<div class="gallery-big">${img(w.gallery[i], 'banner', '')}</div>
-        <div class="seg-inline" style="justify-content:center;margin-top:12px">
-            <button class="btn btn-secondary btn-sm" data-act="gallery-step" data-id="${w.id}" data-item="${(i - 1 + w.gallery.length) % w.gallery.length}">← Anterior</button>
-            <button class="btn btn-secondary btn-sm" data-act="gallery-cover" data-id="${w.id}" data-item="${i}">Usar como portada</button>
-            <button class="btn btn-secondary btn-sm" data-act="gallery-step" data-id="${w.id}" data-item="${(i + 1) % w.gallery.length}">Siguiente →</button></div>`);
-    show();
-};
-FEATURE_ACTIONS['gallery-step'] = (id, el) => FEATURE_ACTIONS['gallery-view'](id, el);
-FEATURE_ACTIONS['gallery-cover'] = (id, el) => {
-    const w = getWorkById(id);
-    if (!w) return;
-    closeModal('sheetModal');
-    mutate(() => { w.image = w.gallery[Number(el.dataset.item)]; }, '🖼️ Portada cambiada', { label: `Portada de “${w.title}”` });
-};
-
 /** Tarjeta "Cita del día" en Inicio. */
 function renderQuoteOfDay() {
     const box = $('quoteOfDay');

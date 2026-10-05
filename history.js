@@ -13,7 +13,7 @@ const RECORD_KINDS = ['works', 'persons', 'couples', 'collections', 'notes'];
 const MAX_VERSIONS = 10;
 const VERSION_MERGE_MS = 5 * 60000;
 /** Campos que no cuentan como "cambio" en el historial de una obra. */
-const VERSION_IGNORED = new Set(['updatedAt', 'createdAt', 'activity', 'versions', 'sample', 'note', 'trashedAt', 'trashInfo']);
+const VERSION_IGNORED = new Set(['updatedAt', 'createdAt', 'activity', 'versions', 'sample', 'note', 'trashedAt', 'trashInfo', 'personIds', 'mediaSources', 'galleryInfo']);
 
 const recordKey = (kind, id) => `${kind}/${id}`;
 

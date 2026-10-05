@@ -19,7 +19,7 @@ test('agregar un libro lo guarda y aparece en la estantería', async ({ page }) 
     await page.locator('#page-home [data-add="book"]').click();
     await expect(page.locator('#workModal')).toHaveClass(/active/);
     await page.fill('#f_title', 'Libro de prueba');
-    await page.locator('#workForm [data-field="author"]').fill('Autora Test');
+    await page.locator('#chip_author').pressSequentially('Autora Test,'); // la coma lo deja como nombre (sin ficha)
     await page.locator('#workForm [data-field="pages"]').fill('300');
     await page.locator('#workForm [data-field="progress"]').fill('999');
     await page.click('#workSaveBtn');
