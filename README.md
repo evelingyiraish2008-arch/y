@@ -16,11 +16,17 @@ Consejo: en **Personalizar → Copias de seguridad** puedes exportar o importar 
 
 ## Funciones destacadas
 
-- **Inicio:** banner con lo último en curso (avanzar, valorar con estrellas, añadir a "Mi lista") y la fila "Hoy" (racha, reto anual y lo que se emite hoy).
-- **🔔 Avisos:** lo que se emite hoy, lo que estás a punto de terminar, lo que llevas tiempo sin avanzar y cómo va tu reto.
-- **🎲 ¿Qué veo hoy?:** propone una obra pendiente al azar (por tipo) y la empieza con un clic.
-- **Ctrl K (o 🔍 en la barra lateral):** busca obras, personas, colecciones y notas, ve a cualquier sección o ejecuta acciones.
-- **📊 Estadísticas:** calendario de actividad con rachas, reto anual, terminadas por mes y tipo, estado de la colección, tiempo por tipo, valoraciones, mapa de emociones (spicy × tristeza), etiquetas, países y plataformas. Cada gráfico tiene tooltip y una vista de tabla.
+- **Inicio:** banner con lo último en curso, fila "Hoy" (racha, reto anual y emisiones), cita del día, consejo del día y tour guiado.
+- **Seguridad de tus datos:** papelera de 30 días, deshacer/rehacer (Ctrl+Z / Ctrl+Shift+Z) con historial, historial de versiones de cada obra, bloqueo, borrador automático del formulario y aviso de títulos parecidos.
+- **Coherencia:** gestor de etiquetas (renombrar, unir, color, emoji), parejas BL vinculadas a dos personas, temporadas o sagas por bloques, varias notas por obra (comentario, reseña con criterios, teoría, cita, recordatorio) y relecturas/re-visionados.
+- **Ahorro de tiempo:** rellenar datos y portadas por el título (AniList, MyAnimeList, Open Library, Google Books, TVmaze y TMDB opcional), importar de Goodreads/CSV, MyAnimeList, AniList y JSON, exportar a CSV, selección múltiple, modo rápido y autocompletado.
+- **Experiencia:** atajos de teclado (pulsa `?`), modo foco, vistas de tabla/estantería/mosaico, álbum de personas, celebraciones, sonidos opcionales, estilos (Neón, Minimalista, Papel, Retro terminal, Océano), fondos, avatar, densidad, colores por tipo y menú ordenable.
+- **📊 Estadísticas:** actividad, reto, comparativas, ritmo y proyección, rankings, distribuciones, notas, descubrimientos y “Tu año en Mi Mundo” para compartir.
+- **🔔 Avisos:** recordatorio diario, episodios de hoy (y fechas reales de AniList/TVmaze), resumen semanal, racha en peligro, inactividad y recordatorios por obra; en Android con la app instalada también en segundo plano.
+- **Búsqueda avanzada** en cualquier buscador: `BL nota:5`, `estado:pendiente año:>2020`, `tag:x tag:y`, `autor:"Mo Xiang"`, `-tag:drama`, `tipo:anime o tipo:manhwa`. Colecciones inteligentes, vistas guardadas, filtro por fechas y obras parecidas.
+- **Contenido de cada obra:** citas, galería, personajes, banda sonora, premios y curiosidades. Colecciones ordenables y compartibles (enlace que caduca o imagen).
+- **✨ Extras:** cronología, diario, “¿cómo te sientes hoy?”, adivina por la portada, retos, limpieza y preguntas sobre tus datos.
+- **Más:** español, inglés o portugués; calendario `.ics`; marcador “➕ Mi Mundo” para guardar desde otras webs; escáner de ISBN (navegadores con BarcodeDetector); modo solo lectura y presentación.
 
 ## Sincronizar entre dispositivos (Supabase, opcional)
 
@@ -63,7 +69,13 @@ Después, ábrela en el navegador y pulsa **Personalizar → 📲 Instalar Mi Mu
 | `cloud.js` | Conexión con Supabase, cuenta y panel de la nube |
 | `vendor/supabase.js` | Cliente oficial de Supabase (se regenera con `npm run vendor`) |
 | `supabase/schema.sql` | Tabla, reglas de seguridad e imágenes para Supabase |
-| `app.js` | Estado, renderizado, eventos e inicio (usa `utils.js`) |
+| `history.js` | Papelera, deshacer, versiones, duplicar y títulos parecidos (sin DOM) |
+| `coherence.js` | Etiquetas, parejas, temporadas, notas y relecturas (sin DOM) |
+| `metadata.js`, `importers.js` | Búsqueda de datos en servicios públicos e importación de otras apps (sin DOM) |
+| `analytics.js`, `notify.js`, `query.js`, `extras.js` | Estadísticas avanzadas, avisos, búsqueda avanzada y extras (sin DOM) |
+| `i18n.js` | Idiomas de la interfaz |
+| `features.js`, `tools.js`, `ux.js`, `statsplus.js`, `alerts.js`, `manage.js`, `content.js`, `play.js` | Pantallas de cada grupo de funciones |
+| `app.js` | Estado, renderizado, eventos e inicio |
 | `sw.js` | Service worker: funcionamiento sin conexión |
 | `manifest.webmanifest`, `icons/` | Datos e iconos para instalar la app |
 
@@ -75,7 +87,7 @@ No hay JavaScript en línea en el HTML, así que se puede añadir una Content Se
 npm install
 npx playwright install chromium   # solo la primera vez
 npm test                          # unitarios + de punta a punta
-npm run test:unit                 # solo utils.js (node --test)
+npm run test:unit                 # funciones sin DOM (node --test)
 npm run test:e2e                  # solo Playwright (escritorio y móvil, incluidas la PWA y la nube)
 DATABASE_URL=postgres://… npm run test:sql   # prueba supabase/schema.sql en un PostgreSQL
 ```

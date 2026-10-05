@@ -54,7 +54,7 @@ const cloudLocalAdapter = {
     removeOutbox: entries => store.removeOutbox(entries),
     getRecord(kind, id) {
         if (kind === 'settings') return appData.settings;
-        return (appData[kind] || []).find(x => x.id === id) || null;
+        return [...(appData[kind] || []), ...((appData.trash && appData.trash[kind]) || [])].find(x => x.id === id) || null;
     },
     getImage: id => store.getImageBlob(IMAGE_PREFIX + id),
     hasImage: async id => store.hasImage(id),
@@ -66,13 +66,11 @@ const cloudLocalAdapter = {
         let settingsChanged = false;
         changes.forEach(c => {
             if (c.kind === 'settings') { appData.settings = { ...DEFAULT_SETTINGS, ...(c.data || {}) }; settingsChanged = true; return; }
-            const list = appData[c.kind];
-            const i = list.findIndex(x => x.id === c.id);
-            if (c.deleted) { if (i >= 0) list.splice(i, 1); }
-            else if (i >= 0) list[i] = c.data;
-            else list.push(c.data);
+            if (!appData[c.kind]) return;
+            if (c.deleted) removeRecord(appData, c.kind, c.id);
+            else placeRecord(appData, c.kind, c.data); // a la papelera si viene con trashedAt
         });
-        if (changes.some(c => c.kind === 'collections')) appData.collections.forEach(col => { if (!Array.isArray(col.items)) col.items = []; });
+        if (changes.some(c => c.kind === 'collections')) [...appData.collections, ...appData.trash.collections].forEach(col => { if (!Array.isArray(col.items)) col.items = []; });
         await runAfterSaves(() => store.applyRemote(changes));
         if (settingsChanged) applySettings();
         refreshView();
@@ -183,6 +181,8 @@ const cloud = {
         } else {
             await settleSaves();
             await store.clearLocalData();
+            // Los ajustes de la nube ganan a los de un dispositivo recién estrenado (nombre, colores, avatar…)
+            await store.setMeta('settingsUpdatedAt', null);
             const settings = appData.settings;
             appData = emptyData();
             appData.settings = settings;
@@ -290,7 +290,7 @@ const cloud = {
         if (this.busy || s.state === 'syncing') return '🔄 Sincronizando…';
         if (s.state === 'offline') return `📡 Sin conexión${this.pending ? ` · ${this.pending} cambios esperando` : ''}`;
         if (s.state === 'error') return `⚠️ No se pudo sincronizar: ${(s.error && (s.error.message || s.error)) || 'error'}${this.pending ? ` · ${this.pending} cambios esperando` : ''}`;
-        if (s.state === 'ok') return `✅ Sincronizado a las ${new Date(s.at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+        if (s.state === 'ok') return `✅ Sincronizado a las ${new Date(s.at).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit' })}`;
         return '';
     },
     render() {

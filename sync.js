@@ -24,7 +24,7 @@
 'use strict';
 
 const SYNC_KINDS = ['works', 'persons', 'couples', 'collections', 'notes', 'settings'];
-const SYNC_IMAGE_FIELDS = { works: ['image'], persons: ['image', 'banner'], couples: ['image'] };
+const SYNC_IMAGE_FIELDS = { works: ['image', 'gallery'], persons: ['image', 'banner'], couples: ['image'], settings: ['avatar', 'bgImage'] };
 const SYNC_IMAGE_PREFIX = 'idb:';
 const PUSH_CHUNK = 200;
 const PULL_LIMIT = 500;
@@ -33,7 +33,7 @@ const PULL_LIMIT = 500;
 function imageIdsOf(kind, record) {
     if (!record) return [];
     return (SYNC_IMAGE_FIELDS[kind] || [])
-        .map(f => record[f])
+        .flatMap(f => (Array.isArray(record[f]) ? record[f] : [record[f]])) // la galería es una lista
         .filter(v => typeof v === 'string' && v.startsWith(SYNC_IMAGE_PREFIX))
         .map(v => v.slice(SYNC_IMAGE_PREFIX.length));
 }

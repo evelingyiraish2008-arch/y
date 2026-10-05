@@ -52,6 +52,27 @@ test('se registra el service worker y la app abre sin conexión', async ({ page,
     expect(errors).toEqual([]);
 });
 
+test('el service worker puede calcular y mostrar avisos en segundo plano', async ({ page, context }) => {
+    await page.goto(server.url);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    // Avisos activados con un recordatorio que ya toca
+    await page.evaluate(async () => {
+        appData.settings.notify = { enabled: true, daily: { on: false }, weekly: { on: false }, streak: { on: false }, inactivity: { on: false }, airing: { on: false } };
+        getWorkById('w2').reminder = { mode: 'once', at: Date.now() - 1000 };
+        saveData();
+        await whenSaved();
+    });
+    const [sw] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')];
+    expect(await sw.evaluate(() => typeof dueNotifications)).toBe('function');
+    // Chrome sin pantalla no deja mostrar avisos de verdad: se apunta lo que se mostraría
+    await sw.evaluate(() => { self.__shown = []; self.registration.showNotification = async (title, opts) => { self.__shown.push([title, opts.data.workId]); }; });
+    await sw.evaluate(() => backgroundNotify());
+    expect(await sw.evaluate(() => self.__shown)).toEqual([['🔔 El Nombre del Viento', 'w2']]);
+    // Ya se apuntó como enviado: no se repite
+    await sw.evaluate(() => backgroundNotify());
+    expect(await sw.evaluate(() => self.__shown.length)).toBe(1);
+});
+
 test('el acceso directo “Agregar obra” abre el formulario', async ({ page }) => {
     await page.goto(server.url + '?accion=agregar');
     await expect(page.locator('#workModal')).toHaveClass(/active/);

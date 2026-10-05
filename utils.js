@@ -7,6 +7,9 @@
 // ============================================================
 // 1. CONSTANTES
 // ============================================================
+/** Idioma y formato regional de fechas y números (lo cambia i18n.js). */
+let APP_LOCALE = 'es-ES';
+function setAppLocale(loc) { APP_LOCALE = loc; }
 const DEFAULT_SETTINGS = { themeColor: '#8b5cf6', fontSize: 14, imageFit: 'contain', darkMode: true, userName: 'Sara', yearGoal: 0 };
 const TYPE_META = {
     book:   { label: 'Libro',  icon: '📚', color: '#8b5cf6', progressLabel: 'Página actual',   unit: 'págs', step: 10 },
@@ -23,7 +26,7 @@ const WEEK = [
     { day: 1, short: 'Lun' }, { day: 2, short: 'Mar' }, { day: 3, short: 'Mié' }, { day: 4, short: 'Jue' },
     { day: 5, short: 'Vie' }, { day: 6, short: 'Sáb' }, { day: 0, short: 'Dom' }
 ];
-const IMAGE_SIZES = { poster: [480, 720, 0.8], avatar: [360, 360, 0.82], banner: [1200, 480, 0.75], couple: [800, 500, 0.78] };
+const IMAGE_SIZES = { poster: [480, 720, 0.8], gallery: [1200, 1200, 0.8], avatar: [360, 360, 0.82], banner: [1200, 480, 0.75], couple: [800, 500, 0.78] };
 
 // ============================================================
 // 2. UTILIDADES
@@ -43,7 +46,7 @@ function formatBytes(n) {
 function fmtDate(d) {
     if (!d) return '–';
     const date = typeof d === 'number' ? new Date(d) : new Date(d + (String(d).length === 10 ? 'T00:00:00' : ''));
-    return isNaN(date) ? '–' : date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+    return isNaN(date) ? '–' : date.toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 function todayISO() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
 
@@ -79,15 +82,23 @@ function ratingText(r) { return r ? (Math.round(r * 10) / 10).toString() : '–'
 // 3. MODELO DE DATOS
 // ============================================================
 function emptyData() {
-    return { works: [], persons: [], couples: [], collections: [], notes: [], settings: { ...DEFAULT_SETTINGS } };
+    return {
+        works: [], persons: [], couples: [], collections: [], notes: [], settings: { ...DEFAULT_SETTINGS },
+        trash: { works: [], persons: [], couples: [], collections: [], notes: [] }
+    };
 }
 function normalizeData(d) {
     const out = emptyData();
     if (!d || typeof d !== 'object') return out;
-    ['works', 'persons', 'couples', 'collections', 'notes'].forEach(k => { out[k] = Array.isArray(d[k]) ? d[k] : []; });
+    // Lo que está en la papelera (trashedAt) se separa: puede venir mezclado (IndexedDB, nube) o ya en d.trash
+    ['works', 'persons', 'couples', 'collections', 'notes'].forEach(k => {
+        const all = [...(Array.isArray(d[k]) ? d[k] : []), ...(d.trash && Array.isArray(d.trash[k]) ? d.trash[k] : [])]
+            .filter(x => x && x.id && (k !== 'works' || TYPE_META[x.type]));
+        out[k] = all.filter(x => !x.trashedAt);
+        out.trash[k] = all.filter(x => x.trashedAt);
+    });
     out.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
-    out.works = out.works.filter(w => w && w.id && TYPE_META[w.type]);
-    out.collections.forEach(c => { if (!Array.isArray(c.items)) c.items = []; });
+    [...out.collections, ...out.trash.collections].forEach(c => { if (!Array.isArray(c.items)) c.items = []; });
     // Sincroniza notas antiguas guardadas solo en la obra
     out.works.forEach(w => {
         if (w.note && !out.notes.some(n => n.workId === w.id)) {
@@ -166,8 +177,11 @@ function tagCounts(works) {
 }
 
 function filterWorks(list, f) {
-    const q = norm(f.search);
+    // Búsqueda avanzada (query.js): "BL nota:5", "estado:pendiente año:>2020"…
+    const advanced = f.search && typeof isAdvancedQuery === 'function' && isAdvancedQuery(f.search) ? parseQuery(f.search) : null;
+    const q = advanced ? '' : norm(f.search);
     return list.filter(w => {
+        if (advanced && !matchQuery(w, advanced)) return false;
         if (q) {
             const hay = norm([w.title, w.author, w.studio, w.platform, w.actors, w.directors, w.tags, w.genre].join(' '));
             if (!hay.includes(q)) return false;
@@ -203,6 +217,8 @@ function sortWorks(list, key) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        APP_LOCALE,
+        setAppLocale,
         DEFAULT_SETTINGS,
         TYPE_META,
         READ_STATUSES,

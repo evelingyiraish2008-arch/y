@@ -91,13 +91,92 @@ function runAfterSaves(fn) {
     saveChain = task.catch(() => {});
     return task;
 }
-/** Aplica un cambio en memoria, lo guarda y actualiza la vista. */
-function mutate(fn, msg) {
+/**
+ * Aplica un cambio en memoria, lo guarda y actualiza la vista.
+ * Se apunta en el historial para poder deshacerlo (opts.undo = false para no hacerlo) y,
+ * si cambió alguna obra, en el historial de versiones de esa obra.
+ */
+function mutate(fn, msg, opts = {}) {
+    if (appData.settings.readOnly && !opts.allowReadOnly) {
+        showToast('👀 Estás en modo solo lectura. Desactívalo en Personalizar para hacer cambios.', 'error', 4000);
+        return false;
+    }
+    const before = indexRecords(appData);
+    const cBefore = celebrationStats();
     fn();
+    recordVersions(before, appData);
+    const entry = opts.undo === false ? null : pushUndo(opts.label || msg, diffIndex(before, indexRecords(appData)));
     saveData();
-    if (msg) showToast(msg);
+    if (msg) showToast(msg, opts.type || 'info', entry ? 5000 : 2800, entry ? { label: 'Deshacer', run: () => undoUntil(entry) } : null);
     refreshView();
+    celebrateChanges(cBefore, celebrationStats());
     return true;
+}
+
+// ---------- Deshacer / rehacer ----------
+const UNDO_LIMIT = 50;
+let undoStack = [], redoStack = [];
+function pushUndo(label, changes) {
+    if (!changes.length) return null;
+    const entry = { id: generateId(), label: String(label || 'Cambio').replace(/^\W+\s*/u, ''), at: Date.now(), changes };
+    undoStack.push(entry);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack = [];
+    return entry;
+}
+function afterHistoryJump(msg) {
+    saveData();
+    applySettings();
+    showToast(msg);
+    refreshView();
+}
+function undo() {
+    const entry = undoStack.pop();
+    if (!entry) { showToast('Nada que deshacer'); return; }
+    applyChanges(appData, entry.changes, 'before');
+    redoStack.push(entry);
+    afterHistoryJump(`↩️ Deshecho: ${entry.label}`);
+    playSound('undo');
+}
+function redo() {
+    const entry = redoStack.pop();
+    if (!entry) { showToast('Nada que rehacer'); return; }
+    applyChanges(appData, entry.changes, 'after');
+    undoStack.push(entry);
+    afterHistoryJump(`↪️ Rehecho: ${entry.label}`);
+}
+/** Deshace todo hasta esa acción incluida (el botón "Deshacer" de un aviso o del historial). */
+function undoUntil(entry) {
+    const i = undoStack.indexOf(entry);
+    if (i < 0) { showToast('Ese cambio ya no se puede deshacer'); return; }
+    const undone = undoStack.splice(i).reverse();
+    undone.forEach(e => applyChanges(appData, e.changes, 'before'));
+    redoStack.push(...undone);
+    afterHistoryJump(undone.length > 1 ? `↩️ Deshechos ${undone.length} cambios` : `↩️ Deshecho: ${entry.label}`);
+}
+function openHistory() {
+    openSheet('🕓 Historial de cambios', () => undoStack.length || redoStack.length ? `
+        <p class="panel-desc" style="margin:0 0 12px">Tus últimos ${UNDO_LIMIT} cambios de esta sesión. También puedes usar <kbd>Ctrl</kbd>+<kbd>Z</kbd> y <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>.</p>
+        <div class="pick-list">${undoStack.slice().reverse().map(e => `
+            <div class="pick-item history-item">
+                <span class="info"><b>${esc(e.label)}</b><small>${esc(relativeTime(e.at))} · ${e.changes.length} ${e.changes.length === 1 ? 'registro' : 'registros'}</small></span>
+                <button class="btn btn-secondary btn-sm" data-act="undo-until" data-id="${e.id}">↩️ Deshacer hasta aquí</button>
+            </div>`).join('')}
+            ${redoStack.length ? `<button class="pick-item" data-act="redo" style="justify-content:center;font-weight:600">↪️ Rehacer “${esc(redoStack[redoStack.length - 1].label)}”</button>` : ''}
+        </div>` : emptyState('🕓', 'Sin cambios todavía', 'Aquí aparecerá lo que hagas en esta sesión, para deshacerlo si te equivocas.'));
+}
+/** Fecha relativa si es de la última semana ("hace 2 días"), si no la fecha. */
+function relDate(ts) { return ts && Date.now() - ts < 7 * 86400000 ? relativeTime(ts) : fmtDate(ts); }
+/** "hace 5 min", "ayer", "hace 3 días"… */
+function relativeTime(ts, now = Date.now()) {
+    const s = Math.round((now - ts) / 1000);
+    if (s < 45) return 'hace un momento';
+    if (s < 3600) return `hace ${Math.max(1, Math.round(s / 60))} min`;
+    if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+    const d = Math.round(s / 86400);
+    if (d === 1) return 'ayer';
+    if (d < 30) return `hace ${d} días`;
+    return fmtDate(ts);
 }
 
 function seedSampleData() {
@@ -124,12 +203,13 @@ function seedSampleData() {
         { id: 'p2', name: 'Bright Vachirawit', type: 'actor', works: 12, rating: 5, image: 'https://i.pravatar.cc/300?img=11', bl: true, nationality: 'Tailandia', bio: 'Actor y cantante tailandés.', createdAt: now - day * 35 },
         { id: 'p3', name: 'Lee Jong Suk', type: 'actor', works: 28, rating: 4.5, image: 'https://i.pravatar.cc/300?img=12', bl: false, nationality: 'Corea del Sur', bio: 'Actor surcoreano.', createdAt: now - day * 30 },
         { id: 'p4', name: 'Liu Cixin', type: 'author', works: 15, rating: 4.5, image: 'https://i.pravatar.cc/300?img=15', bl: false, nationality: 'China', bio: 'Escritor de ciencia ficción.', createdAt: now - day * 20 },
-        { id: 'p5', name: 'Park Seo Ham', type: 'actor', works: 12, rating: 5, image: 'https://i.pravatar.cc/300?img=13', bl: true, nationality: 'Corea del Sur', bio: 'Actor y modelo.', createdAt: now - day * 15 }
+        { id: 'p5', name: 'Park Seo Ham', type: 'actor', works: 12, rating: 5, image: 'https://i.pravatar.cc/300?img=13', bl: true, nationality: 'Corea del Sur', bio: 'Actor y modelo.', createdAt: now - day * 15 },
+        { id: 'p6', name: 'Park Jae Chan', type: 'actor', works: 6, rating: 4.5, image: 'https://i.pravatar.cc/300?img=14', bl: true, nationality: 'Corea del Sur', bio: 'Actor y cantante (DONGKIZ).', createdAt: now - day * 15 }
     ];
     appData.couples = [
         { id: 'c1', name: 'First & Khaotung', works: 12, rating: 5, image: IMG_E, favorite: true, createdAt: now - day * 25 },
         { id: 'c2', name: 'Bright & Win', works: 8, rating: 4.5, image: IMG_C, favorite: false, createdAt: now - day * 20 },
-        { id: 'c3', name: 'Park Seo Ham & Park Jae Chan', works: 1, rating: 5, image: IMG_E, favorite: true, createdAt: now - day * 10 }
+        { id: 'c3', name: 'Park Seo Ham & Park Jae Chan', works: 1, rating: 5, image: IMG_E, favorite: true, personA: 'p5', personB: 'p6', createdAt: now - day * 10 }
     ];
     appData.collections = [
         { id: 'col1', name: 'Mi lista', description: 'Obras que quiero ver o leer', items: ['w3', 'w8'], createdAt: now - day * 5 },
@@ -175,30 +255,34 @@ function workCard(w, opts = {}) {
     const p = getProgress(w);
     const quickPlus = isActive(w) && getTotal(w) && (Number(w.progress) || 0) < getTotal(w);
     return `
-    <article class="card" data-open="${w.id}" data-id="${w.id}" tabindex="0" aria-label="${esc(w.title)}">
+    <article class="card work-item${selection.has(w.id) ? ' is-selected' : ''}" data-open="${w.id}" data-id="${w.id}" tabindex="0" aria-label="${esc(w.title)}">
       <div class="card-cover">
         ${img(w.image, w.type, w.title)}
         <div class="card-top">
-          <span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span>
+          ${cardHides('status') ? '' : `<span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span>`}
           ${w.bl ? '<span class="pill bl">BL</span>' : ''}
+          ${w.locked ? '<span class="pill" title="Bloqueada">🔒</span>' : ''}
+          ${(w.awards || []).length ? `<span class="pill award" title="${esc(w.awards.map(a => a.name).join(', '))}">🏆</span>` : ''}
           ${opts.showType ? `<span class="pill">${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}</span>` : ''}
           <span class="spacer"></span>
           ${w.rating ? `<span class="pill rating">★ ${ratingText(w.rating)}</span>` : ''}
         </div>
         <div class="card-bottom">
-          ${(isActive(w) || opts.showProgress) && getTotal(w) ? `<span class="pill">${esc(getProgressText(w))}</span>` : ''}
+          ${(isActive(w) || opts.showProgress) && getTotal(w) && !cardHides('progress') ? `<span class="pill">${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
+          ${rereadBadge(w) ? `<span class="pill">${esc(rereadBadge(w))}</span>` : ''}
           <div class="card-actions">
             ${quickPlus ? `<button class="card-act" data-act="progress" title="Avanzar progreso" aria-label="Avanzar progreso">＋</button>` : ''}
+            <button class="card-act" data-act="quick-note" title="Nota rápida" aria-label="Nota rápida">📝</button>
             <button class="card-act" data-act="edit" title="Editar" aria-label="Editar">✎</button>
             <button class="card-act danger" data-act="delete" title="Eliminar" aria-label="Eliminar">✕</button>
           </div>
         </div>
-        ${p > 0 && p < 100 ? `<div class="card-progress"><span style="width:${p}%"></span></div>` : ''}
+        ${p > 0 && p < 100 && !cardHides('progress') ? `<div class="card-progress"><span style="width:${p}%"></span></div>` : ''}
       </div>
       <div class="card-body">
         <h4 class="card-title">${w.favorite ? '<span class="fav">♥</span>' : ''}<span class="t">${esc(w.title)}</span></h4>
-        <div class="card-sub">${esc(getSubtitle(w))}</div>
-        ${opts.compact ? '' : `<div class="card-meta"><span class="stars">${getStars(w.rating)}</span>${w.spicy ? `<span title="Spicy">🌶️${w.spicy}</span>` : ''}${w.sadness ? `<span title="Tristeza">💧${w.sadness}</span>` : ''}</div>`}
+        ${cardHides('subtitle') ? '' : `<div class="card-sub">${esc(getSubtitle(w))}</div>`}
+        ${opts.compact ? '' : `<div class="card-meta">${cardHides('stars') ? '' : `<span class="stars">${getStars(w.rating)}</span>`}${w.spicy && !cardHides('spicy') ? `<span title="Spicy">🌶️${w.spicy}</span>` : ''}${w.sadness && !cardHides('sadness') ? `<span title="Tristeza">💧${w.sadness}</span>` : ''}</div>`}
         <div class="card-actions-list">
           <button class="btn btn-secondary btn-sm" data-act="edit">✎ Editar</button>
           ${quickPlus ? `<button class="btn btn-secondary btn-sm" data-act="progress">＋ Progreso</button>` : ''}
@@ -219,10 +303,11 @@ function emptyState(icon, title, text, addType) {
 // ============================================================
 // 5. FILTROS Y ORDEN
 // ============================================================
-function renderGrid(gridId, list, empty, countId) {
+function renderGrid(gridId, list, empty, countId, page = currentPage, cardOpts = {}) {
     const grid = $(gridId);
     if (countId) $(countId).textContent = list.length ? `· ${list.length}` : '';
-    grid.innerHTML = list.length ? list.map(w => workCard(w)).join('') : emptyState(...empty);
+    if (list.length) renderWorks(grid, list, page, cardOpts);
+    else { grid.className = 'card-grid'; grid.innerHTML = emptyState(...empty); }
 }
 
 // ============================================================
@@ -233,10 +318,12 @@ function renderBooks() {
         search: val('booksSearch'), status: val('booksStatusFilter'), bl: checked('booksBlFilter'), fav: checked('booksFavFilter'),
         spicy: val('booksSpicyFilter'), sadness: val('booksSadnessFilter')
     });
-    renderGrid('booksGrid', sortWorks(list, val('booksSort')), ['📚', 'No hay libros aquí', 'Prueba con otros filtros o agrega un libro nuevo.', 'book'], 'booksCount');
+    list = filterByDate(list, val('booksDateFilter'));
+    renderSavedViews('books');
+    renderGrid('booksGrid', sortWorks(list, val('booksSort')), ['📚', 'No hay libros aquí', 'Prueba con otros filtros o agrega un libro nuevo.', 'book'], 'booksCount', 'books');
 }
 
-let seriesTab = 'all', seriesView = 'grid';
+let seriesTab = 'all';
 function renderSeries() {
     const all = getWorksByType('series');
     populateYearFilter('seriesYearFilter', all);
@@ -258,10 +345,9 @@ function renderSeries() {
     document.querySelectorAll('#seriesTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === seriesTab));
     const titles = { all: '❤️ Todas', bl: '💕 BL', viendo: '▶️ Viendo', terminado: '✅ Terminadas', 'quiero ver': '⏳ Pendientes' };
     $('seriesSectionTitle').innerHTML = `${titles[seriesTab]} <span class="muted">${list.length ? '· ' + list.length : ''}</span>`;
-    $('seriesGrid').classList.toggle('is-list', seriesView === 'list');
-    $('viewGridBtn').classList.toggle('is-on', seriesView === 'grid');
-    $('viewListBtn').classList.toggle('is-on', seriesView === 'list');
-    renderGrid('seriesGrid', sortWorks(list, val('seriesSort')), ['🎬', 'No hay series aquí', 'Prueba con otra pestaña o agrega una serie.', 'series']);
+    list = filterByDate(list, val('seriesDateFilter'));
+    renderSavedViews('series');
+    renderGrid('seriesGrid', sortWorks(list, val('seriesSort')), ['🎬', 'No hay series aquí', 'Prueba con otra pestaña o agrega una serie.', 'series'], null, 'series');
 }
 function populateYearFilter(selectId, items) {
     const select = $(selectId);
@@ -275,23 +361,26 @@ function renderAnime() {
         search: val('animeSearch'), status: val('animeStatusFilter'), bl: checked('animeBlFilter'), fav: checked('animeFavFilter'),
         spicy: val('animeSpicyFilter'), sadness: val('animeSadnessFilter')
     });
-    renderGrid('animeGrid', sortWorks(list, val('animeSort')), ['🎌', 'No hay animes aquí', 'Prueba con otros filtros o agrega un anime.', 'anime'], 'animeCount');
+    list = filterByDate(list, val('animeDateFilter'));
+    renderSavedViews('anime');
+    renderGrid('animeGrid', sortWorks(list, val('animeSort')), ['🎌', 'No hay animes aquí', 'Prueba con otros filtros o agrega un anime.', 'anime'], 'animeCount', 'anime');
 }
 function renderManhwa() {
     let list = filterWorks(getWorksByType('manhwa'), {
         search: val('manhwaSearch'), status: val('manhwaStatusFilter'), bl: checked('manhwaBlFilter'), fav: checked('manhwaFavFilter'),
         spicy: val('manhwaSpicyFilter'), sadness: val('manhwaSadnessFilter')
     });
-    renderGrid('manhwaGrid', sortWorks(list, val('manhwaSort')), ['📕', 'No hay manhwas aquí', 'Prueba con otros filtros o agrega un manhwa.', 'manhwa'], 'manhwaCount');
+    list = filterByDate(list, val('manhwaDateFilter'));
+    renderSavedViews('manhwa');
+    renderGrid('manhwaGrid', sortWorks(list, val('manhwaSort')), ['📕', 'No hay manhwas aquí', 'Prueba con otros filtros o agrega un manhwa.', 'manhwa'], 'manhwaCount', 'manhwa');
 }
 function renderBL() {
     let list = filterWorks(appData.works.filter(w => w.bl), {
         search: val('blSearch'), type: val('blTypeFilter'), status: val('blStatusFilter'), minRating: checked('blMinRating') ? 4 : 0
     });
-    list = sortWorks(list, val('blSort'));
-    $('blCount').textContent = list.length ? `· ${list.length}` : '';
-    $('blGrid').innerHTML = list.length ? list.map(w => workCard(w, { showType: true })).join('')
-        : emptyState('💖', 'No hay obras BL aquí', 'Marca “Es BL” al agregar o editar una obra.', 'series');
+    list = sortWorks(filterByDate(list, val('blDateFilter')), val('blSort'));
+    renderSavedViews('bl');
+    renderGrid('blGrid', list, ['💖', 'No hay obras BL aquí', 'Marca “Es BL” al agregar o editar una obra.', 'series'], 'blCount', 'bl', { showType: true });
 }
 
 // ============================================================
@@ -299,18 +388,18 @@ function renderBL() {
 // ============================================================
 function renderHome() {
     const s = appData.settings;
-    $('statBooks').textContent = getWorksByType('book').length;
-    $('statSeries').textContent = getWorksByType('series').length;
-    $('statAnime').textContent = getWorksByType('anime').length;
-    $('statManhwa').textContent = getWorksByType('manhwa').length;
-    $('statPersons').textContent = appData.persons.length;
+    animateCount($('statBooks'), getWorksByType('book').length);
+    animateCount($('statSeries'), getWorksByType('series').length);
+    animateCount($('statAnime'), getWorksByType('anime').length);
+    animateCount($('statManhwa'), getWorksByType('manhwa').length);
+    animateCount($('statPersons'), appData.persons.length);
 
     const h = new Date().getHours();
     const hello = h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
     $('homeGreeting').textContent = `${hello}, ${s.userName || 'Sara'} 💜`;
     const now = new Date();
-    const dateStr = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    $('home-date').textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    const dateStr = now.toLocaleDateString(APP_LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    $('home-date').textContent = `${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · ${welcomePhrase(now)}`;
 
     const inProgress = appData.works.filter(isActive).sort((a, b) => lastTouched(b) - lastTouched(a));
     $('homeContinueWatching').innerHTML = inProgress.length
@@ -329,6 +418,9 @@ function renderHome() {
         { caption: 'Etiquetas más usadas', empty: 'Añade etiquetas a tus obras para ver las más populares.' });
     renderHero(inProgress);
     renderToday();
+    renderQuoteOfDay();
+    renderTip();
+    renderWelcome();
     renderBell();
 }
 
@@ -364,15 +456,17 @@ const SEEN_KEY = 'mi_mundo_avisos_vistos';
 function seenNotifications() {
     try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch (e) { return new Set(); }
 }
+function bellItems() { return [...reminderBellItems(), ...computeNotifications(appData.works, appData.settings), ...rateReminderItems()]; }
 function renderBell() {
-    const list = computeNotifications(appData.works, appData.settings);
+    const list = bellItems();
     const seen = seenNotifications();
     const unseen = list.filter(n => !seen.has(n.id)).length;
     $('bellBadge').hidden = !unseen;
     $('bellBadge').textContent = unseen > 9 ? '9+' : unseen;
+    updateFavicon(unseen);
 }
 function openNotifications() {
-    const list = computeNotifications(appData.works, appData.settings);
+    const list = bellItems();
     const seen = seenNotifications();
     openSheet('🔔 Avisos', () => list.length ? `<div class="pick-list">${list.map(n => `
         <button class="notif-item ${seen.has(n.id) ? '' : 'is-new'}" ${n.workId ? `data-open="${n.workId}"` : 'data-nav="stats"'}>
@@ -416,7 +510,7 @@ function starInput(id, rating) {
 }
 function setRating(id, value) {
     const w = getWorkById(id);
-    if (!w) return;
+    if (!w || isLocked(w)) return;
     const next = Number(w.rating) === value ? 0 : value;
     mutate(() => { w.rating = next; }, next ? `⭐ Valorada con ${ratingText(next)}` : '☆ Valoración quitada');
 }
@@ -475,25 +569,32 @@ function renderHero(inProgress) {
 
 function changeProgress(id, delta) {
     const w = getWorkById(id);
-    if (!w) return;
-    const total = getTotal(w);
-    const step = delta * TYPE_META[w.type].step;
-    let next = Math.max(0, (Number(w.progress) || 0) + step);
-    if (total) next = Math.min(next, total);
-    const finishes = total && next >= total && w.status !== 'terminado';
-    const msg = finishes ? `🎉 ¡Terminaste “${w.title}”!` : `⏩ ${w.title}: ${w.type === 'book' ? next + ' págs' : (w.type === 'manhwa' ? 'cap ' : 'ep ') + next}`;
+    if (!w || isLocked(w)) return;
+    // Se calcula en una copia para saber qué mensaje mostrar
+    const sim = JSON.parse(JSON.stringify(w));
+    const seasonStep = hasSeasons(sim) ? advanceSeason(sim, delta) : null;
+    const total = getTotal(sim);
+    if (!seasonStep) {
+        let next = Math.max(0, (Number(sim.progress) || 0) + delta * TYPE_META[w.type].step);
+        if (total) next = Math.min(next, total);
+        sim.progress = next;
+    }
+    const next = Number(sim.progress) || 0;
+    if (next === (Number(w.progress) || 0)) return;
+    const finishes = total && next >= total && (w.status !== 'terminado' || w.rereading);
+    const unit = w.type === 'book' ? next + ' págs' : (w.type === 'manhwa' ? 'cap ' : 'ep ') + next;
+    const msg = finishes ? `🎉 ¡Terminaste “${w.title}”!` : `⏩ ${w.title}: ${seasonStep ? seasonLabel(sim) : unit}`;
     mutate(() => {
-        w.progress = next;
+        if (seasonStep) advanceSeason(w, delta); else w.progress = next;
         w.updatedAt = Date.now();
         if (delta > 0) bumpActivity(w);
-        if (finishes) {
-            w.status = 'terminado';
-            if (!w.endDate) w.endDate = todayISO();
-        } else if (delta > 0 && isPlanned(w)) {
+        if (finishes) finishWork(w);
+        else if (delta > 0 && isPlanned(w)) {
             w.status = STATUS_BY_TYPE[w.type][0];
             if (!w.startDate) w.startDate = todayISO();
         }
-    }, msg);
+    }, msg, { type: finishes ? 'success' : 'info' });
+    if (delta > 0 && !finishes) playSound('tick');
 }
 
 // ============================================================
@@ -502,12 +603,14 @@ function changeProgress(id, delta) {
 const RENDERERS = {
     home: renderHome, books: renderBooks, series: renderSeries, anime: renderAnime, manhwa: renderManhwa,
     bl: renderBL, persons: renderPersons, couples: renderCouples, emission: renderEmission, stats: renderStats,
-    collections: renderCollections, notes: renderNotes, settings: renderSettings
+    collections: renderCollections, notes: renderNotes, settings: renderSettings, extras: renderExtras
 };
 let currentPage = 'home';
 
+function translateIfNeeded() { if (currentLang !== 'es') translateUI(document.body); }
 function navigateTo(page, { push = true } = {}) {
     if (!RENDERERS[page]) page = 'home';
+    if (selecting && page !== currentPage) { selecting = false; selection.clear(); document.body.classList.remove('is-selecting'); renderBulkBar(); }
     currentPage = page;
     document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.nav === page));
     document.querySelectorAll('.page-view').forEach(el => el.classList.toggle('active', el.id === 'page-' + page));
@@ -515,6 +618,7 @@ function navigateTo(page, { push = true } = {}) {
     $('main').scrollTop = 0;
     if (window.innerWidth <= 760) window.scrollTo(0, 0);
     RENDERERS[page]();
+    translateIfNeeded();
 }
 function refreshView() {
     RENDERERS[currentPage]();
@@ -522,20 +626,18 @@ function refreshView() {
     if (currentDetailId) renderDetail();
     if ($('personDetailOverlay').classList.contains('active') && currentPersonId) renderPersonDetail();
     if ($('sheetModal').classList.contains('active') && sheetRefresh) sheetRefresh();
+    translateIfNeeded();
 }
 function renderSidebar() {
     const counts = { bl: appData.works.filter(w => w.bl).length };
     Object.keys(TYPE_META).forEach(t => counts[t] = getWorksByType(t).length);
     document.querySelectorAll('[data-count]').forEach(el => el.textContent = counts[el.dataset.count] || '');
     const name = appData.settings.userName || 'Sara';
-    const xp = appData.works.length * 10 + appData.works.filter(w => w.status === 'terminado').length * 15 + appData.notes.length * 5;
-    const level = Math.floor(xp / 50) + 1;
-    const ranks = [[1, '🌱 Semilla'], [3, '🌿 Brote'], [6, '⭐ Estrella'], [10, '🔥 Leyenda'], [15, '👑 Supremo']];
-    const rank = ranks.filter(r => level >= r[0]).pop()[1];
+    const { level, rank, pct } = levelInfo();
     $('userName').textContent = name;
-    $('userAvatar').textContent = name.trim().charAt(0).toUpperCase() || '✨';
+    renderAvatar();
     $('userRank').textContent = `${rank} · Nivel ${level}`;
-    $('userLevelBar').style.width = ((xp % 50) / 50 * 100) + '%';
+    $('userLevelBar').style.width = pct + '%';
     $('personNames').innerHTML = appData.persons.map(p => `<option value="${esc(p.name)}">`).join('');
 }
 
@@ -548,20 +650,24 @@ function searchAll(raw, limit = 12) {
     const q = norm(raw);
     const results = [];
     if (q.length < 2) return results;
+    if (isAdvancedQuery(raw)) {
+        return searchWorks(appData.works, raw).slice(0, limit).map(w => ({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type }));
+    }
     appData.works.forEach(w => {
         if (norm([w.title, w.tags, w.author, w.actors, w.studio].join(' ')).includes(q))
             results.push({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type });
     });
     appData.persons.forEach(p => { if (norm(p.name).includes(q)) results.push({ kind: 'person', id: p.id, title: p.name, sub: '👤 ' + (PERSON_TYPE_LABEL[p.type] || p.type), image: p.image, ph: 'person' }); });
     appData.couples.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'couple', id: c.id, title: c.name, sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
-    appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `🗂️ Colección · ${c.items.length} obras`, icon: '🗂️' }); });
+    appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `${isSmart(c) ? '✨ Colección inteligente' : '🗂️ Colección'} · ${collectionWorks(c).length} obras`, icon: isSmart(c) ? '✨' : '🗂️' }); });
     appData.notes.forEach(n => { if (norm(n.content + ' ' + n.workTitle).includes(q)) results.push({ kind: 'note', id: n.workId, title: n.workTitle || 'Nota', sub: '📝 ' + n.content.slice(0, 50), icon: '📝' }); });
+    appData.works.forEach(w => (w.quotes || []).forEach(qq => { if (norm(qq.text + ' ' + (qq.context || '')).includes(q)) results.push({ kind: 'work', id: w.id, title: w.title, sub: '❝ ' + qq.text.slice(0, 60), icon: '❝' }); }));
     return results.slice(0, limit);
 }
 function openResult(r) {
     if (r.kind === 'work' || r.kind === 'note') openDetail(r.id);
     else if (r.kind === 'person') openPersonDetail(r.id);
-    else if (r.kind === 'couple') openCoupleModal(getCoupleById(r.id));
+    else if (r.kind === 'couple') openCoupleDetail(r.id);
     else if (r.kind === 'collection') { navigateTo('collections'); openCollectionView(r.id); }
 }
 function runGlobalSearch() {
@@ -588,7 +694,7 @@ function openSearchResult(i) {
 const PAGE_NAMES = {
     home: '🏠 Inicio', books: '📖 Libros', series: '🎬 Series y Películas', anime: '🎌 Anime', manhwa: '📕 Manhwas', bl: '💖 Solo BL',
     persons: '👥 Personas', couples: '💕 Parejas BL', emission: '📡 Centro de Emisión', collections: '🗂️ Colecciones',
-    stats: '📊 Estadísticas', notes: '📝 Notas', settings: '⚙️ Personalizar'
+    stats: '📊 Estadísticas', notes: '📝 Notas', extras: '✨ Extras', settings: '⚙️ Personalizar'
 };
 let paletteItems = [], paletteIndex = 0;
 function paletteActions() {
@@ -600,8 +706,27 @@ function paletteActions() {
         { icon: '👤', title: 'Agregar persona', run: () => openPersonModal() },
         { icon: '🎲', title: '¿Qué veo hoy?', run: openPicker },
         { icon: '🔔', title: 'Ver avisos', run: openNotifications },
-        { icon: appData.settings.darkMode ? '☀️' : '🌙', title: appData.settings.darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => updateSetting('darkMode', !appData.settings.darkMode) },
+        { icon: isDarkNow() ? '☀️' : '🌙', title: isDarkNow() ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro', run: () => { const d = isDarkNow(); appData.settings.themeAuto = false; updateSetting('darkMode', !d); } },
+        { icon: '⌨️', title: 'Ver atajos de teclado', sub: '?', run: openShortcuts },
+        { icon: '🎁', title: 'Tu año en Mi Mundo (resumen)', run: () => openWrapped() },
+        { icon: '▶️', title: 'Presentar mis favoritas', run: () => FEATURE_ACTIONS['present-favs']() },
+        { icon: '🧭', title: 'Tour guiado', run: startTour },
+        { icon: '💭', title: '¿Cómo te sientes hoy?', run: () => { extrasTab = 'mood'; navigateTo('extras'); } },
+        { icon: '🎮', title: 'Adivina por la portada', run: () => { extrasTab = 'guess'; navigateTo('extras'); } },
+        { icon: '📅', title: 'Exportar emisiones al calendario (.ics)', run: () => FEATURE_ACTIONS['export-ics']() },
+        { icon: '👀', title: appData.settings.readOnly ? 'Salir del modo solo lectura' : 'Modo solo lectura', run: () => FEATURE_ACTIONS['readonly-toggle']() },
         { icon: '📤', title: 'Exportar copia de seguridad', run: exportData },
+        { icon: '↩️', title: 'Deshacer último cambio', sub: 'Ctrl + Z', run: undo },
+        { icon: '↪️', title: 'Rehacer', sub: 'Ctrl + Shift + Z', run: redo },
+        { icon: '🕓', title: 'Historial de cambios', run: openHistory },
+        { icon: '🏷️', title: 'Gestionar etiquetas', run: openTagManager },
+        { icon: '🔎', title: 'Ayuda de búsqueda avanzada', sub: 'BL nota:5 · estado:pendiente año:>2020…', run: openQueryHelp },
+        { icon: '✨', title: 'Nueva colección inteligente', run: () => openCollectionModal(null, { smart: true }) },
+        { icon: '⚡', title: 'Modo rápido: agregar varias obras', run: openQuickAdd },
+        { icon: '🌐', title: 'Importar de Goodreads, MyAnimeList, AniList o CSV', run: openImportWizard },
+        { icon: '📄', title: 'Exportar a CSV (Excel)', run: () => FEATURE_ACTIONS['export-csv']() },
+        { icon: '☑️', title: 'Seleccionar varias obras', run: () => { if (!SELECT_PAGES.includes(currentPage)) navigateTo('books'); setSelecting(true); } },
+        { icon: '🗑️', title: 'Abrir papelera', run: openTrash },
         ...(cloud.state === 'signedIn' ? [{ icon: '🔄', title: 'Sincronizar ahora', run: () => cloud.syncNow() }] : [])
     ];
 }
@@ -617,6 +742,7 @@ function renderPalette() {
     const match = t => !q || norm(t).includes(q);
     const groups = [];
     const found = searchAll(raw, 8).map(r => ({ icon: r.icon || '', image: r.image, ph: r.ph, title: r.title, sub: r.sub, run: () => openResult(r) }));
+    if (isAdvancedQuery(raw)) found.unshift({ icon: '🔎', title: `Ver todos (${searchWorks(appData.works, raw).length})`, sub: describeQuery(raw), run: () => showQueryResults(raw) });
     if (found.length) groups.push(['Resultados', found]);
     const actions = paletteActions().filter(a => match(a.title));
     if (actions.length) groups.push(['Acciones', actions]);
@@ -748,18 +874,32 @@ async function optimizeStoredImages() {
 // 11. MODALES (genérico)
 // ============================================================
 let lastFocus = null;
+/** Formularios que avisan antes de cerrarse con cambios sin guardar. */
+const DIRTY_MODALS = ['workModal', 'personModal', 'coupleModal', 'collectionModal'];
+const modalBaselines = {};
+function modalSnapshot(id) {
+    return [...$(id).querySelectorAll('input:not([type=file]), select, textarea')].map(el => (el.type === 'checkbox' ? el.checked : el.value)).join('\u0001');
+}
 function openModal(id) {
     lastFocus = document.activeElement;
     $('vizTip').classList.remove('show');
     $(id).classList.add('active');
+    if (DIRTY_MODALS.includes(id)) modalBaselines[id] = modalSnapshot(id);
     const first = $(id).querySelector('input:not([type=hidden]):not([type=file]), select, textarea, button');
     setTimeout(() => first && first.focus({ preventScroll: true }), 60);
 }
-function closeModal(id) {
+/** Cierra un modal. Si tiene cambios sin guardar, pregunta antes (salvo force). Devuelve false si no se cerró. */
+function closeModal(id, { force = false } = {}) {
+    if (!force && $(id).classList.contains('active') && modalBaselines[id] !== undefined && modalSnapshot(id) !== modalBaselines[id]) {
+        if (!confirm('Tienes cambios sin guardar. ¿Cerrar sin guardarlos?')) return false;
+        if (id === 'workModal' && !editingWorkId) clearDraft();
+    }
+    delete modalBaselines[id];
     $(id).classList.remove('active');
     if (id === 'sheetModal') sheetRefresh = null;
     if (id === 'personDetailOverlay') currentPersonId = null;
     if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
+    return true;
 }
 function topOpenModal() {
     const open = [...document.querySelectorAll('.modal-overlay.active')];
@@ -791,6 +931,7 @@ function setFormType(type) {
     status.selectedIndex = idx;
     $('lbl_progress').textContent = TYPE_META[type].progressLabel;
     $('lbl_start').textContent = type === 'series' ? 'Fecha de estreno / inicio' : 'Fecha de inicio';
+    if ($('seasonsEditor') && $('workModal').classList.contains('active')) renderSeasonsEditor(readSeasonsEditor());
     const pv = $('workImagePreview');
     if (!$('f_image').value) pv.src = PH[type];
 }
@@ -809,7 +950,21 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     $('f_status').innerHTML = '';
     setFormType(work ? work.type : type);
     document.querySelectorAll('#workTypeTabs .seg-btn').forEach(b => b.disabled = !!work && b.dataset.type !== work.type);
-    const src = work || preset;
+    fillAutocomplete();
+    applyFormFieldVisibility();
+    fillWorkForm(work || preset);
+    updateAirDayHint();
+    const draft = !work && !preset.title ? readDraft() : null;
+    $('workDraftBar').hidden = !draft;
+    if (draft) {
+        $('workDraftBar').innerHTML = `<span>📝 Tienes un borrador sin guardar: <b>${esc(draft.data.title)}</b> <small>(${esc(relativeTime(draft.at))})</small></span>
+            <span class="seg-inline"><button type="button" class="btn btn-primary btn-sm" data-act="draft-restore">Recuperar</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-act="draft-discard">Descartar</button></span>`;
+    }
+    openModal('workModal');
+    setTimeout(() => $('f_title').focus(), 60);
+}
+function fillWorkForm(src) {
     workForm.querySelectorAll('[data-field]').forEach(el => {
         const f = el.dataset.field;
         let v = src[f];
@@ -821,19 +976,59 @@ function openWorkModal(type = 'book', work = null, preset = {}) {
     updateRangeOutputs(workForm);
     updateWorkPreview();
     if ($('workImagePreview').src === '' || !$('f_image').value) $('workImagePreview').src = PH[formType];
-    openModal('workModal');
-    setTimeout(() => $('f_title').focus(), 60);
+    renderSeasonsEditor(src.seasonsList);
+    updateTitleHint();
+    updateTagsHint();
 }
+
+// ---------- Borrador del formulario (se guarda solo mientras escribes) ----------
+const DRAFT_KEY = 'mi_mundo_borrador_obra';
+const DRAFT_MAX_AGE = 7 * 86400000;
+function saveDraft() {
+    if (editingWorkId || !$('workModal').classList.contains('active')) return;
+    const data = collectWorkForm();
+    try {
+        if (data.title) localStorage.setItem(DRAFT_KEY, JSON.stringify({ type: formType, data, at: Date.now() }));
+        else localStorage.removeItem(DRAFT_KEY);
+    } catch (e) { /* sin acceso a localStorage */ }
+}
+function readDraft() {
+    try {
+        const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+        if (d && d.data && d.data.title && TYPE_META[d.type] && Date.now() - d.at < DRAFT_MAX_AGE) return d;
+    } catch (e) { /* borrador dañado */ }
+    return null;
+}
+function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* sin acceso */ } }
+function restoreDraft() {
+    const d = readDraft();
+    if (!d) return;
+    setFormType(d.type);
+    fillWorkForm(d.data);
+    $('workDraftBar').hidden = true;
+    showToast('📝 Borrador recuperado');
+}
+
+/** Aviso mientras escribes el título: "¿Ya la tienes?". */
+function updateTitleHint() {
+    const el = $('titleHint');
+    const sims = findSimilarWorks($('f_title').value, appData.works, { excludeId: editingWorkId, limit: 2 });
+    el.hidden = !sims.length;
+    el.innerHTML = sims.length ? `💡 ¿Ya la tienes? ${sims.map(x => `<button type="button" class="link-btn" data-open="${x.work.id}">${TYPE_META[x.work.type].icon} ${esc(x.work.title)}</button>`).join(' ')}` : '';
+}
+
 function collectWorkForm() {
     const data = {};
     workForm.querySelectorAll('[data-field]').forEach(el => {
         const wrap = el.closest('[data-types]');
         if (wrap && wrap.hidden) return;
         const f = el.dataset.field;
+        if (el.type === 'hidden' && el.value === '') return; // ids de AniList/TVmaze: solo si se buscaron datos
         if (el.type === 'checkbox') data[f] = el.checked;
         else if ('num' in el.dataset) data[f] = el.value === '' ? (f === 'year' ? '' : 0) : Number(el.value);
         else data[f] = el.value.trim();
     });
+    if ($('f_multi')) data.seasonsList = readSeasonsEditor();
     return data;
 }
 function saveWork() {
@@ -850,36 +1045,127 @@ function saveWork() {
     if (!editing) {
         const dup = appData.works.find(w => w.type === formType && norm(w.title) === norm(data.title));
         if (dup && !confirm(`Ya tienes “${dup.title}” en ${getTypeLabel(dup.type).toLowerCase()}s. ¿Agregarla de todas formas?`)) return;
+        const sim = !dup && findSimilarWorks(data.title, appData.works, { min: 0.85, limit: 1 })[0];
+        if (sim && !confirm(`Se parece mucho a “${sim.work.title}” (${getTypeLabel(sim.work.type)}). ¿Agregarla de todas formas?`)) return;
     }
     const ok = mutate(() => {
         if (editing) {
             const w = getWorkById(editing);
             const before = { progress: Number(w.progress) || 0, status: w.status };
             Object.assign(w, data, { updatedAt: Date.now() });
+            if (!hasSeasons(w)) delete w.seasonsList;
+            syncSeasonAggregates(w);
             if ((Number(w.progress) || 0) > before.progress || (w.status !== before.status && !isPlanned(w))) bumpActivity(w);
+            if (w.rereading && w.status === 'terminado' && before.status !== 'terminado') finishWork(w);
             appData.notes.forEach(n => { if (n.workId === w.id) n.workTitle = w.title; });
         } else {
             const w = { id: generateId(), type: formType, ...data, createdAt: Date.now(), updatedAt: Date.now() };
+            if (!hasSeasons(w)) delete w.seasonsList;
+            syncSeasonAggregates(w);
             if ((Number(w.progress) || 0) > 0) bumpActivity(w);
             appData.works.push(w);
         }
-    }, editing ? '✅ Obra actualizada' : '✅ Obra agregada');
-    if (ok) closeModal('workModal');
+    }, editing ? '✅ Obra actualizada' : '✅ Obra agregada', { label: editing ? `Editar “${data.title}”` : `Agregar “${data.title}”` });
+    if (ok) { if (!editing) clearDraft(); closeModal('workModal', { force: true }); }
 }
 function deleteWork(id) {
     const w = getWorkById(id);
-    if (!w || !confirm(`¿Eliminar “${w.title}” permanentemente?`)) return;
+    if (!w || isLocked(w)) return;
+    // Solo se pregunta si se van a perder relaciones: lo demás se puede deshacer o recuperar de la papelera
+    const colls = manualCollections().filter(c => c.items.includes(id)).length;
+    const notes = appData.notes.filter(n => n.workId === id).length;
+    if (colls || notes) {
+        const parts = [colls ? `está en ${colls} ${colls === 1 ? 'colección' : 'colecciones'}` : '', notes ? `tiene ${notes} ${notes === 1 ? 'nota' : 'notas'}` : ''].filter(Boolean);
+        if (!confirm(`“${w.title}” ${parts.join(' y ')}.\n\nSe enviará a la papelera con sus notas y podrás restaurarla durante ${TRASH_DAYS} días. ¿Continuar?`)) return;
+    }
     if (currentDetailId === id) closeDetail();
-    mutate(() => {
-        appData.works = appData.works.filter(x => x.id !== id);
-        appData.notes = appData.notes.filter(n => n.workId !== id);
-        appData.collections.forEach(c => { c.items = c.items.filter(i => i !== id); });
-    }, '🗑️ Obra eliminada');
+    mutate(() => { trashRecord(appData, 'works', id, Date.now(), { from: TYPE_PLURAL[w.type] }); }, `🗑️ “${w.title}” enviada a la papelera`, { label: `Eliminar “${w.title}”` });
 }
 function toggleFavorite(id) {
     const w = getWorkById(id);
     if (!w) return;
     mutate(() => { w.favorite = !w.favorite; w.updatedAt = Date.now(); }, w.favorite ? '🤍 Quitado de favoritos' : '❤️ Añadido a favoritos');
+}
+
+/** Si la obra está bloqueada, avisa y devuelve true. */
+function isLocked(w) {
+    if (!w || !w.locked) return false;
+    showToast('🔒 Esta obra está bloqueada. Desbloquéala en su ficha para cambiarla.', 'error');
+    return true;
+}
+function toggleLock(id) {
+    const w = getWorkById(id);
+    if (!w) return;
+    mutate(() => { w.locked = !w.locked; }, w.locked ? '🔓 Obra desbloqueada' : '🔒 Obra bloqueada: no se podrá editar, avanzar ni borrar sin querer');
+}
+function openDuplicate(id) {
+    const w = getWorkById(id);
+    if (!w) return;
+    openSheet('⧉ Duplicar obra', () => `
+        <p class="panel-desc" style="margin:0 0 12px">Se creará una copia de “${esc(w.title)}” sin progreso, fechas ni valoración, como pendiente. ¿De qué tipo?</p>
+        <div class="pick-list">${TYPE_ORDER.map(t => `
+            <button class="pick-item" data-act="duplicate-as" data-id="${w.id}" data-type="${t}">
+                <span class="n-icon">${TYPE_META[t].icon}</span>
+                <span class="info"><b>${esc(getTypeLabel(t))}${t === w.type ? ' (mismo tipo)' : ''}</b><small>${t === w.type ? 'Ideal para otra temporada o edición' : `Por ejemplo, la adaptación en ${getTypeLabel(t).toLowerCase()}`}</small></span>
+            </button>`).join('')}</div>`);
+}
+function duplicateAs(id, type) {
+    const w = getWorkById(id);
+    if (!w || !TYPE_META[type]) return;
+    const copy = duplicateWork(w, { type });
+    closeModal('sheetModal');
+    mutate(() => { appData.works.push(copy); }, `⧉ Copia creada: “${copy.title}”`, { label: `Duplicar “${w.title}”` });
+    openWorkModal(null, getWorkById(copy.id));
+}
+function duplicatePersonById(id) {
+    const p = getPersonById(id);
+    if (!p) return;
+    const copy = duplicatePerson(p);
+    if (currentPersonId) closeModal('personDetailOverlay');
+    mutate(() => { appData.persons.push(copy); }, `⧉ Copia creada: ${copy.name}`, { label: `Duplicar a ${p.name}` });
+    openPersonModal(getPersonById(copy.id));
+}
+
+// ---------- Historial de versiones de una obra ----------
+const FIELD_LABELS = {
+    title: 'Título', status: 'Estado', progress: 'Progreso', rating: 'Valoración', favorite: 'Favorito', bl: 'BL', author: 'Autor',
+    studio: 'Estudio', platform: 'Plataforma', country: 'País', genre: 'Género', year: 'Año', actors: 'Actores', directors: 'Directores',
+    pages: 'Páginas', totalEpisodes: 'Episodios', totalChapters: 'Capítulos', seasons: 'Temporadas', season: 'Temporada',
+    airDay: 'Día de emisión', startDate: 'Inicio', endDate: 'Fin', tags: 'Etiquetas', synopsis: 'Sinopsis', spicy: 'Spicy',
+    sadness: 'Tristeza', image: 'Portada', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
+};
+function fieldValueText(field, v) {
+    if (v === null || v === undefined || v === '') return '—';
+    if (typeof v === 'boolean') return v ? 'Sí' : 'No';
+    if (field === 'status') return getStatusLabel(v);
+    if (field === 'type') return getTypeLabel(v);
+    if (field === 'image') return 'imagen';
+    if (field === 'rating') return Number(v) ? '★ ' + ratingText(v) : '—';
+    if (field === 'airDay') return (WEEK.find(d => d.day === Number(v)) || {}).short || '—';
+    if (field === 'startDate' || field === 'endDate') return fmtDate(v);
+    if (typeof v === 'object') return '…';
+    const str = String(v);
+    return str.length > 40 ? str.slice(0, 40) + '…' : str;
+}
+function versionsHtml(w) {
+    const versions = w.versions || [];
+    const added = w.createdAt && !w.sample ? `<p class="hint" style="margin:10px 0 0">➕ Agregada el ${fmtDate(w.createdAt)}</p>` : '';
+    if (!versions.length) return `<p>Aún no hay cambios. Aquí verás tus últimos ${MAX_VERSIONS} cambios en esta obra y podrás volver atrás.</p>${added}`;
+    return `<div class="version-list">${versions.map((v, i) => ({ v, i })).reverse().map(({ v, i }) => `
+        <div class="version-item">
+          <div class="version-head"><b>${esc(relativeTime(v.at))}</b>
+            <button class="btn btn-secondary btn-sm" data-act="version-restore" data-id="${w.id}" data-version="${i}" title="Deshace este cambio y los posteriores">⏪ Volver a antes</button></div>
+          <ul>${Object.entries(v.changes).map(([f, [a, b]]) => `<li><span>${esc(FIELD_LABELS[f] || f)}:</span> ${esc(fieldValueText(f, a))} → <b>${esc(fieldValueText(f, b))}</b></li>`).join('')}</ul>
+        </div>`).join('')}</div>${added}`;
+}
+function restoreVersion(id, index) {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !(w.versions || [])[index]) return;
+    const target = workBeforeVersion(w, index);
+    mutate(() => {
+        const i = appData.works.indexOf(w);
+        appData.works[i] = { ...target, versions: w.versions };
+    }, `⏪ “${w.title}” ha vuelto a una versión anterior`, { label: `Restaurar versión de “${w.title}”` });
 }
 
 // ============================================================
@@ -888,8 +1174,9 @@ function toggleFavorite(id) {
 let currentDetailId = null;
 function openDetail(id) {
     if (!getWorkById(id)) return;
-    if (currentDetailId !== id) $('detailPanel').innerHTML = '';
+    if (currentDetailId !== id) { $('detailPanel').innerHTML = ''; detailRenderedId = null; }
     currentDetailId = id;
+    rememberSession({ detail: id });
     renderDetail();
     $('detailPanel').scrollTop = 0;
     $('detailPanel').classList.add('active');
@@ -901,6 +1188,19 @@ function closeDetail() {
     $('detailPanel').setAttribute('aria-hidden', 'true');
     $('detailOverlay').classList.remove('active');
     currentDetailId = null;
+    rememberSession({ detail: null });
+}
+// ---------- Recuperar la sesión (si la app se cerró con una obra abierta) ----------
+const SESSION_KEY = 'mi_mundo_sesion';
+function rememberSession(patch) {
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...JSON.parse(localStorage.getItem(SESSION_KEY) || '{}'), ...patch, at: Date.now() })); }
+    catch (e) { /* sin acceso */ }
+}
+function offerSessionRecovery() {
+    let last = null;
+    try { last = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { /* dañado */ }
+    const w = last && last.detail && Date.now() - last.at < 86400000 && getWorkById(last.detail);
+    if (w) showToast(`👀 La última vez estabas viendo “${w.title}”`, 'info', 7000, { label: 'Abrir', run: () => openDetail(w.id) });
 }
 function peopleChips(str) {
     return splitList(str).map(n => {
@@ -908,13 +1208,19 @@ function peopleChips(str) {
         return p ? `<button class="chip" data-person="${p.id}">${esc(n)}</button>` : `<span class="chip chip-muted">${esc(n)}</span>`;
     }).join('');
 }
-function renderDetail() {
+let detailRenderedId = null;
+/** Pinta la ficha. Mantiene las secciones abiertas y lo que estuvieras escribiendo (salvo fresh = true). */
+function renderDetail(fresh = false) {
     const w = getWorkById(currentDetailId);
     if (!w) { closeDetail(); return; }
-    const openStates = [...$('detailPanel').querySelectorAll('details')].map(d => d.open);
+    const sameWork = detailRenderedId === w.id;
+    const open = sameWork ? Object.fromEntries([...$('detailPanel').querySelectorAll('details[data-key]')].map(d => [d.dataset.key, d.open])) : {};
+    const composer = sameWork && !fresh ? readNoteComposer() : null;
+    const focusedNote = document.activeElement && document.activeElement.id === 'detailNote';
+    if (!sameWork) { editingNoteId = null; noteFilter = 'all'; }
+    detailRenderedId = w.id;
     const p = getProgress(w), total = getTotal(w);
-    const note = appData.notes.find(n => n.workId === w.id);
-    const inColls = appData.collections.filter(c => c.items.includes(w.id));
+    const inColls = appData.collections.filter(c => collectionHas(c, w.id));
     const rel = [
         ['Autor', w.author, true], ['Estudio', w.studio], ['Plataforma', w.platform], ['Género', w.genre], ['País', w.country],
         ['Actores', w.actors, true], ['Directores', w.directors, true],
@@ -922,10 +1228,7 @@ function renderDetail() {
         ['Emisión', (WEEK.find(d => d.day === getAirDay(w)) || {}).short || '']
     ].filter(r => r[1]);
     const tags = splitList(w.tags);
-    const wTags = tags.map(t => t.toLowerCase());
-    const similar = appData.works.filter(o => o.id !== w.id)
-        .map(o => ({ o, score: splitList(o.tags).filter(t => wTags.includes(t.toLowerCase())).length + (o.bl && w.bl ? 0.5 : 0) + (o.type === w.type ? 0.25 : 0) }))
-        .filter(x => x.score >= 1).sort((a, b) => b.score - a.score).slice(0, 6).map(x => x.o);
+    const similar = similarWorks(w, appData.works, 6).map(x => x.work);
 
     $('detailPanel').innerHTML = `
       <div class="detail-header">
@@ -950,8 +1253,14 @@ function renderDetail() {
           <button class="btn btn-secondary btn-sm ${w.favorite ? 'is-on' : ''}" data-act="fav" data-id="${w.id}">${w.favorite ? '❤️ Favorito' : '🤍 Favorito'}</button>
           <button class="btn btn-secondary btn-sm ${myList() && myList().items.includes(w.id) ? 'is-on' : ''}" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ Mi lista' : '＋ Mi lista'}</button>
           <button class="btn btn-secondary btn-sm" data-act="collect" data-id="${w.id}">📂 Colecciones${inColls.length ? ' · ' + inColls.length : ''}</button>
-          <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}">🗑️</button>
+          <button class="btn btn-secondary btn-sm" data-act="focus" data-id="${w.id}" title="Modo foco (F)">🎯 Foco</button>
+          <button class="btn btn-secondary btn-sm ${w.reminder ? 'is-on' : ''}" data-act="reminder" data-id="${w.id}" title="${w.reminder ? 'Te lo recuerdo ' + esc(reminderText(w.reminder)) : 'Recordarme'}">${w.reminder ? '🔔 Recordatorio' : '🔔 Recordarme'}</button>
+          <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
+          <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
+          <button class="btn btn-secondary btn-sm" data-act="share-work" data-id="${w.id}" title="Compartir">📤</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
+        ${suggestionsHtml(w)}
         ${total ? `
         <div class="detail-progress">
           <div class="detail-progress-row"><span>${esc(getProgressText(w))}</span>
@@ -975,52 +1284,30 @@ function renderDetail() {
           <div class="detail-section-title">Sinopsis</div>
           <p class="detail-text">${esc(w.synopsis || 'Sin sinopsis todavía.')}</p>
         </div>
-        ${tags.length ? `<div class="detail-section"><div class="detail-section-title">Etiquetas</div><div class="tag-list">${tags.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div></div>` : ''}
-        <details class="expandable" ${openStates[0] ?? rel.length ? 'open' : ''}>
+        ${tags.length ? `<div class="detail-section"><div class="detail-section-title">Etiquetas</div><div class="tag-list">${tags.map(tagChip).join('')}</div></div>` : ''}
+        ${seasonsSectionHtml(w, open.seasons)}
+        <details class="expandable" data-key="ficha" ${open.ficha ?? rel.length ? 'open' : ''}>
           <summary>🔗 Ficha</summary>
           <div class="expandable-content">
             ${rel.length ? `<dl class="kv">${rel.map(([k, v, people]) => `<dt>${k}</dt><dd>${people ? peopleChips(v) : esc(v)}</dd>`).join('')}</dl>` : '<p>Sin información adicional. Edita la obra para añadirla.</p>'}
           </div>
         </details>
-        <details class="expandable" ${openStates[1] ?? note ? 'open' : ''}>
-          <summary>📝 Mis notas</summary>
-          <div class="expandable-content">
-            <label class="field"><textarea id="detailNote" placeholder="Escribe tus pensamientos, teorías o reseñas…">${esc(note ? note.content : '')}</textarea></label>
-            <div style="display:flex;gap:8px;margin-top:10px;">
-              <button class="btn btn-primary btn-sm" data-act="note-save" data-id="${w.id}">Guardar nota</button>
-              ${note ? `<button class="btn btn-danger btn-sm" data-act="note-delete" data-id="${w.id}">Eliminar</button>` : ''}
-            </div>
-          </div>
-        </details>
-        <details class="expandable" ${openStates[2] ?? similar.length ? 'open' : ''}>
+        ${notesSectionHtml(w, open.notes, composer)}
+        ${contentSectionHtml(w, open.content)}
+        ${rereadsSectionHtml(w, open.rereads)}
+        <details class="expandable" data-key="similar" ${open.similar ?? similar.length ? 'open' : ''}>
           <summary>🔍 Obras similares</summary>
           <div class="expandable-content">
-            ${similar.length ? `<div class="mini-grid">${similar.map(miniCard).join('')}</div>` : `<p>${tags.length ? 'No hay obras con etiquetas en común.' : 'Añade etiquetas a esta obra para ver recomendaciones.'}</p>`}
+            ${similar.length ? `<div class="mini-grid">${similar.map(miniCard).join('')}</div><button class="btn btn-secondary btn-sm" data-act="similar" data-id="${w.id}" style="margin-top:10px">🔍 Ver todas las parecidas y por qué</button>` : `<p>${tags.length ? 'No hay obras parecidas todavía.' : 'Añade etiquetas, autor o reparto para ver recomendaciones.'}</p>`}
           </div>
         </details>
+        <details class="expandable" data-key="history" ${open.history ? 'open' : ''}>
+          <summary>🕓 Historial${(w.versions || []).length ? ` · ${w.versions.length}` : ''}</summary>
+          <div class="expandable-content">${versionsHtml(w)}</div>
+        </details>
       </div>`;
+    if (focusedNote && $('detailNote')) { const t = $('detailNote'); t.focus({ preventScroll: true }); t.setSelectionRange(t.value.length, t.value.length); }
 }
-function saveNote(id) {
-    const w = getWorkById(id);
-    const content = $('detailNote').value.trim();
-    if (!w) return;
-    if (!content) { showToast('📝 Escribe algo antes de guardar', 'error'); return; }
-    mutate(() => {
-        const existing = appData.notes.find(n => n.workId === id);
-        if (existing) { existing.content = content; existing.workTitle = w.title; existing.updatedAt = Date.now(); }
-        else appData.notes.push({ id: generateId(), workId: id, workTitle: w.title, content, createdAt: Date.now() });
-        w.note = content;
-    }, '📝 Nota guardada');
-}
-function deleteNote(workId) {
-    if (!confirm('¿Eliminar esta nota?')) return;
-    mutate(() => {
-        appData.notes = appData.notes.filter(n => n.workId !== workId);
-        const w = getWorkById(workId);
-        if (w) delete w.note;
-    }, '🗑️ Nota eliminada');
-}
-
 // ============================================================
 // 14. COLECCIONES
 // ============================================================
@@ -1031,14 +1318,14 @@ function renderCollections() {
         return;
     }
     list.innerHTML = appData.collections.map(c => {
-        const works = c.items.map(getWorkById).filter(Boolean);
+        const works = collectionWorks(c);
         const mosaic = works.slice(0, 4);
         return `
         <article class="collection-card" data-coll="${c.id}" tabindex="0">
           <div class="collection-mosaic">${mosaic.length ? mosaic.map(w => img(w.image, w.type, w.title)).join('') + '<span></span>'.repeat(4 - mosaic.length) : '<div class="ph">🗂️</div>'}</div>
           <div class="collection-info">
-            <h4><span>${esc(c.name)}</span><span class="chip chip-muted">${works.length}</span></h4>
-            <p>${esc(c.description || '')}</p>
+            <h4><span>${isSmart(c) ? '✨ ' : ''}${esc(c.name)}</span><span class="chip chip-muted">${works.length}</span></h4>
+            <p>${esc(c.description || (isSmart(c) ? describeQuery(c.query) : ''))}</p>
             <div class="collection-actions">
               <button class="btn btn-secondary btn-sm" data-act="coll-open" data-id="${c.id}">📂 Abrir</button>
               <button class="btn btn-secondary btn-sm" data-act="coll-edit" data-id="${c.id}">✏️</button>
@@ -1048,10 +1335,13 @@ function renderCollections() {
         </article>`;
     }).join('');
 }
-function openCollectionModal(c = null) {
+function openCollectionModal(c = null, preset = {}) {
     $('editCollectionId').value = c ? c.id : '';
     $('collectionName').value = c ? c.name : '';
     $('collectionDesc').value = c ? (c.description || '') : '';
+    $('collectionSmart').checked = c ? isSmart(c) : !!preset.smart;
+    $('collectionQuery').value = c ? (c.query || '') : (preset.query || '');
+    updateSmartPreview();
     $('collectionModalTitle').textContent = c ? '✏️ Editar colección' : '＋ Nueva colección';
     openModal('collectionModal');
 }
@@ -1061,30 +1351,28 @@ function saveCollection() {
     const name = $('collectionName').value.trim();
     if (!name) { showToast('⚠️ El nombre es obligatorio', 'error'); return; }
     const description = $('collectionDesc').value.trim();
+    const smart = $('collectionSmart').checked, query = $('collectionQuery').value.trim();
+    if (smart && !query) { showToast('⚠️ Escribe la búsqueda de la colección inteligente', 'error'); $('collectionQuery').focus(); return; }
+    const extra = smart ? { smart: true, query } : { smart: false, query: '' };
     const ok = mutate(() => {
-        if (id) Object.assign(getCollectionById(id), { name, description });
-        else appData.collections.push({ id: generateId(), name, description, items: pendingCollectWorkId ? [pendingCollectWorkId] : [], createdAt: Date.now() });
+        if (id) Object.assign(getCollectionById(id), { name, description, ...extra });
+        else appData.collections.push({ id: generateId(), name, description, ...extra, items: pendingCollectWorkId && !smart ? [pendingCollectWorkId] : [], createdAt: Date.now() });
     }, id ? '✅ Colección actualizada' : (pendingCollectWorkId ? '✅ Colección creada con la obra' : '✅ Colección creada'));
-    if (ok) { pendingCollectWorkId = null; closeModal('collectionModal'); }
+    if (ok) { pendingCollectWorkId = null; closeModal('collectionModal', { force: true }); }
 }
 function deleteCollection(id) {
     const c = getCollectionById(id);
-    if (!c || !confirm(`¿Eliminar la colección “${c.name}”? Las obras no se borrarán.`)) return;
-    mutate(() => { appData.collections = appData.collections.filter(x => x.id !== id); }, '🗑️ Colección eliminada');
+    if (!c) return;
+    const n = isSmart(c) ? 0 : c.items.filter(getWorkById).length;
+    if (n && !confirm(`La colección “${c.name}” tiene ${n} ${n === 1 ? 'obra' : 'obras'} (las obras no se borran).\n\nSe enviará a la papelera. ¿Continuar?`)) return;
+    mutate(() => { trashRecord(appData, 'collections', id, Date.now(), { from: 'Colecciones' }); }, `🗑️ Colección “${c.name}” enviada a la papelera`, { label: `Eliminar colección “${c.name}”` });
 }
 function openCollectionView(id) {
     openSheet((getCollectionById(id) || {}).name || 'Colección', () => {
         const c = getCollectionById(id);
         if (!c) return '<p>Colección no encontrada.</p>';
-        $('sheetTitle').textContent = '🗂️ ' + c.name;
-        const works = c.items.map(getWorkById).filter(Boolean);
-        if (!works.length) return emptyState('📭', 'Colección vacía', 'Abre cualquier obra y pulsa “📂 Colecciones” para añadirla aquí.');
-        return `<div class="pick-list">${works.map(w => `
-            <div class="pick-item">
-              <div class="thumb">${img(w.image, w.type, w.title)}</div>
-              <button class="info" style="text-align:left" data-open="${w.id}"><b>${esc(w.title)}</b><small>${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))} · ${esc(getStatusLabel(w.status))}</small></button>
-              <button class="icon-btn sm" data-act="coll-remove" data-id="${c.id}" data-item="${w.id}" title="Quitar de la colección" aria-label="Quitar">✕</button>
-            </div>`).join('')}</div>`;
+        $('sheetTitle').textContent = (isSmart(c) ? '✨ ' : '🗂️ ') + c.name;
+        return collectionViewHtml(c);
     });
 }
 function openCollectionPicker(workId) {
@@ -1093,7 +1381,7 @@ function openCollectionPicker(workId) {
     openSheet('📂 Añadir a colección', () => `
         <p class="panel-desc" style="margin:0 0 12px">Marca las colecciones donde quieres guardar “${esc(w.title)}”.</p>
         <div class="pick-list">
-          ${appData.collections.map(c => `
+          ${manualCollections().map(c => `
             <label class="pick-item" style="cursor:pointer">
               <input type="checkbox" data-pick-coll="${c.id}" data-work="${workId}" ${c.items.includes(workId) ? 'checked' : ''}>
               <span class="info"><b>${esc(c.name)}</b><small>${c.items.length} obras</small></span>
@@ -1140,8 +1428,12 @@ function renderPersons() {
     $('person-list').hidden = personTab === 'general';
 
     const emptyPersons = `<div class="empty-state"><div class="big">👥</div><h4>No hay personas aquí</h4><p>Agrega actores, autores o directores para ver sus obras.</p><button class="btn btn-primary btn-sm" data-act="person-new">＋ Agregar persona</button></div>`;
+    const album = appData.settings.personView === 'album';
+    document.querySelectorAll('[data-act="person-view"]').forEach(b => b.classList.toggle('is-on', b.dataset.id === (album ? 'album' : 'cards')));
+    const people = list => (!list.length ? emptyPersons : album ? personAlbum(list) : list.map(personCard).join(''));
     if (personTab === 'general') {
-        $('allPersonsGrid').innerHTML = all.length ? all.map(personCard).join('') : emptyPersons;
+        $('allPersonsGrid').innerHTML = people(all);
+        $('allPersonsGrid').classList.toggle('is-album', album);
         const top = appData.persons.slice().sort((a, b) => personWorkCount(b) - personWorkCount(a)).slice(0, 5);
         $('personRanking').innerHTML = top.length ? top.map((p, i) => `
             <button class="ranking-item" data-person="${p.id}">
@@ -1152,7 +1444,8 @@ function renderPersons() {
             </button>`).join('') : '<p class="panel-desc" style="margin:0">Sin datos todavía.</p>';
     } else {
         const list = personTab === 'bl' ? all.filter(p => p.bl) : all.filter(p => p.type === personTab);
-        $('personsGrid').innerHTML = list.length ? list.map(personCard).join('') : emptyPersons;
+        $('personsGrid').innerHTML = people(list);
+        $('personsGrid').classList.toggle('is-album', album);
     }
 }
 let currentPersonId = null;
@@ -1202,9 +1495,11 @@ function renderPersonDetail() {
             ${p.bl ? '<span class="chip chip-pink">💖 BL</span>' : ''}
           </div>
           ${p.bio ? `<div class="person-bio">${esc(p.bio)}</div>` : ''}
+          ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(c.name)}</button>`).join('')}</div>` : ''}
           ${social ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${social}</div>` : ''}
           <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
             <button class="btn btn-secondary btn-sm" data-act="person-edit" data-id="${p.id}">✏️ Editar</button>
+            <button class="btn btn-secondary btn-sm" data-act="person-duplicate" data-id="${p.id}">⧉ Duplicar</button>
           </div>
           <div class="detail-section-title">📚 Obras en tu colección (${totalLinked})</div>
           ${totalLinked ? `
@@ -1255,13 +1550,15 @@ function savePerson() {
         if (id) Object.assign(getPersonById(id), data, { updatedAt: Date.now() });
         else appData.persons.push({ id: generateId(), ...data, createdAt: Date.now() });
     }, id ? '✅ Persona actualizada' : '✅ Persona agregada');
-    if (ok) closeModal('personModal');
+    if (ok) closeModal('personModal', { force: true });
 }
 function deletePerson(id) {
     const p = getPersonById(id);
-    if (!p || !confirm(`¿Eliminar a ${p.name}?`)) return;
+    if (!p) return;
+    const n = worksForPerson(p).length;
+    if (n && !confirm(`${p.name} aparece en ${n} ${n === 1 ? 'obra' : 'obras'} de tu colección (las obras no se borran).\n\nSe enviará a la papelera. ¿Continuar?`)) return;
     if (currentPersonId === id) closeModal('personDetailOverlay');
-    mutate(() => { appData.persons = appData.persons.filter(x => x.id !== id); }, '🗑️ Persona eliminada');
+    mutate(() => { trashRecord(appData, 'persons', id, Date.now(), { from: 'Personas' }); }, `🗑️ ${p.name} enviada a la papelera`, { label: `Eliminar a ${p.name}` });
 }
 
 // ============================================================
@@ -1272,10 +1569,10 @@ function renderCouples() {
     const q = norm(val('couplesSearch'));
     let list = appData.couples.filter(c => norm(c.name).includes(q));
     if (coupleFilter === 'favorite') list = list.filter(c => c.favorite);
-    if (coupleFilter === 'rating') list = list.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    if (coupleFilter === 'rating') { const order = rankCouples(list, appData.works, appData.persons).map(r => r.couple); list = order; }
     document.querySelectorAll('#coupleTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === coupleFilter));
     $('coupleCount').textContent = `${list.length} ${list.length === 1 ? 'pareja' : 'parejas'}`;
-    $('couplesGrid').innerHTML = list.length ? list.map(c => `
+    $('couplesGrid').innerHTML = list.length ? list.map(c => { const info = coupleInfo(c); return `
         <article class="couple-card" data-couple="${c.id}" data-id="${c.id}" tabindex="0">
           <div class="couple-image">${img(c.image, 'couple', c.name)}</div>
           <div class="couple-actions">
@@ -1284,18 +1581,18 @@ function renderCouples() {
           </div>
           <div class="couple-info">
             <div class="couple-name">${esc(c.name)}</div>
-            <div class="couple-works">${c.works || 0} ${c.works == 1 ? 'obra' : 'obras'} juntos</div>
-            <div class="couple-rating"><span class="stars">${getStars(c.rating)}</span><span class="value">${ratingText(c.rating)}</span></div>
+            <div class="couple-works">${info.count} ${info.count === 1 ? 'obra' : 'obras'} juntos${info.linked ? ' · 🔗' : ''}</div>
+            <div class="couple-rating"><span class="stars">${getStars(info.avgRating || c.rating)}</span><span class="value">${ratingText(Math.round((info.avgRating || c.rating || 0) * 10) / 10)}</span></div>
           </div>
-        </article>`).join('')
+        </article>`; }).join('')
         : `<div class="empty-state"><div class="big">💕</div><h4>No hay parejas aquí</h4><p>Guarda tus parejas BL favoritas.</p><button class="btn btn-primary btn-sm" data-act="couple-new">＋ Añadir pareja</button></div>`;
-    const top = appData.couples.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 5);
-    $('coupleRanking').innerHTML = top.length ? top.map((c, i) => `
+    const top = rankCouples(appData.couples, appData.works, appData.persons).slice(0, 5);
+    $('coupleRanking').innerHTML = top.length ? top.map(({ couple: c, score, count }, i) => `
         <button class="ranking-item" data-couple="${c.id}">
           <div class="ranking-number ${['gold', 'silver', 'bronze'][i] || ''}">${i + 1}</div>
           <div class="ranking-avatar">${img(c.image, 'couple', c.name)}</div>
-          <div class="ranking-info"><div class="ranking-name">${esc(c.name)}</div><div class="ranking-detail">${c.works || 0} obras${c.favorite ? ' · ❤️' : ''}</div></div>
-          <div class="ranking-rating">★ ${ratingText(c.rating)}</div>
+          <div class="ranking-info"><div class="ranking-name">${esc(c.name)}</div><div class="ranking-detail">${count} obras${c.favorite ? ' · ❤️' : ''}</div></div>
+          <div class="ranking-rating">★ ${ratingText(Math.round(score * 10) / 10)}</div>
         </button>`).join('') : '<p class="panel-desc" style="margin:0">Sin datos todavía.</p>';
 }
 const updateCouplePreview = bindPreview('coupleImage', 'coupleImagePreview', 'couple');
@@ -1307,25 +1604,30 @@ function openCoupleModal(c = null) {
     $('coupleImage').value = c ? (c.image || '') : '';
     $('coupleFavorite').checked = c ? !!c.favorite : false;
     $('coupleModalTitle').textContent = c ? '✏️ Editar pareja' : '＋ Añadir pareja BL';
+    fillCoupleLinks(c);
     updateRangeOutputs($('coupleModal'));
     updateCouplePreview();
     openModal('coupleModal');
 }
 function saveCouple() {
     const id = $('editCoupleId').value;
-    const name = $('coupleName').value.trim();
-    if (!name) { showToast('⚠️ El nombre es obligatorio', 'error'); $('coupleName').focus(); return; }
-    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), favorite: $('coupleFavorite').checked };
+    const links = collectCoupleLinks();
+    if (links.personA && links.personA === links.personB) { showToast('⚠️ Elige dos personas distintas', 'error'); return; }
+    const a = getPersonById(links.personA), b = getPersonById(links.personB);
+    // Si no escribes nombre, se usa "A & B"
+    const name = $('coupleName').value.trim() || (a && b ? `${a.name} & ${b.name}` : '');
+    if (!name) { showToast('⚠️ Escribe un nombre o elige a los dos actores', 'error'); $('coupleName').focus(); return; }
+    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), favorite: $('coupleFavorite').checked, ...links };
     const ok = mutate(() => {
         if (id) Object.assign(getCoupleById(id), data);
         else appData.couples.push({ id: generateId(), ...data, createdAt: Date.now() });
     }, id ? '✅ Pareja actualizada' : '✅ Pareja añadida');
-    if (ok) closeModal('coupleModal');
+    if (ok) closeModal('coupleModal', { force: true });
 }
 function deleteCouple(id) {
     const c = getCoupleById(id);
-    if (!c || !confirm(`¿Eliminar a “${c.name}”?`)) return;
-    mutate(() => { appData.couples = appData.couples.filter(x => x.id !== id); }, '🗑️ Pareja eliminada');
+    if (!c) return;
+    mutate(() => { trashRecord(appData, 'couples', id, Date.now(), { from: 'Parejas BL' }); }, `🗑️ “${c.name}” enviada a la papelera`, { label: `Eliminar pareja “${c.name}”` });
 }
 
 // ============================================================
@@ -1352,6 +1654,8 @@ function renderEmission() {
           ${items.map(w => `<button class="week-event" data-open="${w.id}" style="border-left-color:${TYPE_META[w.type].color}">${esc(w.title)}<small>${esc(getProgressText(w))}</small></button>`).join('') || '<div class="week-empty">—</div>'}
         </div>`;
     }).join('');
+    renderNextAiring();
+    maybeRefreshAiring();
     const unscheduled = active.filter(w => getAirDay(w) === null);
     $('unscheduledSection').hidden = !unscheduled.length;
     $('unscheduledGrid').innerHTML = unscheduled.map(w => workCard(w, { compact: true, showType: true })).join('');
@@ -1387,7 +1691,7 @@ function renderStats() {
         kpi('🗃️ Obras', works.length, `${addedThisMonth} agregadas este mes`),
         kpi(`✅ Terminadas en ${year}`, doneYear, donePrev || doneYear ? (diff === 0 ? `Igual que en ${year - 1}` : `${diff > 0 ? '▲' : '▼'} ${Math.abs(diff)} ${diff > 0 ? 'más' : 'menos'} que en ${year - 1}`) : '', diff > 0 ? 'up' : diff < 0 ? 'down' : ''),
         kpi('🔥 Racha actual', `${st.current} ${st.current === 1 ? 'día' : 'días'}`, `Mejor racha: ${st.best} ${st.best === 1 ? 'día' : 'días'}`),
-        kpi('⏱️ Horas estimadas', `${Math.round(totalHours).toLocaleString('es-ES')} h`, `≈ ${Math.round(totalHours / 24)} días seguidos`),
+        kpi('⏱️ Horas estimadas', `${Math.round(totalHours).toLocaleString(APP_LOCALE)} h`, `≈ ${Math.round(totalHours / 24)} días seguidos`),
         kpi('⭐ Valoración media', avg ? avg.toFixed(1) : '–', `${rated.length} ${rated.length === 1 ? 'obra valorada' : 'obras valoradas'}`)
     ].join('');
 
@@ -1423,12 +1727,15 @@ function renderStats() {
     ], { caption: 'Obras por estado' });
 
     $('statsTime').innerHTML = proportionBar(TYPE_ORDER.map(t => ({
-        name: TYPE_PLURAL[t], value: hours[t], color: TYPE_META[t].color, display: `${Math.round(hours[t]).toLocaleString('es-ES')} h`
+        name: TYPE_PLURAL[t], value: hours[t], color: TYPE_META[t].color, display: `${Math.round(hours[t]).toLocaleString(APP_LOCALE)} h`
     })), { caption: 'Horas estimadas por tipo' });
 
-    const hist = ratingHistogram(works);
-    $('statsRatingSub').textContent = rated.length ? `Media ${avg.toFixed(1)} · la más repetida: ${ratingText(hist.reduce((a, b) => (b.count > a.count ? b : a)).rating)} ★` : 'Cuántas obras tienen cada nota';
-    $('statsRatings').innerHTML = rated.length ? columnChart({
+    const pworks = worksInPeriod(works, statsPeriod, now);
+    const hist = ratingHistogram(pworks);
+    const prated = pworks.filter(w => Number(w.rating) > 0);
+    const pavg = prated.length ? prated.reduce((a, w) => a + Number(w.rating), 0) / prated.length : 0;
+    $('statsRatingSub').textContent = prated.length ? `Media ${pavg.toFixed(1)} · la más repetida: ${ratingText(hist.reduce((a, b) => (b.count > a.count ? b : a)).rating)} ★` : 'Cuántas obras tienen cada nota';
+    $('statsRatings').innerHTML = prated.length ? columnChart({
         categories: hist.map(b => (b.rating % 1 ? (b.rating === 0.5 ? '½' : `${Math.floor(b.rating)}½`) : String(b.rating))),
         series: [{ name: 'Obras', color: 'var(--gold)' }],
         values: hist.map(b => [b.count]),
@@ -1436,17 +1743,19 @@ function renderStats() {
         caption: 'Obras por valoración'
     }) : '<p class="viz-empty">Valora tus obras con estrellas para ver esto.</p>';
 
-    $('statsMood').innerHTML = heatGrid(moodGrid(works), {
+    $('statsMood').innerHTML = heatGrid(moodGrid(pworks), {
         rows: ['5', '4', '3', '2', '1'], cols: ['1', '2', '3', '4', '5'],
         rowTitle: '💧 Tristeza', colTitle: '🌶️ Spicy', caption: 'Obras según spicy y tristeza', cellAction: 'mood'
     });
-    $('statsGenresChart').innerHTML = barList(tagCounts(works).slice(0, 10).map(([label, value]) => ({ label, value })),
+    $('statsGenresChart').innerHTML = barList(tagCounts(pworks).slice(0, 10).map(([label, value]) => ({ label, value })),
         { caption: 'Etiquetas más usadas', empty: 'Añade etiquetas para ver estadísticas de géneros.' });
-    $('statsCountries').innerHTML = barList(topValues(works, 'country').map(x => ({ label: x.label, value: x.count })),
+    $('statsCountries').innerHTML = barList(topValues(pworks, 'country').map(x => ({ label: x.label, value: x.count })),
         { caption: 'Obras por país', empty: 'Añade el país a tus series y animes.' });
-    $('statsPlatforms').innerHTML = barList(topValues(works, 'platform').map(x => ({ label: x.label, value: x.count })),
+    $('statsPlatforms').innerHTML = barList(topValues(pworks, 'platform').map(x => ({ label: x.label, value: x.count })),
         { caption: 'Obras por plataforma', empty: 'Añade la plataforma a tus series y manhwas.' });
     renderAchievements();
+    renderStatsPlus(now);
+    renderDiscoveries();
 }
 function renderGoal(done, year, now) {
     const goal = Number(appData.settings.yearGoal) || 0;
@@ -1528,8 +1837,9 @@ function renderAchievements() {
 // ============================================================
 function renderNotes() {
     const q = norm(val('notesSearch'));
-    const notes = appData.notes.filter(n => !q || norm(n.content + ' ' + n.workTitle).includes(q))
-        .sort((a, b) => lastTouched(b) - lastTouched(a));
+    const type = val('notesTypeFilter') || 'all';
+    const notes = appData.notes.filter(n => (!q || norm(n.content + ' ' + n.workTitle).includes(q)) && (type === 'all' || noteType(n) === type))
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || lastTouched(b) - lastTouched(a));
     $('notesList').innerHTML = notes.length ? notes.map(n => {
         const w = getWorkById(n.workId);
         return `
@@ -1537,15 +1847,16 @@ function renderNotes() {
           <div class="thumb" ${w ? `data-open="${w.id}"` : ''}>${img(w && w.image, w ? w.type : 'book', n.workTitle)}</div>
           <div class="body">
             <h4>${esc(n.workTitle || (w && w.title) || 'Nota')}</h4>
-            <div class="date">${lastTouched(n) > (n.createdAt || 0) + 60000 ? 'Editada ' + fmtDate(n.updatedAt) : fmtDate(n.createdAt)}</div>
+            <div class="date">${NOTE_TYPES[noteType(n)].icon} ${NOTE_TYPES[noteType(n)].label}${n.pinned ? ' · 📌' : ''} · ${lastTouched(n) > (n.createdAt || 0) + 60000 ? 'Editada ' + relDate(n.updatedAt) : relDate(n.createdAt)}${noteType(n) === 'resena' && reviewAverage(n.scores) ? ` · ★ ${ratingText(Math.round(reviewAverage(n.scores) * 10) / 10)}` : ''}</div>
             <div class="content">${esc(n.content)}</div>
             <div class="actions">
               ${w ? `<button class="btn btn-secondary btn-sm" data-open="${w.id}">✏️ Abrir</button>` : ''}
-              <button class="btn btn-secondary btn-sm" data-act="note-delete" data-id="${esc(n.workId)}">🗑️</button>
+              <button class="btn btn-secondary btn-sm" data-act="note-pin" data-id="${n.id}">${n.pinned ? 'Desfijar' : '📌'}</button>
+              <button class="btn btn-secondary btn-sm" data-act="note-remove" data-id="${esc(n.id)}" aria-label="Eliminar nota">🗑️</button>
             </div>
           </div>
         </article>`;
-    }).join('') : `<div class="empty-state"><div class="big">📝</div><h4>${q ? 'Sin resultados' : 'Aún no tienes notas'}</h4><p>Abre cualquier obra y escribe en “Mis notas”.</p></div>`;
+    }).join('') : `<div class="empty-state"><div class="big">📝</div><h4>${q || type !== 'all' ? 'Sin resultados' : 'Aún no tienes notas'}</h4><p>Abre cualquier obra y escribe en “Mis notas”: comentarios, reseñas, teorías, citas o recordatorios.</p></div>`;
 }
 
 // ============================================================
@@ -1554,14 +1865,19 @@ function renderNotes() {
 function applySettings() {
     const s = appData.settings;
     const root = document.documentElement;
-    root.style.setProperty('--accent', s.themeColor);
-    root.dataset.theme = s.darkMode ? 'dark' : 'light';
+    const dark = isDarkNow(s);
+    root.style.setProperty('--accent', accentNow(s));
+    root.dataset.theme = dark ? 'dark' : 'light';
     document.querySelector('.page-inner').style.zoom = (s.fontSize || 14) / 14;
     document.body.classList.toggle('fit-cover', s.imageFit === 'cover');
-    document.querySelector('meta[name=color-scheme]').content = s.darkMode ? 'dark' : 'light';
+    document.querySelector('meta[name=color-scheme]').content = dark ? 'dark' : 'light';
     // Color de la barra del sistema (móvil y app instalada)
-    document.querySelector('meta[name=theme-color]').content = s.darkMode ? '#0b0b13' : '#fbfbfe';
+    document.querySelector('meta[name=theme-color]').content = dark ? '#0b0b13' : '#fbfbfe';
+    applyPersonalization();
+    root.classList.toggle('read-only', !!s.readOnly);
+    if (detectLang(s.lang) !== currentLang || currentLang !== 'es') applyLanguage(s.lang);
 }
+if (typeof matchMedia !== 'undefined') matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (appData.settings.themeAuto) applySettings(); });
 function updateSetting(key, value, msg) {
     appData.settings[key] = value;
     applySettings();
@@ -1572,14 +1888,94 @@ function updateSetting(key, value, msg) {
 function renderSettings() {
     const s = appData.settings;
     if (document.activeElement !== $('settingName')) $('settingName').value = s.userName || '';
-    document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(s.themeColor).toLowerCase()));
+    if (document.activeElement !== $('settingTmdbKey')) $('settingTmdbKey').value = s.tmdbKey || '';
+    $('settingLang').value = s.lang || 'es';
+    $('readOnlyToggle').setAttribute('aria-checked', String(!!s.readOnly));
+    $('clipperLink').href = clipperBookmarklet();
+    document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
+    $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
+    renderPersonalizePanel();
     $('fontSizeSlider').value = s.fontSize;
     $('fontSizeValue').textContent = s.fontSize + 'px';
     $('btnContain').classList.toggle('is-on', s.imageFit !== 'cover');
     $('btnCover').classList.toggle('is-on', s.imageFit === 'cover');
-    $('themeToggle').setAttribute('aria-checked', String(!!s.darkMode));
+    $('themeToggle').setAttribute('aria-checked', String(isDarkNow(s)));
+    renderTrash();
+    renderNotifyPanel();
     updateStorageMeter();
 }
+// ---------- Papelera ----------
+const TRASH_KIND = {
+    works: ['Obras', w => w.title, w => img(w.image, w.type, w.title)],
+    persons: ['Personas', p => p.name, p => img(p.image, 'person', p.name)],
+    couples: ['Parejas BL', c => c.name, c => img(c.image, 'couple', c.name)],
+    collections: ['Colecciones', c => c.name, () => '🗂️'],
+    notes: ['Notas', n => `Nota de “${n.workTitle || 'obra'}”`, () => '📝']
+};
+function renderTrash() {
+    const entries = trashEntries(appData);
+    const now = Date.now();
+    $('trashCount').textContent = entries.length || '';
+    if (!entries.length) {
+        $('trashBody').innerHTML = `<p class="panel-desc" style="margin:0">La papelera está vacía. Lo que elimines se guarda aquí ${TRASH_DAYS} días por si te arrepientes.</p>`;
+        return;
+    }
+    $('trashBody').innerHTML = RECORD_KINDS.map(kind => {
+        const list = entries.filter(e => e.kind === kind);
+        if (!list.length) return '';
+        const [label, title, thumb] = TRASH_KIND[kind];
+        return `<div class="trash-group"><div class="trash-group-title">${label} · ${list.length}</div>${list.map(({ item, extra }) => {
+            const info = item.trashInfo || {};
+            const left = trashDaysLeft(item, now);
+            return `<div class="pick-item trash-item">
+                <div class="thumb">${thumb(item)}</div>
+                <span class="info"><b>${esc(title(item))}</b>
+                    <small>Eliminada ${esc(relativeTime(item.trashedAt, now))}${info.from ? ' · desde ' + esc(info.from) : ''}${extra ? ` · con ${extra} ${extra === 1 ? 'nota' : 'notas'}` : ''} · ${left ? `se borra en ${left} ${left === 1 ? 'día' : 'días'}` : 'se borra hoy'}</small>
+                    ${kind === 'notes' ? `<small class="trash-preview">${esc(String(item.content || '').slice(0, 90))}</small>` : ''}
+                </span>
+                <span class="trash-actions">
+                    <button class="btn btn-secondary btn-sm" data-act="trash-restore" data-id="${kind}:${esc(item.id)}">↩️ Restaurar</button>
+                    <button class="icon-btn sm" data-act="trash-purge" data-id="${kind}:${esc(item.id)}" title="Eliminar para siempre" aria-label="Eliminar para siempre">✕</button>
+                </span>
+            </div>`;
+        }).join('')}</div>`;
+    }).join('') + `<button class="btn btn-danger btn-sm btn-block" data-act="trash-empty" style="margin-top:12px">🧹 Vaciar papelera</button>`;
+}
+function splitTrashId(key) {
+    const i = key.indexOf(':');
+    return [key.slice(0, i), key.slice(i + 1)];
+}
+function restoreFromTrash(key) {
+    const [kind, id] = splitTrashId(key);
+    const item = (appData.trash[kind] || []).find(x => x.id === id);
+    if (!item) return;
+    const name = TRASH_KIND[kind][1](item);
+    mutate(() => { restoreRecord(appData, kind, id); }, `↩️ Restaurada: ${name}`, { label: `Restaurar ${name}` });
+}
+function purgeFromTrash(key) {
+    const [kind, id] = splitTrashId(key);
+    const item = (appData.trash[kind] || []).find(x => x.id === id);
+    if (!item) return;
+    const name = TRASH_KIND[kind][1](item);
+    if (!confirm(`¿Eliminar para siempre “${name}”? Ya no se podrá recuperar.`)) return;
+    mutate(() => { purgeRecord(appData, kind, id); }, `✕ Eliminada para siempre: ${name}`, { label: `Eliminar para siempre ${name}` });
+}
+function emptyTrash() {
+    const n = trashCount(appData);
+    if (!n) return;
+    if (!confirm(`¿Vaciar la papelera? Se eliminarán para siempre ${n} ${n === 1 ? 'elemento' : 'elementos'}.`)) return;
+    if (!confirm('¿Seguro del todo? No se podrá deshacer.')) return;
+    mutate(() => { RECORD_KINDS.forEach(k => { appData.trash[k] = []; }); }, '🧹 Papelera vaciada', { undo: false });
+    whenSaved().then(() => store.collectGarbage(appData)).then(updateStorageMeter).catch(() => {});
+}
+function openTrash() {
+    navigateTo('settings');
+    const panel = $('trashPanel');
+    panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    panel.classList.add('flash');
+    setTimeout(() => panel.classList.remove('flash'), 1200);
+}
+
 async function updateStorageMeter() {
     if (!store) return;
     const info = await store.estimate();
@@ -1617,7 +2013,8 @@ function importData(file) {
         const data = normalizeData(parsed);
         try { await externalizeImages(data, store); }
         catch (e) { console.error(e); showToast('❌ No se pudieron guardar las imágenes de la copia', 'error'); return; }
-        mutate(() => { appData = data; }, '📥 Datos importados correctamente');
+        mutate(() => { appData = data; }, '📥 Datos importados correctamente', { undo: false });
+        undoStack = []; redoStack = [];
         applySettings();
         renderSettings();
         await whenSaved();
@@ -1630,7 +2027,8 @@ async function wipeData() {
     if (!confirm('¿Borrar TODOS tus datos? Esta acción no se puede deshacer.\n\nConsejo: exporta una copia antes.' + inCloud)) return;
     if (!confirm('¿Seguro del todo?')) return;
     const settings = appData.settings;
-    mutate(() => { appData = emptyData(); appData.settings = settings; }, '🗑️ Datos borrados');
+    mutate(() => { appData = emptyData(); appData.settings = settings; }, '🗑️ Datos borrados', { undo: false });
+    undoStack = []; redoStack = [];
     await whenSaved();
     store.collectGarbage(appData).then(updateStorageMeter).catch(() => {});
 }
@@ -1638,15 +2036,27 @@ async function wipeData() {
 // ============================================================
 // 21. TOAST
 // ============================================================
-function showToast(msg, type = 'info', ms = 2800) {
+/** Aviso breve. action = { label, run } añade un botón (p. ej. "Deshacer"). */
+function showToast(msg, type = 'info', ms = 2800, action = null) {
     const stack = $('toastStack');
     while (stack.children.length >= 3) stack.firstElementChild.remove();
     const el = document.createElement('div');
     el.className = 'toast toast-' + type;
-    el.textContent = msg;
+    const text = document.createElement('span');
+    text.textContent = msg;
+    el.appendChild(text);
+    const hide = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); };
+    if (action) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toast-action';
+        btn.textContent = action.label;
+        btn.addEventListener('click', () => { hide(); action.run(); });
+        el.appendChild(btn);
+    }
     stack.appendChild(el);
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
-    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, ms);
+    setTimeout(hide, ms);
 }
 
 // ============================================================
@@ -1654,14 +2064,26 @@ function showToast(msg, type = 'info', ms = 2800) {
 // ============================================================
 function handleAction(act, id, el) {
     switch (act) {
-        case 'edit': openWorkModal(null, getWorkById(id)); break;
+        case 'edit': { const w = getWorkById(id); if (w && !isLocked(w)) openWorkModal(null, w); break; }
+        case 'lock': toggleLock(id); break;
+        case 'duplicate': openDuplicate(id); break;
+        case 'duplicate-as': duplicateAs(id, el.dataset.type); break;
+        case 'person-duplicate': duplicatePersonById(id); break;
+        case 'version-restore': restoreVersion(id, Number(el.dataset.version)); break;
+        case 'draft-restore': restoreDraft(); break;
+        case 'draft-discard': clearDraft(); $('workDraftBar').hidden = true; break;
+        case 'history': openHistory(); break;
+        case 'undo-until': { const e = undoStack.find(x => x.id === id); if (e) undoUntil(e); break; }
+        case 'redo': redo(); break;
+        case 'trash-restore': restoreFromTrash(id); break;
+        case 'trash-purge': purgeFromTrash(id); break;
+        case 'trash-empty': emptyTrash(); break;
         case 'delete': deleteWork(id); break;
         case 'progress': changeProgress(id, 1); break;
         case 'progress-minus': changeProgress(id, -1); break;
         case 'fav': toggleFavorite(id); break;
         case 'collect': openCollectionPicker(id); break;
         case 'note-save': saveNote(id); break;
-        case 'note-delete': deleteNote(id); break;
         case 'coll-new': pendingCollectWorkId = null; openCollectionModal(); break;
         case 'coll-new-with': pendingCollectWorkId = id; closeModal('sheetModal'); openCollectionModal(); break;
         case 'coll-open': openCollectionView(id); break;
@@ -1711,6 +2133,7 @@ function handleAction(act, id, el) {
             break;
         }
         case 'mood': openMoodCell(id); break;
+        default: if (FEATURE_ACTIONS[act]) FEATURE_ACTIONS[act](id, el);
     }
 }
 
@@ -1719,6 +2142,11 @@ document.addEventListener('click', e => {
     // Cerrar search al hacer clic fuera
     if (!t.closest('#globalSearchBox')) $('globalSearchResults').classList.remove('active');
 
+    // Modo selección: tocar una tarjeta la marca en vez de abrirla
+    if (selecting) {
+        const card = t.closest('.page-view .work-item[data-id]');
+        if (card && !t.closest('[data-act="table-sort"]')) { e.preventDefault(); toggleSelected(card.dataset.id); return; }
+    }
     const result = t.closest('[data-result]');
     if (result) { openSearchResult(Number(result.dataset.result)); return; }
     const closeBtn = t.closest('[data-close]');
@@ -1758,6 +2186,7 @@ document.addEventListener('click', e => {
     if (nav) { navigateTo(nav.dataset.nav); return; }
     const open = t.closest('[data-open]');
     if (open) {
+        if (open.closest('#workModal') && !closeModal('workModal')) return;
         if (open.closest('#sheetModal')) closeModal('sheetModal');
         if (open.closest('#personDetailOverlay')) closeModal('personDetailOverlay');
         openDetail(open.dataset.open);
@@ -1766,7 +2195,7 @@ document.addEventListener('click', e => {
     const person = t.closest('[data-person]');
     if (person) { if (currentDetailId && person.closest('#detailPanel')) closeDetail(); openPersonDetail(person.dataset.person); return; }
     const couple = t.closest('[data-couple]');
-    if (couple) { openCoupleModal(getCoupleById(couple.dataset.couple)); return; }
+    if (couple) { if (currentDetailId && couple.closest('#detailPanel')) closeDetail(); if (couple.closest('#personDetailOverlay')) closeModal('personDetailOverlay'); openCoupleDetail(couple.dataset.couple); return; }
     const coll = t.closest('[data-coll]');
     if (coll) { openCollectionView(coll.dataset.coll); return; }
     const scroll = t.closest('[data-scroll]');
@@ -1788,14 +2217,12 @@ document.addEventListener('click', e => {
     if (typeBtn && !typeBtn.disabled) { setFormType(typeBtn.dataset.type); return; }
     const seriesTabBtn = t.closest('#seriesTabs .tab');
     if (seriesTabBtn) { seriesTab = seriesTabBtn.dataset.filter; renderSeries(); return; }
-    const viewBtn = t.closest('[data-view]');
-    if (viewBtn) { seriesView = viewBtn.dataset.view; renderSeries(); return; }
     const personTabBtn = t.closest('#personTabs .tab');
     if (personTabBtn) { personTab = personTabBtn.dataset.tab; renderPersons(); return; }
     const coupleTabBtn = t.closest('#coupleTabs .tab');
     if (coupleTabBtn) { coupleFilter = coupleTabBtn.dataset.filter; renderCouples(); return; }
     const color = t.closest('[data-color]');
-    if (color) { updateSetting('themeColor', color.dataset.color, '🎨 Color actualizado'); return; }
+    if (color) { updateSetting(isDarkNow() ? 'themeColor' : 'themeColorLight', color.dataset.color, '🎨 Color actualizado'); return; }
     const fit = t.closest('[data-fit]');
     if (fit) { updateSetting('imageFit', fit.dataset.fit, '🖼️ Ajuste de imagen actualizado'); return; }
 });
@@ -1810,6 +2237,27 @@ $('detailOverlay').addEventListener('click', closeDetail);
 document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'paletteInput') { renderPalette(); return; }
+    if (onImportInput(t)) return;
+    if (t.id === 'collectionQuery' || t.id === 'collectionSmart') updateSmartPreview();
+    if (t.id === 'queryTry') { updateQueryTry(); return; }
+    if (t.id === 'galleryInput') { onGalleryUploaded(t); return; }
+    if (t.dataset.notify && t.type !== 'checkbox' && t.tagName !== 'SELECT') return; // la hora se guarda al terminar de elegirla
+    if (onPersonalizeInput(t, 'input')) return;
+    if (t.id === 'settingTmdbKey') { appData.settings.tmdbKey = t.value.trim(); saveData(); return; }
+    if (t.closest && t.closest('#workForm')) {
+        if (t.dataset.sfield) toggleAggregateInputs();
+        saveDraft();
+        if (t.id === 'f_title') updateTitleHint();
+        if (t.id === 'f_tags') updateTagsHint();
+    }
+    if (t.id === 'tagSearch') {
+        tagFilter = t.value;
+        const caret = t.selectionStart;
+        sheetRefresh();
+        $('tagSearch').focus();
+        $('tagSearch').setSelectionRange(caret, caret);
+    }
+    if (t.id === 'coupleWorksSearch') renderCoupleWorksPicker();
     if (t.dataset.render && RENDERERS[t.dataset.render]) RENDERERS[t.dataset.render]();
     if (t.type === 'range' && t.dataset.out) updateRangeOutputs(t.closest('.modal, .panel-card') || document);
     if (t.id === 'pdSearch') renderPersonDetail();
@@ -1823,6 +2271,24 @@ document.addEventListener('change', e => {
     if (t.id === 'importFileInput') { importData(t.files[0]); t.value = ''; }
     if (t.id === 'pdType') renderPersonDetail();
     if (t.id === 'fontSizeSlider') saveData();
+    if (onPersonalizeInput(t, 'change')) return;
+    if (onNotifyInput(t)) return;
+    if (t.id === 'settingLang') { appData.settings.lang = t.value; saveData(); applySettings(); renderSettings(); return; }
+    if (t.id === 'diaryDate') { diaryDate = t.value && t.value <= todayISO() ? t.value : todayISO(); renderExtras(); return; }
+    if (t.dataset.collSort) { onCollectionSort(t); return; }
+    if (t.id === 'f_multi') onMultiSeasonToggle();
+    if (t.id === 'wrappedYear') { openWrapped(Number(t.value)); return; }
+    if (t.id === 'importAnyFile') { readImportFile(t.files[0]); t.value = ''; }
+    if (t.id === 'bulkStatus') { onBulkStatus(t); t.value = ''; }
+    if (t.dataset.field === 'airDay' || t.id === 'f_status') updateAirDayHint();
+    if (t.closest && t.closest('#workForm')) saveDraft();
+    if (t.dataset.tagColor) onTagColorChange(t);
+    if (t.id === 'coupleA' || t.id === 'coupleB') renderCoupleWorksPicker();
+    if (t.dataset.coupleWork) {
+        if (t.checked) coupleWorkPick.add(t.dataset.coupleWork); else coupleWorkPick.delete(t.dataset.coupleWork);
+        renderCoupleWorksPicker();
+    }
+    if (t.name === 'noteType' && $('reviewCriteria')) $('reviewCriteria').hidden = t.value !== 'resena';
     if (t.dataset.pickColl) {
         const c = getCollectionById(t.dataset.pickColl), wid = t.dataset.work;
         if (!c) return;
@@ -1835,6 +2301,9 @@ document.addEventListener('change', e => {
 
 // Teclado
 document.addEventListener('keydown', e => {
+    if (onWrappedKey(e) || onPresentKey(e)) { e.preventDefault(); return; }
+    if (tourStep >= 0 && e.key === 'Escape') { FEATURE_ACTIONS['tour-end'](); return; }
+    if (e.target.id !== 'paletteInput' && handleShortcut(e)) { e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if ($('paletteModal').classList.contains('active')) closeModal('paletteModal'); else openPalette();
@@ -1855,10 +2324,17 @@ document.addEventListener('keydown', e => {
         }
         if (e.key === 'Enter') { e.preventDefault(); openSearchResult(searchIndex >= 0 ? searchIndex : 0); return; }
     }
+    const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]');
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !typing) {
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+        if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); return; }
+    }
     if (e.key === 'Escape') {
         const m = topOpenModal();
         if (m) { closeModal(m.id); return; }
         if (currentDetailId) { closeDetail(); return; }
+        if (selecting) { setSelecting(false); return; }
         $('globalSearchResults').classList.remove('active');
         return;
     }
@@ -1867,6 +2343,9 @@ document.addEventListener('keydown', e => {
         e.target.click();
     }
     if (e.key === 'Enter' && e.target.closest('#workForm') && e.target.tagName === 'INPUT') { e.preventDefault(); saveWork(); }
+    if (e.key === 'Enter' && e.target.closest('.quick-form') && e.target.tagName === 'INPUT') { e.preventDefault(); quickAdd(); }
+    if (e.key === 'Enter' && e.target.id === 'queryTry' && e.target.value.trim()) { e.preventDefault(); showQueryResults(e.target.value.trim()); }
+    if (e.key === 'Enter' && e.target.id === 'collectionQuery') { e.preventDefault(); saveCollection(); }
 });
 
 // Botones con id
@@ -1877,7 +2356,7 @@ $('collectionSaveBtn').addEventListener('click', saveCollection);
 $('addPersonBtn').addEventListener('click', () => openPersonModal());
 $('addCoupleBtn').addEventListener('click', () => openCoupleModal());
 $('addCollectionBtn').addEventListener('click', () => { pendingCollectWorkId = null; openCollectionModal(); });
-$('themeToggle').addEventListener('click', () => updateSetting('darkMode', !appData.settings.darkMode, appData.settings.darkMode ? '☀️ Modo claro' : '🌙 Modo oscuro'));
+$('themeToggle').addEventListener('click', () => { const dark = isDarkNow(); appData.settings.themeAuto = false; updateSetting('darkMode', !dark, dark ? '☀️ Modo claro' : '🌙 Modo oscuro'); });
 $('resetSettingsBtn').addEventListener('click', () => {
     const name = appData.settings.userName;
     appData.settings = { ...DEFAULT_SETTINGS, userName: name };
@@ -1891,7 +2370,7 @@ $('importBtn').addEventListener('click', () => $('importFileInput').click());
 $('wipeBtn').addEventListener('click', wipeData);
 $('optimizeImagesBtn').addEventListener('click', optimizeStoredImages);
 $('globalSearch').addEventListener('focus', () => { if ($('globalSearch').value.trim().length >= 2) runGlobalSearch(); });
-window.addEventListener('hashchange', () => navigateTo(location.hash.slice(1), { push: false }));
+window.addEventListener('hashchange', () => { if (!showSharedCollection(location.hash)) navigateTo(location.hash.slice(1), { push: false }); });
 // Sincroniza si la app está abierta en otra pestaña
 async function reloadFromStore() {
     if (savePending) return; // hay cambios propios sin guardar: no los pisamos
@@ -1904,8 +2383,12 @@ if (syncChannel) syncChannel.onmessage = e => { if (e.data && e.data.type === 's
 window.addEventListener('storage', e => {
     if (store && store.kind === 'localstorage' && e.key === LEGACY_KEY && e.newValue) reloadFromStore();
 });
-// Actualiza saludo/fecha cada minuto
+// Actualiza saludo/fecha cada minuto y limpia la papelera cada hora
 setInterval(() => { if (currentPage === 'home') renderHome(); }, 60000);
+setInterval(() => { if (purgeExpiredTrash(appData)) { saveData(); refreshView(); } }, 3600000);
+// Avisos programados: se comprueban cada minuto y al volver a la app
+setInterval(() => checkNotifications().catch(() => {}), 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNotifications().catch(() => {}); });
 
 // Tooltip de los gráficos: el valor destaca y la etiqueta acompaña (con textContent, nunca HTML).
 const vizTip = $('vizTip');
@@ -2027,17 +2510,31 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
             btn.classList.remove('is-on');
         });
     }
+    if (purgeExpiredTrash(appData)) saveData(); // lo que lleva más de 30 días en la papelera se borra solo
     renderSidebar();
     renderInstallState();
     renderPersistState();
     updateOnlineState(false);
-    navigateTo(location.hash.slice(1) || 'home', { push: false });
+    const sharedHash = location.hash.startsWith('#compartido=') ? location.hash : '';
+    navigateTo(sharedHash ? 'home' : (location.hash.slice(1) || 'home'), { push: false });
+    if (sharedHash) showSharedCollection(sharedHash);
     // Acceso directo “Agregar obra” del icono de la app
     const startParams = new URLSearchParams(location.search);
     if (startParams.get('accion') === 'agregar') {
         history.replaceState(null, '', location.pathname + location.hash);
-        openWorkModal('book');
-    }
+        // Desde el marcador "➕ Mi Mundo" llegan el título, la portada y el enlace
+        const clip = presetFromParams(startParams);
+        openWorkModal(clip.type, null, clip.preset);
+    } else if (startParams.get('obra') && getWorkById(startParams.get('obra'))) {
+        // Abierta desde un aviso
+        history.replaceState(null, '', location.pathname + location.hash);
+        openDetail(startParams.get('obra'));
+    } else offerSessionRecovery();
+    $('scanIsbnBtn').hidden = !canScan();
     document.documentElement.dataset.ready = 'true';
+    setTimeout(() => { const sp = $('splash'); if (sp) sp.remove(); }, 450);
     cloud.init();
+    checkNotifications().catch(() => {});
+    if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
+    if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-work' && getWorkById(e.data.id)) openDetail(e.data.id); });
 })();

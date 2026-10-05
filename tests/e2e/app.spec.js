@@ -68,7 +68,8 @@ test('editar y eliminar una obra', async ({ page }) => {
     await page.locator('#detailPanel [data-act="delete"]').click();
     await expect(page.locator('#detailPanel')).not.toHaveClass(/active/);
     await expect(page.locator('#booksGrid')).not.toContainText('El Nombre del Viento');
-    expect((await stored(page)).works.some(w => w.id === 'w2')).toBe(false);
+    // Va a la papelera: sigue guardada, marcada como borrada
+    expect((await stored(page)).works.find(w => w.id === 'w2').trashedAt).toBeGreaterThan(0);
 });
 
 test('avanzar el progreso hasta el final marca la obra como terminada', async ({ page }) => {

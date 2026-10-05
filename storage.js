@@ -51,7 +51,15 @@ function blobToDataUrl(blob) {
 }
 /** Recorre todos los campos de imagen de los datos. */
 function forEachImageField(data, fn) {
-    IMAGE_FIELDS.forEach(([store, field, kind]) => (data[store] || []).forEach(item => fn(item, field, kind)));
+    IMAGE_FIELDS.forEach(([store, field, kind]) => allRecords(data, store).forEach(item => fn(item, field, kind)));
+    // Galería de cada obra: una lista de imágenes (se pasa la lista y la posición)
+    allRecords(data, 'works').forEach(w => { if (Array.isArray(w.gallery)) w.gallery.forEach((_, i) => fn(w.gallery, i, 'poster')); });
+    // Imágenes de los ajustes: avatar y fondo
+    if (data.settings) [['avatar', 'avatar'], ['bgImage', 'banner']].forEach(([field, kind]) => fn(data.settings, field, kind));
+}
+/** Registros de una colección, incluidos los que están en la papelera (se guardan en el mismo almacén). */
+function allRecords(data, name) {
+    return [...(data[name] || []), ...((data.trash && data.trash[name]) || [])];
 }
 
 function openDatabase() {
@@ -134,7 +142,7 @@ class IdbBackend {
             const store = tx.objectStore(name);
             const prev = this.persisted[name] || new Map();
             const current = new Map();
-            (data[name] || []).forEach(item => {
+            allRecords(data, name).forEach(item => {
                 let json = JSON.stringify(item);
                 if (prev.get(item.id) !== json) {
                     if (item.sample && !prev.has(item.id)) {
@@ -236,7 +244,7 @@ class IdbBackend {
         const settingsUpdatedAt = (await this.getMeta('settingsUpdatedAt')) || 1;
         const tx = this.db.transaction('outbox', 'readwrite');
         const store = tx.objectStore('outbox');
-        ENTITY_STORES.forEach(name => (data[name] || []).forEach(item => {
+        ENTITY_STORES.forEach(name => allRecords(data, name).forEach(item => {
             store.put({ key: `${name}/${item.id}`, kind: name, id: item.id, deleted: false, updatedAt: Number(item.updatedAt) || Number(item.createdAt) || 1 });
         }));
         store.put({ key: 'settings/main', kind: 'settings', id: 'main', deleted: false, updatedAt: settingsUpdatedAt });

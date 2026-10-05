@@ -7,7 +7,7 @@
  */
 'use strict';
 
-const fmtNum = n => (Math.round(n * 10) / 10).toLocaleString('es-ES');
+const fmtNum = n => (Math.round(n * 10) / 10).toLocaleString(APP_LOCALE);
 
 /** Divide el eje en 3–5 valores redondos. */
 function niceTicks(max) {
@@ -43,11 +43,16 @@ function dataTable(headers, rows, caption) {
  * Columnas (apiladas si hay varias series).
  * categories: ['ene', …]; series: [{ name, color }]; values[i][s] = valor de la categoría i en la serie s.
  */
-function columnChart({ categories, series, values, unit = '', height = 180, caption = '' }) {
+function columnChart({ categories, series, values, unit = '', height = 180, caption = '', grouped = false }) {
     const totals = values.map(v => v.reduce((a, b) => a + b, 0));
-    const ticks = niceTicks(Math.max(...totals, 0));
+    const ticks = niceTicks(grouped ? Math.max(...values.flat(), 0) : Math.max(...totals, 0));
     const top = ticks[ticks.length - 1] || 1;
+    // Agrupadas: una barra por serie, una junto a otra (para comparar, p. ej. este año y el anterior)
+    const groupedCol = (cat, i) => `<div class="viz-col is-grouped" ${tipAttrs(series.map((s, k) => `${s.name}: ${fmtNum(values[i][k])}${unit}`).join(' · '), cat)}>
+            ${series.map((s, k) => `<span class="viz-gbar" style="height:${(values[i][k] / top) * 100}%;background:${s.color}"></span>`).join('')}
+        </div>`;
     const cols = categories.map((cat, i) => {
+        if (grouped) return groupedCol(cat, i);
         const segs = series.map((s, k) => ({ s, v: values[i][k] })).filter(x => x.v > 0);
         const total = totals[i];
         const tipLabel = series.length > 1
@@ -69,8 +74,32 @@ function columnChart({ categories, series, values, unit = '', height = 180, capt
         <div class="viz-xaxis">${categories.map(c => `<span>${esc(c)}</span>`).join('')}</div>
     </div>
     ${legend(series)}
-    ${dataTable(['', ...series.map(s => s.name), ...(series.length > 1 ? ['Total'] : [])],
-        categories.map((c, i) => [c, ...values[i].map(fmtNum), ...(series.length > 1 ? [fmtNum(totals[i])] : [])]), caption)}`;
+    ${dataTable(['', ...series.map(s => s.name), ...(series.length > 1 && !grouped ? ['Total'] : [])],
+        categories.map((c, i) => [c, ...values[i].map(fmtNum), ...(series.length > 1 && !grouped ? [fmtNum(totals[i])] : [])]), caption)}`;
+}
+
+/**
+ * Puntos en una escala de 0 a 5 por fila (p. ej. las valoraciones de cada tipo) con la mediana marcada.
+ * rows: [{ label, color, values: [números], median }]. Los puntos repetidos se apilan hacia arriba.
+ */
+function dotStrip(rows, { max = 5, caption = '', unit = '★' } = {}) {
+    if (!rows.length) return '<p class="viz-empty">Sin datos todavía.</p>';
+    const ticks = Array.from({ length: max + 1 }, (_, i) => i);
+    return `<div class="viz-strip">
+        ${rows.map(r => {
+            const seen = new Map();
+            const dots = r.values.map(v => { const n = seen.get(v) || 0; seen.set(v, n + 1); return { v, n }; });
+            return `<div class="viz-strip-row" ${tipAttrs(`Mediana ${fmtNum(r.median)} ${unit}`, `${r.label} · de ${fmtNum(Math.min(...r.values))} a ${fmtNum(Math.max(...r.values))} · ${r.values.length} ${r.values.length === 1 ? 'obra' : 'obras'}`)}>
+                <span class="viz-strip-label">${esc(r.label)}</span>
+                <span class="viz-strip-track">
+                    ${dots.map(d => `<i style="left:${d.v / max * 100}%;bottom:${50 + Math.min(d.n, 6) * 9}%;background:${r.color}"></i>`).join('')}
+                    <b class="viz-strip-median" style="left:${r.median / max * 100}%" aria-hidden="true"></b>
+                </span>
+            </div>`;
+        }).join('')}
+        <div class="viz-strip-axis"><span></span><span class="viz-strip-ticks">${ticks.map(t => `<span style="left:${t / max * 100}%">${t}</span>`).join('')}</span></div>
+    </div>
+    ${dataTable(['', 'Obras', 'Mínima', 'Mediana', 'Máxima'], rows.map(r => [r.label, String(r.values.length), fmtNum(Math.min(...r.values)), fmtNum(r.median), fmtNum(Math.max(...r.values))]), caption)}`;
 }
 
 /** Barras horizontales de una sola serie: [{ label, value, display? }]. */
@@ -113,12 +142,12 @@ function activityCalendar(byDay, { weeks = 26, now = Date.now(), caption = '' } 
     const days = [];
     for (let i = 0; i < weeks * 7; i++) days.push(addDays(start, i));
     const max = Math.max(1, ...days.map(d => byDay.get(dayKey(d)) || 0));
-    const fmt = d => d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+    const fmt = d => d.toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
     const months = [];
     for (let w = 0; w < weeks; w++) {
         const d = days[w * 7];
         const prev = w ? days[(w - 1) * 7] : null;
-        months.push(!prev || prev.getMonth() !== d.getMonth() ? d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') : '');
+        months.push(!prev || prev.getMonth() !== d.getMonth() ? d.toLocaleDateString(APP_LOCALE, { month: 'short' }).replace('.', '') : '');
     }
     const cell = d => {
         const v = byDay.get(dayKey(d)) || 0;
@@ -165,5 +194,5 @@ function ringMeter(value, max, { size = 112, stroke = 10, label = '' } = {}) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { niceTicks, columnChart, barList, proportionBar, activityCalendar, heatGrid, ringMeter, heatLevel };
+    module.exports = { niceTicks, columnChart, barList, proportionBar, activityCalendar, heatGrid, ringMeter, heatLevel, dotStrip };
 }

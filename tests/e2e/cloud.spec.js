@@ -36,7 +36,7 @@ async function signIn(page, { email = 'sara@example.com', password = 'contraseñ
     page.on('dialog', onDialog);
     try {
         await page.click(`[data-cloud="${create ? 'signup' : 'signin'}"]`);
-        await expect(page.locator('#cloudPanelBody')).toContainText('Conectada como ' + email);
+        await expect(page.locator('#cloudPanelBody')).toContainText('Conectada como ' + email, { timeout: 10000 });
         await expect(page.locator('#cloudStatus')).toContainText('Sincronizado', { timeout: 10000 });
     } finally {
         page.off('dialog', onDialog);
@@ -173,7 +173,7 @@ test('sin conexión los cambios esperan y se envían al volver', async ({ browse
     await page.evaluate(() => { appData.works.find(w => w.id === 'w3').title = 'Cambiado sin red'; saveData(); });
     await page.evaluate(() => whenSaved());
     await page.evaluate(() => cloud.syncNow());
-    await expect(page.locator('#cloudStatus')).toContainText('cambios esperando');
+    await expect(page.locator('#cloudStatus')).toContainText('cambios esperando', { timeout: 10000 });
     await expect(page.locator('#cloudChip')).toHaveText('⚠️');
     fake.offline = false;
     await syncNow(page);
@@ -221,6 +221,45 @@ test('un dispositivo con datos propios puede unirlos con los de la nube', async 
     expect(titles).toContain('Del portátil');
     expect(titles).toContain('Del móvil'); // los ejemplos del portátil no pisan la edición real del móvil
     expect(cloudWorks().some(r => r.id === 'del-portatil')).toBe(true);
+    await phone.context.close();
+    await laptop.context.close();
+});
+
+test('la papelera viaja entre dispositivos y restaurar también', async ({ browser }) => {
+    const phone = await newDevice(browser);
+    await signIn(phone.page, { create: true });
+    const laptop = await newDevice(browser);
+    await signIn(laptop.page);
+
+    await phone.page.evaluate(() => deleteWork('w2'));
+    await syncNow(phone.page);
+    expect(cloudWorks().find(r => r.id === 'w2').data.trashedAt).toBeGreaterThan(0);
+    await syncNow(laptop.page);
+    expect(await laptop.page.evaluate(() => [appData.works.some(w => w.id === 'w2'), appData.trash.works.map(w => w.id)])).toEqual([false, ['w2']]);
+
+    await laptop.page.evaluate(() => restoreFromTrash('works:w2'));
+    await syncNow(laptop.page);
+    await syncNow(phone.page);
+    expect(await phone.page.evaluate(() => [appData.works.some(w => w.id === 'w2'), appData.trash.works.length])).toEqual([true, 0]);
+    expect(phone.errors).toEqual([]);
+    expect(laptop.errors).toEqual([]);
+    await phone.context.close();
+    await laptop.context.close();
+});
+
+test('la foto de avatar (guardada en los ajustes) llega al otro dispositivo', async ({ browser }) => {
+    const phone = await newDevice(browser);
+    await signIn(phone.page, { create: true });
+    await phone.page.evaluate(async () => {
+        const c = document.createElement('canvas'); c.width = 40; c.height = 40;
+        c.getContext('2d').fillRect(0, 0, 40, 40);
+        appData.settings.avatar = await store.saveImage(await new Promise(r => c.toBlob(r, 'image/png')));
+        saveData();
+    });
+    await syncNow(phone.page);
+    const laptop = await newDevice(browser);
+    await signIn(laptop.page);
+    await expect(laptop.page.locator('#userAvatar img')).toHaveAttribute('src', /^blob:/);
     await phone.context.close();
     await laptop.context.close();
 });

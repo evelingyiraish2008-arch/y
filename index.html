@@ -31,7 +31,7 @@
                     <p>Tu universo, organizado.</p>
                 </div>
             </div>
-            <button class="sidebar-search" data-palette title="Buscar o ir a… (Ctrl K)"><span aria-hidden="true">🔍</span><span class="label">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
+            <button class="sidebar-search" data-palette title="Buscar o ir a… (Ctrl K) · Pulsa ? para ver todos los atajos"><span aria-hidden="true">🔍</span><span class="label">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
             <nav class="nav-section">
                 <button class="nav-item active" data-nav="home"><span class="icon">🏠</span><span class="label">Inicio</span></button>
                 <button class="nav-item" data-nav="books"><span class="icon">📖</span><span class="label">Libros</span><span class="nav-count" data-count="book"></span></button>
@@ -49,6 +49,7 @@
                 <button class="nav-item" data-nav="collections"><span class="icon">🗂️</span><span class="label">Colecciones</span></button>
                 <button class="nav-item" data-nav="stats"><span class="icon">📊</span><span class="label">Estadísticas</span></button>
                 <button class="nav-item" data-nav="notes"><span class="icon">📝</span><span class="label">Notas</span></button>
+                <button class="nav-item" data-nav="extras"><span class="icon">✨</span><span class="label">Extras</span></button>
             </nav>
             <div class="nav-divider"></div>
             <nav class="nav-section">
@@ -77,7 +78,8 @@
                     <div class="header-actions">
                         <div class="search-box" id="globalSearchBox">
                             <span aria-hidden="true">🔍</span>
-                            <input type="search" id="globalSearch" placeholder="Buscar en todo tu mundo…" autocomplete="off" aria-label="Búsqueda global">
+                            <input type="search" id="globalSearch" placeholder="Buscar… (prueba: BL nota:5)" autocomplete="off" aria-label="Búsqueda global">
+                            <button class="search-help" data-act="query-help" title="Búsqueda avanzada" aria-label="Ayuda de búsqueda avanzada">?</button>
                             <div class="search-results" id="globalSearchResults" role="listbox"></div>
                         </div>
                         <button class="icon-btn" data-act="pick" title="¿Qué veo hoy?" aria-label="¿Qué veo hoy?">🎲</button>
@@ -92,6 +94,9 @@
                 </div>
 
                 <div class="today-grid" id="todayGrid"></div>
+                <div class="tip-card welcome-card" id="welcomeCard" hidden></div>
+                <div class="quote-of-day" id="quoteOfDay" hidden></div>
+                <div class="tip-card" id="tipOfDay" hidden></div>
 
                 <div class="stats-grid">
                     <button class="stat-card" data-nav="books"><div class="stat-icon">📚</div><div><div class="stat-value" id="statBooks">0</div><div class="stat-label">Libros</div></div></button>
@@ -139,12 +144,15 @@
                 <div class="page-header">
                     <div><h1 class="page-title">📖 Libros</h1><p class="page-subtitle">Tu biblioteca personal de lecturas.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="booksSearch" placeholder="Título, autor o etiqueta…" data-render="books"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="booksFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="book">＋ Agregar</button>
                     </div>
                 </div>
                 <div class="filter-bar" id="booksFilterBar">
+                    <span class="view-switch" data-view-switch="books" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="booksStatusFilter" data-render="books"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="booksSort" data-render="books"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="pages">Páginas</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="booksSpicyFilter" data-render="books"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -152,7 +160,9 @@
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="booksBlFilter" data-render="books"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="booksFavFilter" data-render="books"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="booksDateFilter" data-render="books" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="books"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">📚 Estantería <span class="muted" id="booksCount"></span></h3></div>
                     <div class="card-grid" id="booksGrid"></div>
@@ -164,6 +174,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">🎬 Series y Películas</h1><p class="page-subtitle">Explora y organiza todas tus series a tu manera.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="seriesSearch" placeholder="Título, actor o etiqueta…" data-render="series"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="seriesFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="series">＋ Agregar</button>
@@ -177,9 +188,7 @@
                     <button class="tab" data-filter="quiero ver">⏳ Pendientes <span class="count" id="seriesCountPlan">0</span></button>
                 </div>
                 <div class="filter-bar" id="seriesFilterBar">
-                    <span class="filter-label">Vista</span>
-                    <button class="btn btn-secondary btn-sm is-on" id="viewGridBtn" data-view="grid">🎴 Tarjetas</button>
-                    <button class="btn btn-secondary btn-sm" id="viewListBtn" data-view="list">📋 Lista</button>
+                    <span class="view-switch" data-view-switch="series" role="group" aria-label="Vista"></span>
                     <span class="filter-sep"></span>
                     <select class="filter-select" id="seriesSort" data-render="series"><option value="rating">Ordenar: mi calificación</option><option value="recent">Más recientes</option><option value="year">Año</option><option value="title">Título A-Z</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="seriesTypeFilter" data-render="series"><option value="all">Tipo: todos</option><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select>
@@ -187,7 +196,9 @@
                     <select class="filter-select" id="seriesSpicyFilter" data-render="series"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="seriesSadnessFilter" data-render="series"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <label class="checkbox-wrapper"><input type="checkbox" id="seriesFavFilter" data-render="series"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="seriesDateFilter" data-render="series" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="series"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title" id="seriesSectionTitle">❤️ Todas</h3></div>
                     <div class="card-grid" id="seriesGrid"></div>
@@ -199,12 +210,15 @@
                 <div class="page-header">
                     <div><h1 class="page-title">🎌 Anime</h1><p class="page-subtitle">Tu colección de animes con seguimiento de episodios.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="animeSearch" placeholder="Título, estudio o etiqueta…" data-render="anime"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="animeFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="anime">＋ Agregar</button>
                     </div>
                 </div>
                 <div class="filter-bar" id="animeFilterBar">
+                    <span class="view-switch" data-view-switch="anime" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="animeStatusFilter" data-render="anime"><option value="all">Estado: todos</option><option value="viendo">Viendo</option><option value="terminado">Terminado</option><option value="quiero ver">Quiero ver</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="animeSort" data-render="anime"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="episodes">Episodios</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="animeSpicyFilter" data-render="anime"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -212,7 +226,9 @@
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="animeBlFilter" data-render="anime"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="animeFavFilter" data-render="anime"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="animeDateFilter" data-render="anime" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="anime"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">🎌 Tu colección <span class="muted" id="animeCount"></span></h3></div>
                     <div class="card-grid" id="animeGrid"></div>
@@ -224,12 +240,15 @@
                 <div class="page-header">
                     <div><h1 class="page-title">📕 Manhwas</h1><p class="page-subtitle">Tu colección de manhwas con seguimiento de capítulos.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="manhwaSearch" placeholder="Título, autor o etiqueta…" data-render="manhwa"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="manhwaFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="manhwa">＋ Agregar</button>
                     </div>
                 </div>
                 <div class="filter-bar" id="manhwaFilterBar">
+                    <span class="view-switch" data-view-switch="manhwa" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="manhwaStatusFilter" data-render="manhwa"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="manhwaSort" data-render="manhwa"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="chapters">Capítulos</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="manhwaSpicyFilter" data-render="manhwa"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -237,7 +256,9 @@
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="manhwaBlFilter" data-render="manhwa"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="manhwaFavFilter" data-render="manhwa"> ❤️ Favoritos</label>
+                    <select class="filter-select" id="manhwaDateFilter" data-render="manhwa" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="manhwa"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">📖 Tu colección <span class="muted" id="manhwaCount"></span></h3></div>
                     <div class="card-grid" id="manhwaGrid"></div>
@@ -249,18 +270,23 @@
                 <div class="page-header">
                     <div><h1 class="page-title">💖 Solo BL</h1><p class="page-subtitle">Todas tus obras BL, unificadas en un solo lugar.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="select-mode" title="Elegir varias obras">☑️ Seleccionar</button>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="blSearch" placeholder="Buscar en BL…" data-render="bl"></div>
                         <button class="btn btn-secondary is-on" data-toggle-filters="blFilterBar">🎛 Filtros</button>
                         <button class="btn btn-primary" data-add="series" data-bl="1">＋ Agregar BL</button>
                     </div>
                 </div>
                 <div class="filter-bar" id="blFilterBar">
+                    <span class="view-switch" data-view-switch="bl" role="group" aria-label="Vista"></span>
+                    <span class="filter-sep"></span>
                     <select class="filter-select" id="blTypeFilter" data-render="bl"><option value="all">Todos los tipos</option><option value="book">Libros</option><option value="series">Series</option><option value="anime">Anime</option><option value="manhwa">Manhwa</option></select>
                     <select class="filter-select" id="blStatusFilter" data-render="bl"><option value="all">Todos los estados</option><option value="active">En curso</option><option value="terminado">Terminado</option><option value="plan">Pendiente</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="blSort" data-render="bl"><option value="recent">Recientes</option><option value="rating">Valoración</option><option value="spicy">Más spicy</option><option value="title">Título A-Z</option></select>
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="blMinRating" data-render="bl"> ⭐ Solo 4+ estrellas</label>
+                    <select class="filter-select" id="blDateFilter" data-render="bl" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
+                <div class="saved-views" data-saved-views="bl"></div>
                 <div class="section">
                     <div class="section-header"><h3 class="section-title">💖 Galería BL <span class="muted" id="blCount"></span></h3></div>
                     <div class="card-grid" id="blGrid"></div>
@@ -273,6 +299,7 @@
                     <div><h1 class="page-title">👥 Personas</h1><p class="page-subtitle">Actores, autores, directores y más.</p></div>
                     <div class="header-actions">
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="personSearch" placeholder="Buscar por nombre…" data-render="persons"></div>
+                        <span class="view-switch" role="group" aria-label="Vista"><button class="btn btn-secondary btn-sm is-on" data-act="person-view" data-id="cards" title="Tarjetas">🎴</button><button class="btn btn-secondary btn-sm" data-act="person-view" data-id="album" title="Álbum de fotos">🖼️</button></span>
                         <select class="filter-select" id="personSortSelect" data-render="persons" style="height:40px">
                             <option value="name">Ordenar: nombre</option>
                             <option value="works">Más obras</option>
@@ -341,7 +368,9 @@
             <section class="page-view" id="page-emission">
                 <div class="page-header">
                     <div><h1 class="page-title">📡 Centro de Emisión</h1><p class="page-subtitle">Todo lo que estás siguiendo, organizado por día de emisión.</p></div>
+                    <div class="header-actions"><button class="btn btn-secondary" data-act="airing-refresh">🔄 Próximos episodios</button><button class="btn btn-secondary" data-act="export-ics">📅 Añadir a mi calendario (.ics)</button></div>
                 </div>
+                <div class="next-airing" id="nextAiring" hidden></div>
                 <div class="stats-grid cols-4">
                     <div class="stat-card"><div class="stat-icon">📺</div><div><div class="stat-value" id="emissionToday">0</div><div class="stat-label">Hoy</div></div></div>
                     <div class="stat-card"><div class="stat-icon pink">🗓️</div><div><div class="stat-value" id="emissionThisWeek">0</div><div class="stat-label">Esta semana</div></div></div>
@@ -362,6 +391,9 @@
             <section class="page-view" id="page-stats">
                 <div class="page-header">
                     <div><h1 class="page-title">📊 Estadísticas</h1><p class="page-subtitle">Descubre tu progreso y tus hábitos.</p></div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" data-act="wrapped">🎁 Tu año en Mi Mundo</button>
+                    </div>
                 </div>
                 <div class="kpi-grid" id="statsKpis"></div>
                 <div class="stats-layout">
@@ -372,6 +404,69 @@
                     <div class="viz-card span-4">
                         <div class="viz-head"><div><div class="viz-title">🎯 Reto anual</div><div class="viz-sub">Obras terminadas este año</div></div></div>
                         <div id="statsGoal"></div>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">📅 Comparativas</div><div class="viz-sub">Obras terminadas frente al periodo anterior</div></div></div>
+                        <div class="cmp-tiles" id="statsCompareTiles"></div>
+                    </div>
+                    <div class="viz-card span-8">
+                        <div class="viz-head"><div><div class="viz-title">📈 Este año frente al anterior</div><div class="viz-sub">Terminadas cada mes</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsYearCompare"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">🗓️ Tus temporadas</div><div class="viz-sub" id="statsSeasonSub"></div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsSeason"></div>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">🚀 Ritmo y proyección</div><div class="viz-sub">A tu ritmo actual, cuándo terminarás lo que estás viendo y leyendo</div></div></div>
+                        <div id="statsPace"></div>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">🔎 Descubrimientos</div><div class="viz-sub">Lo que tus datos dicen de tus gustos</div></div></div>
+                        <div id="statsDiscoveries"></div>
+                    </div>
+                    <div class="period-bar span-12" role="group" aria-label="Periodo de las estadísticas">
+                        <span class="filter-label">Rankings y distribuciones de:</span>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="12m" data-stats-period="12m">Últimos 12 meses</button>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="year" data-stats-period="year">Este año</button>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="prev" data-stats-period="prev">Año pasado</button>
+                        <button class="chip chip-muted" data-act="stats-period" data-id="all" data-stats-period="all">Siempre</button>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">🏅 Tus rankings</div><div class="viz-sub">Lo mejor de cada categoría</div></div></div>
+                        <div class="rank-grid" id="statsRankings"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">🎚️ Notas por tipo</div><div class="viz-sub">Cada punto es una obra; la raya marca la mediana</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsSpread"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">🕰️ ¿De qué época son?</div><div class="viz-sub">Por década de publicación</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsDecades"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">⭐ Lo que más valoras</div><div class="viz-sub">Media de los criterios de tus reseñas</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsCriteria"></div>
+                    </div>
+                    <div class="viz-card span-6">
+                        <div class="viz-head"><div><div class="viz-title">🔁 Lo que más repites</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsRevisited"></div>
+                    </div>
+                    <div class="viz-card span-12">
+                        <div class="viz-head"><div><div class="viz-title">📝 Tus notas</div></div></div>
+                        <div class="pace-kpis notes-kpis" id="statsNotesKpis"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">✍️ Notas por mes</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsNotesMonthly"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">💬 Tus palabras</div><div class="viz-sub">Las que más usas</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsWords"></div>
+                    </div>
+                    <div class="viz-card span-4">
+                        <div class="viz-head"><div><div class="viz-title">🕐 Cuándo escribes</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
+                        <div class="viz-body" id="statsWriting"></div>
                     </div>
                     <div class="viz-card span-8">
                         <div class="viz-head"><div><div class="viz-title">✅ Terminadas por mes</div><div class="viz-sub">Últimos 12 meses, por tipo (según la fecha de fin)</div></div><button class="viz-table-toggle" data-table-toggle>Ver tabla</button></div>
@@ -417,6 +512,7 @@
                 <div class="page-header">
                     <div><h1 class="page-title">🗂️ Colecciones</h1><p class="page-subtitle">Crea listas personalizadas para organizar tus obras.</p></div>
                     <div class="header-actions">
+                        <button class="btn btn-secondary" data-act="coll-templates">📋 Plantillas</button>
                         <button class="btn btn-primary" id="addCollectionBtn">＋ Nueva colección</button>
                     </div>
                 </div>
@@ -428,10 +524,24 @@
                 <div class="page-header">
                     <div><h1 class="page-title">📝 Notas</h1><p class="page-subtitle">Tus pensamientos, teorías y reseñas.</p></div>
                     <div class="header-actions">
+                        <select class="filter-select" id="notesTypeFilter" data-render="notes" aria-label="Tipo de nota">
+                            <option value="all">Todas</option><option value="comentario">💬 Comentarios</option><option value="resena">⭐ Reseñas</option>
+                            <option value="teoria">🔮 Teorías</option><option value="cita">❝ Citas</option><option value="recordatorio">⏰ Recordatorios</option>
+                        </select>
                         <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="notesSearch" placeholder="Buscar en notas…" data-render="notes"></div>
                     </div>
                 </div>
                 <div class="notes-grid" id="notesList"></div>
+            </section>
+
+            <!-- EXTRAS -->
+            <section class="page-view" id="page-extras">
+                <div class="page-header">
+                    <div><h1 class="page-title">✨ Extras</h1><p class="page-subtitle">Tu historia, juegos, retos y curiosidades sobre tu colección.</p></div>
+                    <div class="header-actions"><button class="btn btn-secondary" data-act="present-favs">▶️ Presentar favoritas</button></div>
+                </div>
+                <div class="tabs" id="extrasTabs"></div>
+                <div class="panel-card" id="extrasBody"></div>
             </section>
 
             <!-- PERSONALIZAR -->
@@ -448,8 +558,30 @@
                             <div class="panel-title">👤 Tu perfil</div>
                             <label class="field"><span>Tu nombre</span><input type="text" id="settingName" maxlength="30" placeholder="Tu nombre"></label>
                         </div>
+                        <div class="panel-card" id="personalizePanel">
+                            <div class="panel-title">✨ Más personalización</div>
+                            <div id="personalizeBody"></div>
+                        </div>
                         <div class="panel-card">
-                            <div class="panel-title">🎨 Color principal</div>
+                            <div class="panel-title">🌍 Idioma</div>
+                            <select class="text-input" id="settingLang" aria-label="Idioma"><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option><option value="auto">Automático (el del navegador)</option></select>
+                            <div class="setting-row" style="margin-top:12px"><span>👀 Solo lectura (para enseñar tu colección sin que se cambie nada)</span><button class="toggle-switch" data-act="readonly-toggle" id="readOnlyToggle" role="switch" aria-checked="false" aria-label="Solo lectura"></button></div>
+                            <div class="seg-inline wrap" style="margin-top:12px">
+                                <button class="btn btn-secondary btn-sm" data-act="tour">🧭 Tour guiado</button>
+                                <button class="btn btn-secondary btn-sm" data-act="shortcuts">⌨️ Atajos</button>
+                            </div>
+                            <div class="clipper">
+                                <p class="panel-desc" style="margin:12px 0 8px">📎 <b>Guardar desde otras webs:</b> arrastra este botón a la barra de marcadores. En una página de Netflix, Goodreads, Webtoon… púlsalo y se abrirá Mi Mundo con el título y la portada.</p>
+                                <a class="btn btn-primary btn-sm" id="clipperLink" href="#">➕ Mi Mundo</a>
+                            </div>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🏷️ Etiquetas</div>
+                            <p class="panel-desc" style="margin:-6px 0 12px">Renombra, une, colorea o pon un emoji a tus etiquetas.</p>
+                            <button class="btn btn-secondary btn-sm btn-block" data-act="tags">🏷️ Gestionar etiquetas</button>
+                        </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🎨 Color principal <span class="muted" id="colorModeHint"></span></div>
                             <div class="color-options" id="colorOptions">
                                 <button class="color-option" data-color="#8b5cf6" style="background:#8b5cf6;color:#8b5cf6" aria-label="Violeta"></button>
                                 <button class="color-option" data-color="#3b82f6" style="background:#3b82f6;color:#3b82f6" aria-label="Azul"></button>
@@ -481,6 +613,15 @@
                             <div class="panel-title">🌙 Tema</div>
                             <div class="setting-row"><span>Modo oscuro</span><button class="toggle-switch" id="themeToggle" role="switch" aria-checked="true" aria-label="Modo oscuro"></button></div>
                         </div>
+                        <div class="panel-card">
+                            <div class="panel-title">🔎 Búsqueda de datos</div>
+                            <p class="panel-desc" style="margin:-6px 0 12px">Para series y películas puedes añadir una clave gratuita de TMDB (themoviedb.org → Ajustes → API). Sin ella se usa TVmaze.</p>
+                            <label class="field"><span>Clave de TMDB (opcional)</span><input type="password" class="text-input" id="settingTmdbKey" autocomplete="off" placeholder="Pega aquí tu clave"></label>
+                        </div>
+                        <div class="panel-card" id="notifyPanel">
+                            <div class="panel-title">🔔 Avisos</div>
+                            <div id="notifyBody"></div>
+                        </div>
                         <div class="panel-card" id="cloudPanel">
                             <div class="panel-title">☁️ Sincronización en la nube</div>
                             <div id="cloudPanelBody"></div>
@@ -499,12 +640,19 @@
                             <p class="hint" style="margin:10px 0 12px;">Todo se guarda en este navegador. Exporta una copia de vez en cuando para no perder nada.</p>
                             <button class="btn btn-secondary btn-sm btn-block" id="optimizeImagesBtn">🪄 Optimizar imágenes guardadas</button>
                         </div>
+                        <div class="panel-card" id="trashPanel">
+                            <div class="panel-title">🗑️ Papelera <span class="chip chip-muted nav-count" id="trashCount"></span>
+                                <button class="btn btn-secondary btn-sm" data-act="history" style="margin-left:auto">🕓 Historial</button></div>
+                            <div id="trashBody"></div>
+                        </div>
                         <div class="panel-card">
                             <div class="panel-title">💾 Copias de seguridad</div>
                             <div class="stack" style="gap:10px">
                                 <button class="btn btn-primary btn-sm btn-block" id="exportBtn">📤 Exportar datos (JSON)</button>
                                 <button class="btn btn-secondary btn-sm btn-block" id="importBtn">📥 Importar datos (JSON)</button>
                                 <input type="file" id="importFileInput" accept=".json,application/json" hidden>
+                                <button class="btn btn-secondary btn-sm btn-block" data-act="import-wizard">🌐 Importar de otras apps</button>
+                                <button class="btn btn-secondary btn-sm btn-block" data-act="export-csv">📄 Exportar a CSV (Excel)</button>
                                 <button class="btn btn-danger btn-sm btn-block" id="wipeBtn">🗑️ Borrar todos los datos</button>
                             </div>
                         </div>
@@ -514,6 +662,23 @@
           </div>
         </main>
     </div>
+
+    <!-- ===== TU AÑO (HISTORIA) ===== -->
+    <div class="wrapped" id="wrapped" hidden role="dialog" aria-modal="true" aria-label="Tu año en Mi Mundo"></div>
+
+    <!-- ===== PRESENTACIÓN ===== -->
+    <div class="present-mode" id="presentMode" hidden role="dialog" aria-modal="true" aria-label="Presentación"></div>
+    <!-- ===== PANTALLA DE CARGA ===== -->
+    <div class="splash" id="splash" aria-hidden="true"><div class="splash-logo">📚</div><div class="splash-name">Mi Mundo</div><div class="splash-bar"><span></span></div></div>
+
+    <!-- ===== MODO FOCO ===== -->
+    <div class="focus-mode" id="focusMode" hidden role="dialog" aria-modal="true" aria-label="Modo foco"></div>
+
+    <!-- ===== SELECCIÓN DE VARIAS OBRAS ===== -->
+    <div class="bulk-bar" id="bulkBar" hidden role="toolbar" aria-label="Acciones con las obras seleccionadas"></div>
+    <input type="file" id="importAnyFile" hidden>
+    <datalist id="dlAuthors"></datalist><datalist id="dlStudios"></datalist><datalist id="dlPlatforms"></datalist>
+    <datalist id="dlCountries"></datalist><datalist id="dlGenres"></datalist><datalist id="dlActors"></datalist><datalist id="dlDirectors"></datalist>
 
     <!-- ===== DETAIL PANEL ===== -->
     <div class="overlay" id="detailOverlay"></div>
@@ -532,6 +697,7 @@
                 <button class="icon-btn sm" data-close aria-label="Cerrar">✕</button>
             </header>
             <div class="modal-body">
+                <div class="draft-bar" id="workDraftBar" hidden></div>
                 <div class="seg" id="workTypeTabs">
                     <button type="button" class="seg-btn" data-type="book">📚 Libro</button>
                     <button type="button" class="seg-btn" data-type="series">🎬 Serie</button>
@@ -539,25 +705,34 @@
                     <button type="button" class="seg-btn" data-type="manhwa">📕 Manhwa</button>
                 </div>
                 <form id="workForm" class="work-form" autocomplete="off" novalidate>
+                    <input type="hidden" data-field="anilistId" data-num>
+                    <input type="hidden" data-field="tvmazeId" data-num>
                     <div class="cover-picker">
                         <div class="cover-preview"><img id="workImagePreview" alt="Portada"></div>
                         <button type="button" class="btn btn-secondary btn-sm" data-upload="workImageFile">📤 Subir imagen</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-act="cover-search">🖼️ Buscar portada</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-act="scan-isbn" id="scanIsbnBtn" hidden>📷 Escanear ISBN</button>
                         <input type="file" id="workImageFile" accept="image/*" hidden data-target="f_image" data-kind="poster">
                         <input type="text" class="text-input" id="f_image" data-field="image" placeholder="…o pega una URL" style="border-radius:var(--radius-md)">
                         <span class="hint">Se reduce automáticamente para ahorrar espacio.</span>
                     </div>
                     <div class="form-grid">
                         <label class="field span-2"><span>Título *</span><input type="text" id="f_title" data-field="title" placeholder="Nombre de la obra" required></label>
+                        <div class="title-hint span-2" id="titleHint" hidden></div>
+                        <div class="span-2 meta-actions">
+                            <button type="button" class="btn btn-secondary btn-sm" data-act="meta-search">🔎 Rellenar datos por el título</button>
+                            <span class="hint">Busca en AniList, MyAnimeList, Open Library, Google Books y TVmaze. No cambia lo que ya escribiste.</span>
+                        </div>
                         <label class="field"><span>Estado</span><select id="f_status" data-field="status"></select></label>
                         <label class="field" data-types="series"><span>Tipo</span><select data-field="seriesType" data-default="Serie"><option value="Serie">Serie</option><option value="Película">Película</option><option value="Variedad">Variedad</option></select></label>
-                        <label class="field" data-types="book manhwa"><span>Autor</span><input type="text" data-field="author" placeholder="Autor" list="personNames"></label>
-                        <label class="field" data-types="anime"><span>Estudio</span><input type="text" data-field="studio" placeholder="MAPPA, Kyoto…"></label>
-                        <label class="field" data-types="series manhwa"><span>Plataforma</span><input type="text" data-field="platform" placeholder="Netflix, Viki, Webtoon…"></label>
-                        <label class="field" data-types="series anime"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…"></label>
-                        <label class="field" data-types="book manhwa"><span>Género</span><input type="text" data-field="genre" placeholder="Fantasía, Romance…"></label>
+                        <label class="field" data-types="book manhwa"><span>Autor</span><input type="text" data-field="author" placeholder="Autor" list="dlAuthors"></label>
+                        <label class="field" data-types="anime"><span>Estudio</span><input type="text" data-field="studio" placeholder="MAPPA, Kyoto…" list="dlStudios"></label>
+                        <label class="field" data-types="series manhwa"><span>Plataforma</span><input type="text" data-field="platform" placeholder="Netflix, Viki, Webtoon…" list="dlPlatforms"></label>
+                        <label class="field" data-types="series anime"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…" list="dlCountries"></label>
+                        <label class="field" data-types="book manhwa"><span>Género</span><input type="text" data-field="genre" placeholder="Fantasía, Romance…" list="dlGenres"></label>
                         <label class="field"><span>Año</span><input type="number" data-field="year" data-num placeholder="2026" min="1800" max="2100"></label>
-                        <label class="field span-2" data-types="series"><span>Actores (separados por comas)</span><input type="text" data-field="actors" placeholder="Actor 1, Actor 2…"></label>
-                        <label class="field span-2" data-types="series"><span>Directores (separados por comas)</span><input type="text" data-field="directors" placeholder="Director 1, Director 2…"></label>
+                        <label class="field span-2" data-types="series"><span>Actores (separados por comas)</span><input type="text" data-field="actors" placeholder="Actor 1, Actor 2…" list="dlActors"></label>
+                        <label class="field span-2" data-types="series"><span>Directores (separados por comas)</span><input type="text" data-field="directors" placeholder="Director 1, Director 2…" list="dlDirectors"></label>
                         <label class="field"><span id="lbl_progress">Progreso</span><input type="number" data-field="progress" data-num min="0" placeholder="0"></label>
                         <label class="field" data-types="book"><span>Total de páginas</span><input type="number" data-field="pages" data-num min="0" placeholder="0"></label>
                         <label class="field" data-types="series anime"><span>Total de episodios</span><input type="number" data-field="totalEpisodes" data-num min="0" placeholder="0"></label>
@@ -566,10 +741,16 @@
                         <label class="field" data-types="manhwa"><span>Temporada</span><input type="number" data-field="season" data-num min="1" placeholder="1" data-default="1"></label>
                         <label class="field" data-types="series anime manhwa"><span>Día de emisión</span>
                             <select data-field="airDay" data-default=""><option value="">Sin asignar</option><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option></select>
+                            <small class="hint" id="airDayHint"></small>
                         </label>
+                        <div class="field span-2 seasons-block">
+                            <label class="checkbox-wrapper"><input type="checkbox" id="f_multi"> <span id="lbl_multi">Tiene varias temporadas</span></label>
+                            <div class="seasons-editor" id="seasonsEditor" hidden></div>
+                        </div>
                         <label class="field"><span id="lbl_start">Fecha de inicio</span><input type="date" data-field="startDate"></label>
                         <label class="field"><span>Fecha de fin</span><input type="date" data-field="endDate"></label>
-                        <label class="field span-2"><span>Etiquetas (separadas por comas)</span><input type="text" data-field="tags" placeholder="BL, drama, fantasía…"></label>
+                        <label class="field span-2"><span>Etiquetas (separadas por comas)</span><input type="text" id="f_tags" data-field="tags" placeholder="BL, drama, fantasía…"></label>
+                        <div class="title-hint span-2" id="tagsHint" hidden></div>
                         <label class="field span-2"><span>Sinopsis</span><textarea data-field="synopsis" placeholder="¿De qué trata?"></textarea></label>
                         <div class="field span-2">
                             <div class="sliders">
@@ -586,6 +767,7 @@
                 </form>
             </div>
             <footer class="modal-footer">
+                <button class="btn btn-ghost btn-sm footer-left" data-act="quick-from-form" title="Agregar varias obras seguidas solo con el título">⚡ Modo rápido</button>
                 <button class="btn btn-secondary" data-close>Cancelar</button>
                 <button class="btn btn-primary" id="workSaveBtn">Guardar</button>
             </footer>
@@ -655,8 +837,16 @@
                             <input type="file" id="coupleImageFile" accept="image/*" hidden data-target="coupleImage" data-kind="couple">
                         </div>
                     </div>
-                    <label class="field span-2"><span>Nombre *</span><input type="text" id="coupleName" placeholder="Ej: First & Khaotung"></label>
-                    <label class="field"><span>Obras juntos</span><input type="number" id="coupleWorks" min="0" placeholder="0"></label>
+                    <label class="field"><span>Actor / actriz 1</span><select class="text-input" id="coupleA"></select></label>
+                    <label class="field"><span>Actor / actriz 2</span><select class="text-input" id="coupleB"></select></label>
+                    <label class="field span-2"><span>Nombre</span><input type="text" id="coupleName" placeholder="Si lo dejas vacío: “Actor 1 & Actor 2”"></label>
+                    <div class="field span-2">
+                        <span class="field-label-row"><span>Sus obras juntos</span><small class="muted" id="coupleWorksCount"></small></span>
+                        <input type="search" class="text-input" id="coupleWorksSearch" placeholder="Buscar obra…">
+                        <div class="pick-list couple-works-picker" id="coupleWorksPicker"></div>
+                        <span class="hint">Las obras donde salen los dos en el reparto se marcan solas.</span>
+                    </div>
+                    <label class="field"><span>Obras juntos (si no las vinculas)</span><input type="number" id="coupleWorks" min="0" placeholder="0"></label>
                     <div class="field checks" style="align-self:end;padding-bottom:10px"><label class="checkbox-wrapper"><input type="checkbox" id="coupleFavorite"> ❤️ Favorita</label></div>
                     <div class="field span-2"><div class="sliders"><div class="slider-group"><span class="slider-label">⭐ Valoración</span><input type="range" class="rating" min="0" max="5" step="0.5" id="coupleRating" data-out="out_coupleRating"><output class="slider-value" id="out_coupleRating">–</output></div></div></div>
                 </div>
@@ -680,6 +870,21 @@
                 <div class="form-grid">
                     <label class="field span-2"><span>Nombre *</span><input type="text" id="collectionName" placeholder="Ej: Para maratonear"></label>
                     <label class="field span-2"><span>Descripción</span><textarea id="collectionDesc" placeholder="¿Qué hay en esta colección?"></textarea></label>
+                    <div class="field span-2">
+                        <label class="checkbox-wrapper"><input type="checkbox" id="collectionSmart"> ✨ Colección inteligente (se llena sola con una búsqueda)</label>
+                        <div id="collectionSmartBox" hidden>
+                            <input type="text" class="text-input" id="collectionQuery" placeholder="Por ejemplo: BL nota:>=4" autocomplete="off" style="margin-top:8px">
+                            <small class="hint" id="collectionQueryHint"></small>
+                            <div class="tag-list" style="margin-top:8px">
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="BL nota:>=4.5">💖 BL de 4,5★ o más</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="estado:pendiente">⏳ Pendientes</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="tristeza:>=4">💧 Para llorar</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="fin:2026">🗓️ Terminadas en 2026</button>
+                                <button type="button" class="chip chip-muted" data-act="smart-example" data-id="estado:activo progreso:>=80">🏁 Casi terminadas</button>
+                                <button type="button" class="chip chip-muted" data-act="query-help">❓ Cómo escribir búsquedas</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <footer class="modal-footer">
@@ -718,10 +923,27 @@
 
     <script src="utils.js"></script>
     <script src="insights.js"></script>
+    <script src="history.js"></script>
+    <script src="query.js"></script>
+    <script src="extras.js"></script>
+    <script src="i18n.js"></script>
+    <script src="coherence.js"></script>
+    <script src="metadata.js"></script>
+    <script src="importers.js"></script>
+    <script src="analytics.js"></script>
+    <script src="notify.js"></script>
     <script src="charts.js"></script>
     <script src="storage.js"></script>
     <script src="sync.js"></script>
     <script src="cloud.js"></script>
+    <script src="features.js"></script>
+    <script src="tools.js"></script>
+    <script src="ux.js"></script>
+    <script src="statsplus.js"></script>
+    <script src="alerts.js"></script>
+    <script src="manage.js"></script>
+    <script src="content.js"></script>
+    <script src="play.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
