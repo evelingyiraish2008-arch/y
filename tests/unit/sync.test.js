@@ -216,6 +216,8 @@ describe('SyncEngine', () => {
 describe('imageIdsOf', () => {
     it('devuelve solo las imágenes guardadas en IndexedDB', () => {
         assert.deepEqual(imageIdsOf('persons', { image: 'idb:a', banner: 'https://x/y.png' }), ['a']);
+        assert.deepEqual(imageIdsOf('works', { image: 'idb:p', gallery: ['idb:g1', 'https://x/z.png', 'idb:g2'] }), ['p', 'g1', 'g2']);
+        assert.deepEqual(imageIdsOf('settings', { avatar: 'idb:av' }), ['av']);
         assert.deepEqual(imageIdsOf('notes', { image: 'idb:a' }), []);
         assert.deepEqual(imageIdsOf('works', null), []);
     });

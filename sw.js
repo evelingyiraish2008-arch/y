@@ -31,6 +31,7 @@ const APP_SHELL = [
     './alerts.js',
     './query.js',
     './manage.js',
+    './content.js',
     './charts.js',
     './storage.js',
     './sync.js',

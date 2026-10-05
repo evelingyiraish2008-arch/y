@@ -256,6 +256,7 @@ function workCard(w, opts = {}) {
           ${cardHides('status') ? '' : `<span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span>`}
           ${w.bl ? '<span class="pill bl">BL</span>' : ''}
           ${w.locked ? '<span class="pill" title="Bloqueada">🔒</span>' : ''}
+          ${(w.awards || []).length ? `<span class="pill award" title="${esc(w.awards.map(a => a.name).join(', '))}">🏆</span>` : ''}
           ${opts.showType ? `<span class="pill">${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}</span>` : ''}
           <span class="spacer"></span>
           ${w.rating ? `<span class="pill rating">★ ${ratingText(w.rating)}</span>` : ''}
@@ -410,6 +411,7 @@ function renderHome() {
         { caption: 'Etiquetas más usadas', empty: 'Añade etiquetas a tus obras para ver las más populares.' });
     renderHero(inProgress);
     renderToday();
+    renderQuoteOfDay();
     renderBell();
 }
 
@@ -646,6 +648,7 @@ function searchAll(raw, limit = 12) {
     appData.couples.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'couple', id: c.id, title: c.name, sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
     appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `${isSmart(c) ? '✨ Colección inteligente' : '🗂️ Colección'} · ${collectionWorks(c).length} obras`, icon: isSmart(c) ? '✨' : '🗂️' }); });
     appData.notes.forEach(n => { if (norm(n.content + ' ' + n.workTitle).includes(q)) results.push({ kind: 'note', id: n.workId, title: n.workTitle || 'Nota', sub: '📝 ' + n.content.slice(0, 50), icon: '📝' }); });
+    appData.works.forEach(w => (w.quotes || []).forEach(qq => { if (norm(qq.text + ' ' + (qq.context || '')).includes(q)) results.push({ kind: 'work', id: w.id, title: w.title, sub: '❝ ' + qq.text.slice(0, 60), icon: '❝' }); }));
     return results.slice(0, limit);
 }
 function openResult(r) {
@@ -1268,6 +1271,7 @@ function renderDetail(fresh = false) {
           </div>
         </details>
         ${notesSectionHtml(w, open.notes, composer)}
+        ${contentSectionHtml(w, open.content)}
         ${rereadsSectionHtml(w, open.rereads)}
         <details class="expandable" data-key="similar" ${open.similar ?? similar.length ? 'open' : ''}>
           <summary>🔍 Obras similares</summary>
@@ -2207,6 +2211,7 @@ document.addEventListener('input', e => {
     if (onImportInput(t)) return;
     if (t.id === 'collectionQuery' || t.id === 'collectionSmart') updateSmartPreview();
     if (t.id === 'queryTry') { updateQueryTry(); return; }
+    if (t.id === 'galleryInput') { onGalleryUploaded(t); return; }
     if (t.dataset.notify && t.type !== 'checkbox' && t.tagName !== 'SELECT') return; // la hora se guarda al terminar de elegirla
     if (onPersonalizeInput(t, 'input')) return;
     if (t.id === 'settingTmdbKey') { appData.settings.tmdbKey = t.value.trim(); saveData(); return; }

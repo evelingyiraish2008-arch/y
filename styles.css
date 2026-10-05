@@ -1624,3 +1624,39 @@ code { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size:
 .pick-item[draggable="true"] { cursor: grab; }
 .pick-item.dragging { opacity: .5; }
 #collectionSmartBox[hidden] { display: none; }
+
+/* ===== CONTENIDO DE CADA OBRA ===== */
+.pill.award { background: linear-gradient(135deg, #fbbf24, #b45309); color: #fff; }
+.content-tabs { margin-bottom: 12px; }
+.content-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.content-form.inline { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.content-form.inline .text-input { flex: 1 1 180px; }
+.content-form.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.content-form .text-input { height: 38px; padding: 0 10px; border-radius: 10px; font-size: 13px; }
+.content-form textarea.text-input { height: auto; padding: 8px 10px; resize: vertical; }
+.content-form .btn { justify-self: start; align-self: flex-start; }
+.content-list { display: flex; flex-direction: column; gap: 8px; }
+.quote-item { margin: 0; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--bg-elevated); border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.quote-item.is-fav { border-left-color: var(--gold); }
+.quote-item p { font-size: 14px; font-style: italic; line-height: 1.5; white-space: pre-wrap; }
+.quote-item footer { margin-top: 6px; font-size: 11.5px; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.link-btn.danger { color: var(--red); }
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.gallery-item { position: relative; margin: 0; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--bg-elevated); }
+.gallery-open { width: 100%; height: 100%; }
+.gallery-open img { width: 100%; height: 100%; object-fit: cover; }
+.gallery-del { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.6); color: #fff; opacity: 0; transition: opacity var(--t-fast); }
+.gallery-item:hover .gallery-del, .gallery-del:focus-visible { opacity: 1; }
+@media (hover: none) { .gallery-del { opacity: 1; } }
+.gallery-big img { width: 100%; max-height: 70vh; object-fit: contain; border-radius: var(--radius-md); background: var(--bg-elevated); }
+.thumb.round { border-radius: 50%; width: 40px; height: 40px; display: grid; place-items: center; font-size: 18px; }
+.character-item .info small, .song-item .info small, .award-item .info small { display: block; }
+.award-medal { font-size: 22px; }
+.trivia-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.trivia-list li { padding: 8px 10px; background: var(--bg-elevated); border-radius: var(--radius-sm); }
+.quote-of-day { position: relative; margin: 0 0 28px; padding: 18px 22px 18px 64px; border-radius: var(--radius-lg); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--bg-surface)), var(--bg-surface)); border: 1px solid var(--border-subtle); }
+.quote-of-day[hidden] { display: none; }
+.qod-mark { position: absolute; left: 18px; top: 8px; font-size: 48px; color: var(--accent-text); opacity: .7; font-family: Georgia, serif; }
+.quote-of-day blockquote { margin: 0; }
+.quote-of-day p { font-size: 15.5px; font-style: italic; line-height: 1.5; }
+.quote-of-day footer { margin-top: 6px; font-size: 12px; color: var(--text-muted); }

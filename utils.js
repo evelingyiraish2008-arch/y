@@ -23,7 +23,7 @@ const WEEK = [
     { day: 1, short: 'Lun' }, { day: 2, short: 'Mar' }, { day: 3, short: 'Mié' }, { day: 4, short: 'Jue' },
     { day: 5, short: 'Vie' }, { day: 6, short: 'Sáb' }, { day: 0, short: 'Dom' }
 ];
-const IMAGE_SIZES = { poster: [480, 720, 0.8], avatar: [360, 360, 0.82], banner: [1200, 480, 0.75], couple: [800, 500, 0.78] };
+const IMAGE_SIZES = { poster: [480, 720, 0.8], gallery: [1200, 1200, 0.8], avatar: [360, 360, 0.82], banner: [1200, 480, 0.75], couple: [800, 500, 0.78] };
 
 // ============================================================
 // 2. UTILIDADES
