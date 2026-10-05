@@ -182,6 +182,8 @@ function openCoupleDetail(id) {
         const a = getPersonById(c.personA), b = getPersonById(c.personB);
         const related = relatedCouples(c, appData.couples);
         return `
+        <div class="couple-banner ${c.banner ? 'has-banner' : ''}">${bannerBgHtml(c.banner, c.image)}
+            <button class="icon-btn sm detail-banner-btn" data-act="banner-quick" data-kind="couples" data-id="${c.id}" title="${c.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${c.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button></div>
         <div class="couple-detail-hero">${img(c.image, 'couple', c.name)}</div>
         <div class="couple-detail-people">
             ${[a, b].map(p => (p ? `<button class="couple-person" data-person="${p.id}"><span class="avatar">${img(p.image, 'person', p.name)}</span><b>${esc(p.name)}</b></button>` : '')).join('<span class="couple-heart">💕</span>')}

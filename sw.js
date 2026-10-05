@@ -32,6 +32,8 @@ const APP_SHELL = [
     './query.js',
     './manage.js',
     './content.js',
+    './mediakit.js',
+    './media.js',
     './extras.js',
     './i18n.js',
     './play.js',

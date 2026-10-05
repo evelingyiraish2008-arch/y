@@ -42,9 +42,13 @@ function collectionViewHtml(c) {
         <button class="btn btn-secondary btn-sm" data-act="present-coll" data-id="${c.id}">▶️ Presentar</button>
         <button class="btn btn-secondary btn-sm" data-act="coll-share" data-id="${c.id}">📤 Compartir</button>
     </div>`;
-    if (!works.length) return head + emptyState(isSmart(c) ? '✨' : '📭', isSmart(c) ? 'Ninguna obra cumple la búsqueda' : 'Colección vacía', isSmart(c) ? 'Cuando alguna obra la cumpla, aparecerá aquí sola.' : 'Abre cualquier obra y pulsa “📂 Colecciones” para añadirla aquí.');
+    const first = works.find(w => w.image);
+    const hero = `<div class="coll-hero ${c.banner ? 'has-banner' : ''}">${bannerBgHtml(c.banner, first && first.image)}
+        <div class="coll-hero-text"><h3>${isSmart(c) ? '✨ ' : ''}${esc(c.name)}</h3><p>${works.length} ${works.length === 1 ? 'obra' : 'obras'}${c.description ? ' · ' + esc(c.description) : ''}</p></div>
+        <button class="icon-btn sm detail-banner-btn" data-act="banner-quick" data-kind="collections" data-id="${c.id}" title="${c.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${c.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button></div>`;
+    if (!works.length) return hero + head + emptyState(isSmart(c) ? '✨' : '📭', isSmart(c) ? 'Ninguna obra cumple la búsqueda' : 'Colección vacía', isSmart(c) ? 'Cuando alguna obra la cumpla, aparecerá aquí sola.' : 'Abre cualquier obra y pulsa “📂 Colecciones” para añadirla aquí.');
     const manual = sort === 'manual' && !isSmart(c);
-    return head + `<div class="pick-list">${works.map((w, i) => `
+    return hero + head + `<div class="pick-list">${works.map((w, i) => `
         <div class="pick-item" ${manual ? `draggable="true" data-coll-item="${w.id}"` : ''}>
           ${manual ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : ''}
           <div class="thumb">${img(w.image, w.type, w.title)}</div>

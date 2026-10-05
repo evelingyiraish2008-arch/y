@@ -24,7 +24,7 @@
 'use strict';
 
 const SYNC_KINDS = ['works', 'persons', 'couples', 'collections', 'notes', 'settings'];
-const SYNC_IMAGE_FIELDS = { works: ['image', 'gallery'], persons: ['image', 'banner'], couples: ['image'], settings: ['avatar', 'bgImage'] };
+const SYNC_IMAGE_FIELDS = { works: ['image', 'banner', 'gallery'], persons: ['image', 'banner'], couples: ['image', 'banner'], collections: ['banner'], settings: ['avatar', 'bgImage', 'profileBanner'] };
 const SYNC_IMAGE_PREFIX = 'idb:';
 const PUSH_CHUNK = 200;
 const PULL_LIMIT = 500;

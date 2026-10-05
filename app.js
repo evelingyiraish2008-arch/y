@@ -534,6 +534,7 @@ function renderHero(inProgress) {
     const w = inProgress.slice().sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || lastTouched(b) - lastTouched(a))[0];
     if (!w) {
         bg.style.backgroundImage = 'none';
+        bg.classList.remove('is-banner');
         content.innerHTML = `
             <div class="hero-info">
                 <span class="hero-badge">✨ Bienvenida</span>
@@ -543,7 +544,9 @@ function renderHero(inProgress) {
             </div>`;
         return;
     }
-    bg.style.backgroundImage = cssUrl(imageSrc(w.image, w.type));
+    const banner = resolveImageSrc(w.banner || '');
+    bg.style.backgroundImage = cssUrl(banner || imageSrc(w.image, w.type));
+    bg.classList.toggle('is-banner', !!banner);
     const p = getProgress(w), total = getTotal(w);
     const step = TYPE_META[w.type].step;
     content.innerHTML = `
@@ -975,6 +978,7 @@ function fillWorkForm(src) {
     });
     updateRangeOutputs(workForm);
     updateWorkPreview();
+    refreshImgFields(workForm);
     if ($('workImagePreview').src === '' || !$('f_image').value) $('workImagePreview').src = PH[formType];
     renderSeasonsEditor(src.seasonsList);
     updateTitleHint();
@@ -1231,8 +1235,9 @@ function renderDetail(fresh = false) {
     const similar = similarWorks(w, appData.works, 6).map(x => x.work);
 
     $('detailPanel').innerHTML = `
-      <div class="detail-header">
-        <div class="bg" style="background-image:${esc(cssUrl(imageSrc(w.image, w.type)))}"></div>
+      <div class="detail-header ${w.banner ? 'has-banner' : ''}">
+        ${bannerBgHtml(w.banner, w.image)}
+        ${isLocked(w) ? '' : `<button class="icon-btn detail-banner-btn" data-act="banner-quick" data-kind="works" data-id="${w.id}" title="${w.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${w.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button>`}
         <button class="icon-btn detail-close" data-detail-close aria-label="Cerrar">✕</button>
       </div>
       <div class="detail-top">
@@ -1322,7 +1327,7 @@ function renderCollections() {
         const mosaic = works.slice(0, 4);
         return `
         <article class="collection-card" data-coll="${c.id}" tabindex="0">
-          <div class="collection-mosaic">${mosaic.length ? mosaic.map(w => img(w.image, w.type, w.title)).join('') + '<span></span>'.repeat(4 - mosaic.length) : '<div class="ph">🗂️</div>'}</div>
+          <div class="collection-mosaic ${c.banner ? 'has-banner' : ''}">${c.banner ? img(c.banner, 'banner', c.name) : mosaic.length ? mosaic.map(w => img(w.image, w.type, w.title)).join('') + '<span></span>'.repeat(4 - mosaic.length) : '<div class="ph">🗂️</div>'}</div>
           <div class="collection-info">
             <h4><span>${isSmart(c) ? '✨ ' : ''}${esc(c.name)}</span><span class="chip chip-muted">${works.length}</span></h4>
             <p>${esc(c.description || (isSmart(c) ? describeQuery(c.query) : ''))}</p>
@@ -1339,6 +1344,8 @@ function openCollectionModal(c = null, preset = {}) {
     $('editCollectionId').value = c ? c.id : '';
     $('collectionName').value = c ? c.name : '';
     $('collectionDesc').value = c ? (c.description || '') : '';
+    $('collectionBanner').value = c ? (c.banner || '') : '';
+    refreshImgField('collectionBanner');
     $('collectionSmart').checked = c ? isSmart(c) : !!preset.smart;
     $('collectionQuery').value = c ? (c.query || '') : (preset.query || '');
     updateSmartPreview();
@@ -1351,12 +1358,13 @@ function saveCollection() {
     const name = $('collectionName').value.trim();
     if (!name) { showToast('⚠️ El nombre es obligatorio', 'error'); return; }
     const description = $('collectionDesc').value.trim();
+    const banner = $('collectionBanner').value.trim();
     const smart = $('collectionSmart').checked, query = $('collectionQuery').value.trim();
     if (smart && !query) { showToast('⚠️ Escribe la búsqueda de la colección inteligente', 'error'); $('collectionQuery').focus(); return; }
     const extra = smart ? { smart: true, query } : { smart: false, query: '' };
     const ok = mutate(() => {
-        if (id) Object.assign(getCollectionById(id), { name, description, ...extra });
-        else appData.collections.push({ id: generateId(), name, description, ...extra, items: pendingCollectWorkId && !smart ? [pendingCollectWorkId] : [], createdAt: Date.now() });
+        if (id) Object.assign(getCollectionById(id), { name, description, banner, ...extra });
+        else appData.collections.push({ id: generateId(), name, description, banner, ...extra, items: pendingCollectWorkId && !smart ? [pendingCollectWorkId] : [], createdAt: Date.now() });
     }, id ? '✅ Colección actualizada' : (pendingCollectWorkId ? '✅ Colección creada con la obra' : '✅ Colección creada'));
     if (ok) { pendingCollectWorkId = null; closeModal('collectionModal', { force: true }); }
 }
@@ -1479,7 +1487,8 @@ function renderPersonDetail() {
     const focused = document.activeElement && document.activeElement.id;
     const caret = focused === 'pdSearch' ? document.activeElement.selectionStart : null;
     $('personDetailCard').innerHTML = `
-        <div class="person-detail-banner" style="${resolveImageSrc(p.banner) ? 'background-image:' + esc(cssUrl(resolveImageSrc(p.banner))) : ''}"></div>
+        <div class="person-detail-banner ${p.banner ? 'has-banner' : ''}">${bannerBgHtml(p.banner, p.image)}
+          <button class="icon-btn sm detail-banner-btn" data-act="banner-quick" data-kind="persons" data-id="${p.id}" title="${p.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${p.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button></div>
         <button class="icon-btn sm person-detail-close" data-close aria-label="Cerrar">✕</button>
         <img class="person-detail-avatar" src="${esc(imageSrc(p.image, 'person'))}" alt="${esc(p.name)}" data-ph="person">
         <div class="person-detail-content">
@@ -1515,7 +1524,6 @@ function renderPersonDetail() {
     if (focused === 'pdSearch' && $('pdSearch')) { $('pdSearch').focus(); $('pdSearch').setSelectionRange(caret, caret); }
 }
 const updatePersonPreview = bindPreview('personImage', 'personImagePreview', 'person');
-const updateBannerPreview = bindPreview('personBanner', 'personBannerPreview', 'banner');
 function openPersonModal(p = null) {
     $('editPersonId').value = p ? p.id : '';
     $('personName').value = p ? p.name : '';
@@ -1531,7 +1539,7 @@ function openPersonModal(p = null) {
     $('personBl').checked = p ? !!p.bl : false;
     $('personModalTitle').textContent = p ? '✏️ Editar persona' : '＋ Agregar persona';
     updateRangeOutputs($('personModal'));
-    updatePersonPreview(); updateBannerPreview();
+    updatePersonPreview(); refreshImgField('personBanner');
     openModal('personModal');
 }
 function savePerson() {
@@ -1602,6 +1610,8 @@ function openCoupleModal(c = null) {
     $('coupleWorks').value = c ? (c.works || '') : '';
     $('coupleRating').value = c ? (c.rating || 0) : 0;
     $('coupleImage').value = c ? (c.image || '') : '';
+    $('coupleBanner').value = c ? (c.banner || '') : '';
+    refreshImgField('coupleBanner');
     $('coupleFavorite').checked = c ? !!c.favorite : false;
     $('coupleModalTitle').textContent = c ? '✏️ Editar pareja' : '＋ Añadir pareja BL';
     fillCoupleLinks(c);
@@ -1617,7 +1627,7 @@ function saveCouple() {
     // Si no escribes nombre, se usa "A & B"
     const name = $('coupleName').value.trim() || (a && b ? `${a.name} & ${b.name}` : '');
     if (!name) { showToast('⚠️ Escribe un nombre o elige a los dos actores', 'error'); $('coupleName').focus(); return; }
-    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), favorite: $('coupleFavorite').checked, ...links };
+    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), banner: $('coupleBanner').value.trim(), favorite: $('coupleFavorite').checked, ...links };
     const ok = mutate(() => {
         if (id) Object.assign(getCoupleById(id), data);
         else appData.couples.push({ id: generateId(), ...data, createdAt: Date.now() });
@@ -1874,6 +1884,7 @@ function applySettings() {
     // Color de la barra del sistema (móvil y app instalada)
     document.querySelector('meta[name=theme-color]').content = dark ? '#0b0b13' : '#fbfbfe';
     applyPersonalization();
+    applyProfileBanner();
     root.classList.toggle('read-only', !!s.readOnly);
     if (detectLang(s.lang) !== currentLang || currentLang !== 'es') applyLanguage(s.lang);
 }
@@ -1895,6 +1906,7 @@ function renderSettings() {
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
     $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
     renderPersonalizePanel();
+    renderBannerPanel();
     $('fontSizeSlider').value = s.fontSize;
     $('fontSizeValue').textContent = s.fontSize + 'px';
     $('btnContain').classList.toggle('is-on', s.imageFit !== 'cover');
