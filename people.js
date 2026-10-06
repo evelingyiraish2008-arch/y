@@ -15,7 +15,10 @@ let chipActive = { field: null, index: -1, items: [] };
 let personsCreatedInForm = new Set();
 const linkSetting = key => {
     const s = appData.settings || {};
-    return { suggest: s.linkSuggest !== false, autoCreate: !!s.linkAutoCreate, photoAuto: !!s.photoAuto, photoAsk: s.photoAsk !== false, photoSource: s.photoSource || 'auto' }[key];
+    return {
+        suggest: s.linkSuggest !== false, autoCreate: !!s.linkAutoCreate, photoAuto: !!s.photoAuto, photoAsk: s.photoAsk !== false, photoSource: s.photoSource || 'auto',
+        createOnSave: s.linkCreateOnSave !== false, photoOnSave: s.photoOnSave !== false
+    }[key];
 };
 
 // ============================================================
@@ -59,9 +62,11 @@ function renderChips(field) {
     if (!box) return;
     box.querySelector('.pchips').innerHTML = (chipState[field] || []).map((c, i) => {
         const p = c.id && getPersonById(c.id);
-        return `<span class="pchip ${p ? '' : 'is-text'}" title="${p ? 'Ver ficha de ' + esc(p.name) : 'Solo texto (sin ficha)'}">
+        const hint = metaPhotoHints.get(nameKey(c.name));
+        const willCreate = !p && !c.keep && linkSetting('createOnSave');
+        return `<span class="pchip ${p ? '' : 'is-text'} ${willCreate ? 'is-new' : ''}" title="${p ? 'Ver ficha de ' + esc(p.name) : willCreate ? 'Nueva: su ficha se creará al guardar la obra' : 'Solo el nombre (sin ficha)'}">
             ${p ? `<button type="button" class="pchip-open" data-act="chip-open" data-id="${p.id}">${personAvatar(p, 22)}<span>${esc(c.name)}</span></button>`
-                : `<span class="pchip-open"><span class="pchip-initials">${esc(initials(c.name))}</span><span>${esc(c.name)}</span></span><button type="button" class="pchip-link" data-act="chip-create" data-id="${field}" data-item="${i}" title="Crear su ficha">＋</button>`}
+                : `<span class="pchip-open">${hint ? `<img class="pavatar" src="${esc(hint)}" alt="" width="22" height="22" loading="lazy" onerror="this.remove()">` : `<span class="pchip-initials">${esc(initials(c.name))}</span>`}<span>${esc(c.name)}</span>${willCreate ? '<small class="pchip-badge">nueva</small>' : ''}</span><button type="button" class="pchip-link" data-act="chip-create" data-id="${field}" data-item="${i}" title="Crear su ficha ahora">＋</button>`}
             <button type="button" class="pchip-x" data-act="chip-remove" data-id="${field}" data-item="${i}" aria-label="Quitar ${esc(c.name)}">×</button></span>`;
     }).join('');
 }
@@ -177,9 +182,14 @@ function addChipNames(field, names, { create = true } = {}) {
     if (create && linkSetting('autoCreate')) { createPersonsQuick(field, fresh); return; }
     fresh.forEach(n => (chipState[field] = chipState[field] || []).push({ name: n, id: null }));
     writeChips(field);
-    setChipNote(field, `${fresh.length} ${fresh.length === 1 ? 'persona nueva' : 'personas nuevas'} (${esc(fresh.join(', '))}). ¿Crear sus fichas?
-        <button type="button" class="btn btn-primary btn-sm" data-act="chip-create-all" data-id="${field}">Crear ${fresh.length === 1 ? 'su ficha' : 'todas'}</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-act="chip-note-close" data-id="${field}">Dejar solo el nombre</button>`);
+    const who = `${fresh.length} ${fresh.length === 1 ? 'persona nueva' : 'personas nuevas'} (${esc(fresh.join(', '))})`;
+    setChipNote(field, linkSetting('createOnSave')
+        ? `✨ ${who}: sus fichas se crearán al guardar la obra${linkSetting('photoOnSave') ? ', con foto si la encuentro' : ''}.
+            <button type="button" class="btn btn-secondary btn-sm" data-act="chip-create-all" data-id="${field}">Crear ya</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-act="chip-keep-text" data-id="${field}">Solo el nombre</button>`
+        : `${who}. ¿Crear sus fichas?
+            <button type="button" class="btn btn-primary btn-sm" data-act="chip-create-all" data-id="${field}">Crear ${fresh.length === 1 ? 'su ficha' : 'todas'}</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-act="chip-keep-text" data-id="${field}">Dejar solo el nombre</button>`);
 }
 /** Crea fichas para nombres sueltos sin preguntar más (con el rol del campo). */
 function createPersonsQuick(field, names) {
@@ -199,7 +209,7 @@ function createPersonsQuick(field, names) {
     });
     writeChips(field);
     setChipNote(field, '');
-    if (linkSetting('photoAuto') && !linkSetting('photoAsk')) created.forEach(p => autoPhoto(p));
+    if (linkSetting('photoAuto') && !linkSetting('photoAsk')) queuePhotos(created);
 }
 
 // ============================================================
@@ -285,20 +295,82 @@ async function savePersonPhoto(id, src, file = null) {
         if (/^idb:/.test(ref)) showToast(`📸 Foto de ${p.name} guardada`, 'info', 4500, { label: '✂️ Recortar', run: () => openCropper(resolveImageSrc(ref), 'avatar', async blob => { const r = await store.saveImage(blob); mutate(() => { p.image = r; }, '✂️ Foto recortada'); Object.keys(CHIP_FIELDS).forEach(renderChips); }) });
     } catch (e) { showToast('⚠️ No se pudo guardar la foto', 'error'); }
 }
-/** Foto automática: el primer resultado de la fuente preferida (sin preguntar). */
-async function autoPhoto(p) {
+/**
+ * Busca una foto de la persona sin preguntar: primero la que trajo la fuente de datos de la obra
+ * (TVmaze, AniList, TMDB, Open Library…) y si no, en las fuentes de imágenes, quedándose solo con
+ * resultados cuyo nombre coincide (mejor sin foto que con la de otra persona).
+ */
+async function findPersonPhoto(p) {
+    const hint = metaPhotoHints.get(nameKey(p.name));
+    if (hint) return hint;
     const order = activeSources(appData.settings, 'photo');
     const pref = linkSetting('photoSource');
     const srcs = pref !== 'auto' && order.includes(pref) ? [pref, ...order.filter(k => k !== pref)] : order;
     for (const k of srcs) {
         try {
             const list = await SOURCE_FETCH[k](p.name, 'photo', 0);
-            const hit = list.find(r => r.o !== 'horizontal') || list[0];
-            if (hit) { await savePersonPhoto(p.id, hit.src); return true; }
+            const hit = list.find(r => r.o !== 'horizontal' && personNames(p).some(n => titleMatchesName(r.title, n))) || list.find(r => personNames(p).some(n => titleMatchesName(r.title, n)));
+            if (hit) return hit.src;
         } catch (e) { /* se prueba la siguiente fuente */ }
     }
+    return '';
+}
+/** Guarda la foto (descargada y recortada en cuadrado si la web lo permite) sin avisos ni deshacer. */
+async function storePersonPhotoQuiet(p, src) {
+    let ref = src;
+    if (mediaSetting('download') && /^https?:/i.test(src)) {
+        try { ref = await store.saveImage((await downloadImage(src, 'avatar')).blob); } catch (e) {
+            if (/default=false/.test(src)) return false; // Open Library sin foto del autor
+        }
+    }
+    const cur = getPersonById(p.id);
+    if (!cur || cur.image) return false;
+    mutate(() => { cur.image = ref; cur.updatedAt = Date.now(); }, '', { undo: false });
+    return true;
+}
+/** Foto automática de una persona (con aviso si no se encuentra). */
+async function autoPhoto(p) {
+    const src = await findPersonPhoto(p);
+    if (src && await storePersonPhotoQuiet(p, src)) { Object.keys(CHIP_FIELDS).forEach(renderChips); showToast(`📸 Foto de ${p.name} guardada`); return true; }
     showToast(`🫥 No encontré foto de ${p.name}. Puedes subir una o se verán sus iniciales.`);
     return false;
+}
+// ---------- Fotos en segundo plano (una detrás de otra) ----------
+const metaPhotoHints = new Map(); // nombre → foto que trajo la fuente de datos de una obra
+let photoQueue = [], photoRun = null;
+/** Recuerda el reparto que trajo "Rellenar datos": sus fotos y sus personajes. */
+let formMetaPeople = [];
+function rememberMetaPeople(list) {
+    (list || []).forEach(m => {
+        if (!m || !m.name) return;
+        if (m.image) metaPhotoHints.set(nameKey(m.name), m.image);
+        if (!formMetaPeople.some(x => nameKey(x.name) === nameKey(m.name))) formMetaPeople.push(m);
+    });
+    Object.keys(CHIP_FIELDS).forEach(renderChips);
+}
+function resetFormMeta() { formMetaPeople = []; }
+/** Pone en cola la búsqueda de fotos de estas personas (las que aún no tienen). */
+function queuePhotos(persons, { notify = true } = {}) {
+    const ids = persons.map(p => p.id).filter(id => { const p = getPersonById(id); return p && !p.image && !photoQueue.includes(id); });
+    if (!ids.length) return photoRun || Promise.resolve();
+    photoQueue.push(...ids);
+    if (!photoRun) {
+        const stats = { found: 0, total: 0 };
+        photoRun = (async () => {
+            while (photoQueue.length) {
+                const p = getPersonById(photoQueue.shift());
+                if (!p || p.image) continue;
+                stats.total++;
+                const src = await findPersonPhoto(p);
+                if (src && await storePersonPhotoQuiet(p, src)) stats.found++;
+                Object.keys(CHIP_FIELDS).forEach(renderChips);
+            }
+            photoRun = null;
+            if (notify && stats.total) showToast(stats.found ? `📸 Fotos encontradas: ${stats.found} de ${stats.total}` : `🫥 No encontré fotos para ${stats.total === 1 ? 'esa persona' : 'esas personas'}. Puedes ponerlas desde su ficha.`);
+            renderLinkPanel();
+        })();
+    }
+    return photoRun;
 }
 
 // ============================================================
@@ -313,7 +385,40 @@ function formPersonIds(data) {
         (chipState[f] || []).forEach(c => { if (c.id && getPersonById(c.id)) ids.add(c.id); });
     });
     linkPersonIds(data, appData.persons).forEach(id => ids.add(id));
+    // Intérpretes de personajes que trajo la fuente (p. ej. seiyuus de un anime)
+    formMetaPeople.filter(m => m.character).forEach(m => { const p = resolvePersonName(m.name); if (p) ids.add(p.id); });
     return [...ids];
+}
+/**
+ * Al guardar la obra (dentro del mismo cambio, para deshacerlo todo junto):
+ * crea las fichas de los nombres nuevos del formulario y de los intérpretes que trajo la fuente,
+ * y devuelve las personas creadas para buscarles foto después.
+ */
+function createFormPeople({ dry = false } = {}) {
+    const created = [];
+    if (!linkSetting('createOnSave')) return created;
+    const make = (name, role) => {
+        const found = resolvePersonName(name) || created.find(x => personHasName(x, name));
+        if (found) return found;
+        if (dry) { const p = { id: null, name }; created.push(p); return p; }
+        const p = { id: generateId(), name: name.trim(), type: role, autoCreated: true, createdAt: Date.now() };
+        appData.persons.push(p);
+        created.push(p);
+        return p;
+    };
+    Object.entries(CHIP_FIELDS).forEach(([f, role]) => {
+        const wrap = chipBox(f) && chipBox(f).closest('[data-types]');
+        if (wrap && wrap.hidden) return;
+        (chipState[f] || []).forEach(c => { if (!c.keep && (!c.id || !getPersonById(c.id))) { const p = make(c.name, role); if (!dry) c.id = p.id; } });
+    });
+    formMetaPeople.filter(m => m.character).forEach(m => make(m.name, m.role || 'actor'));
+    return created;
+}
+/** Personajes que trajo la fuente y la obra aún no tiene (unidos a su intérprete). */
+function addMetaCharacters(w) {
+    const fresh = newCharacters(w.characters, formMetaPeople, appData.persons, generateId);
+    if (fresh.length) w.characters = [...(w.characters || []), ...fresh];
+    return fresh.length;
 }
 /** Al cerrar el formulario sin guardar: las personas creadas en él que no quedaron en ninguna obra. */
 function checkFormOrphans() {
@@ -368,7 +473,7 @@ function charactersListHtml(q = '') {
     const list = allCharacters(appData.works, appData.persons).filter(c => !q || norm(c.name).includes(q) || (c.person && norm(c.person.name).includes(q)) || norm(c.work.title).includes(q));
     if (!list.length) return `<div class="empty-state"><div class="big">🎭</div><h4>Aún no hay personajes</h4><p>Abre una obra → “✨ Más contenido” → “🎭 Personajes” y añade los que te gustan (puedes decir quién los interpreta).</p></div>`;
     return `<div class="characters-grid">${list.map(c => `<article class="character-card">
-        <div class="character-avatar">${c.person ? personAvatar(c.person, 56) : '<span class="pchip-initials" style="width:56px;height:56px">🎭</span>'}</div>
+        <div class="character-avatar">${c.image ? `<img class="pavatar" src="${esc(resolveImageSrc(c.image))}" alt="" width="56" height="56" loading="lazy" data-ph="person">` : c.person ? personAvatar(c.person, 56) : '<span class="pchip-initials" style="width:56px;height:56px">🎭</span>'}</div>
         <div class="info"><b>${c.fav ? '♥ ' : ''}${esc(c.name)}</b>
             <small>${esc(CHARACTER_ROLES[c.role] || '')}${c.person ? ` · <button class="link-btn" data-person="${c.person.id}">${esc(c.person.name)}</button>` : ' · sin intérprete'}</small>
             <small><button class="link-btn" data-open="${c.work.id}">${TYPE_META[c.work.type].icon} ${esc(c.work.title)}</button></small></div></article>`).join('')}</div>`;
@@ -390,20 +495,28 @@ function renderLinkPanel() {
     if (!box) return;
     const s = appData.settings;
     const orphans = orphanPersons(appData).length;
+    const missing = missingPersons(appData.works, appData.persons).length;
+    const noPhoto = appData.persons.filter(p => !p.image).length;
     const toggle = (key, label, on) => `<div class="setting-row"><span>${label}</span><button class="toggle-switch" data-act="link-toggle" data-id="${key}" role="switch" aria-checked="${on}" aria-label="${esc(label)}"></button></div>`;
     const sources = activeSources(s, 'photo');
     box.innerHTML = `
         ${toggle('linkSuggest', '🔎 Sugerir personas mientras escribes', linkSetting('suggest'))}
-        ${toggle('linkAutoCreate', '⚡ Crear la ficha automáticamente de los nombres nuevos', linkSetting('autoCreate'))}
-        ${toggle('photoAuto', '📸 Buscar foto al crear una persona', linkSetting('photoAuto'))}
+        ${toggle('linkCreateOnSave', '👥 Al guardar una obra, crear en Personas las fichas de los nombres nuevos', linkSetting('createOnSave'))}
+        ${toggle('photoOnSave', '📸 Buscar sus fotos solas en segundo plano', linkSetting('photoOnSave'))}
+        ${toggle('linkAutoCreate', '⚡ Crear la ficha en cuanto escribo el nombre (sin esperar a guardar)', linkSetting('autoCreate'))}
+        ${toggle('photoAuto', '🔍 Abrir el buscador de fotos al crear una persona a mano', linkSetting('photoAuto'))}
         ${linkSetting('photoAuto') ? toggle('photoAsk', '🙋 Dejarme elegir la foto (si no, se usa la primera)', linkSetting('photoAsk')) : ''}
         <label class="field" style="margin-top:8px"><span>Fuente preferida para las fotos</span>
             <select class="text-input" id="settingPhotoSource"><option value="auto">Automática (por orden)</option>${sources.map(k => `<option value="${k}" ${s.photoSource === k ? 'selected' : ''}>${IMAGE_SOURCES[k].icon} ${esc(IMAGE_SOURCES[k].label)}</option>`).join('')}</select></label>
-        <button class="btn btn-secondary btn-sm" data-act="orphans-clean" style="margin-top:12px">🧹 Limpiar personas huérfanas${orphans ? ` (${orphans})` : ''}</button>
+        <div class="seg-inline wrap" style="margin-top:12px">
+            <button class="btn btn-primary btn-sm" data-act="link-all">🔗 Crear fichas de los nombres de mis obras${missing ? ` (${missing})` : ''}</button>
+            <button class="btn btn-secondary btn-sm" data-act="photos-missing" ${noPhoto ? '' : 'disabled'}>📸 Buscar fotos que faltan${noPhoto ? ` (${noPhoto})` : ''}${photoRun ? ' ⏳' : ''}</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" data-act="orphans-clean" style="margin-top:8px">🧹 Limpiar personas huérfanas${orphans ? ` (${orphans})` : ''}</button>
         <p class="hint">Huérfanas: las que se crearon desde una obra y ya no aparecen en ninguna. Las que añades a mano nunca se tocan.</p>`;
 }
 FEATURE_ACTIONS['link-toggle'] = key => {
-    const defaultsOn = ['linkSuggest', 'photoAsk'];
+    const defaultsOn = ['linkSuggest', 'photoAsk', 'linkCreateOnSave', 'photoOnSave'];
     const s = appData.settings;
     s[key] = defaultsOn.includes(key) ? s[key] === false : !s[key];
     saveData();
@@ -429,6 +542,54 @@ FEATURE_ACTIONS['chip-pick'] = (field, el) => pickChipItem(field, chipActive.ite
 FEATURE_ACTIONS['chip-create'] = (field, el) => { const c = chipState[field][Number(el.dataset.item)]; if (c) openQuickPerson(field, c.name, Number(el.dataset.item)); };
 FEATURE_ACTIONS['chip-create-all'] = field => createPersonsQuick(field, (chipState[field] || []).filter(c => !c.id).map(c => c.name));
 FEATURE_ACTIONS['chip-note-close'] = field => setChipNote(field, '');
+FEATURE_ACTIONS['chip-keep-text'] = field => { (chipState[field] || []).forEach(c => { if (!c.id) c.keep = true; }); renderChips(field); setChipNote(field, ''); };
+
+// ---------- Vincular todas las obras que ya tienes ----------
+/** Crea las fichas que faltan de los nombres de tus obras, une cada obra a sus personas y busca fotos. */
+function linkAllWorks({ ask = true } = {}) {
+    const missing = missingPersons(appData.works, appData.persons);
+    if (!missing.length) {
+        const fixed = relinkWorks(true);
+        showToast(fixed ? `🔗 ${fixed} ${fixed === 1 ? 'obra vinculada' : 'obras vinculadas'} con sus personas` : '✨ Todas las personas de tus obras ya tienen ficha');
+        return [];
+    }
+    const preview = missing.slice(0, 12).map(m => `• ${m.name} (${(PERSON_ROLES[m.role] || '').split(' /')[0].toLowerCase()}, ${m.works} ${m.works === 1 ? 'obra' : 'obras'})`).join('\n');
+    if (ask && !confirm(`Se crearán ${missing.length} ${missing.length === 1 ? 'ficha' : 'fichas'} en Personas:\n\n${preview}${missing.length > 12 ? `\n…y ${missing.length - 12} más` : ''}\n\n${linkSetting('photoOnSave') ? 'Después buscaré sus fotos en segundo plano. ' : ''}¿Continuar? (Se puede deshacer)`)) return [];
+    const created = [];
+    mutate(() => {
+        missing.forEach(m => { const p = { id: generateId(), name: m.name, type: m.role, autoCreated: true, createdAt: Date.now() }; appData.persons.push(p); created.push(p); });
+        relinkWorks(false);
+    }, `👥 ${created.length} ${created.length === 1 ? 'persona añadida' : 'personas añadidas'} desde tus obras`, { label: 'Crear fichas desde las obras' });
+    if (linkSetting('photoOnSave')) queuePhotos(created);
+    return created;
+}
+/** Une cada obra a las personas que nombra (personIds). Devuelve cuántas obras cambiaron. */
+function relinkWorks(asChange) {
+    let n = 0;
+    const apply = () => appData.works.forEach(w => {
+        const ids = [...new Set([...(w.personIds || []).filter(getPersonById), ...linkPersonIds(w, appData.persons)])];
+        if (ids.join() !== (w.personIds || []).join()) { if (ids.length) w.personIds = ids; else delete w.personIds; n++; }
+    });
+    if (asChange) { mutate(apply, '', { undo: false }); } else apply();
+    return n;
+}
+FEATURE_ACTIONS['link-all'] = () => { linkAllWorks(); renderLinkPanel(); };
+FEATURE_ACTIONS['photos-missing'] = () => {
+    const list = appData.persons.filter(p => !p.image);
+    if (!list.length) { showToast('✨ Todas tus personas tienen foto'); return; }
+    showToast(`📸 Buscando fotos de ${list.length} ${list.length === 1 ? 'persona' : 'personas'} en segundo plano…`);
+    queuePhotos(list);
+    renderLinkPanel();
+};
+FEATURE_ACTIONS['link-banner-hide'] = () => { appData.settings.linkBannerHidden = true; saveData(); renderPersons(); };
+/** Aviso en Personas cuando hay nombres en tus obras sin ficha. */
+function linkBannerHtml() {
+    if (appData.settings.linkBannerHidden) return '';
+    const missing = missingPersons(appData.works, appData.persons);
+    if (!missing.length) return '';
+    return `<div class="link-banner">🔗 Hay <b>${missing.length}</b> ${missing.length === 1 ? 'nombre' : 'nombres'} en tus obras sin ficha (${esc(missing.slice(0, 3).map(m => m.name).join(', '))}${missing.length > 3 ? '…' : ''}).
+        <span class="seg-inline"><button class="btn btn-primary btn-sm" data-act="link-all">Crear sus fichas</button><button class="btn btn-ghost btn-sm" data-act="link-banner-hide" aria-label="No volver a mostrar">✕</button></span></div>`;
+}
 
 document.addEventListener('input', e => {
     const t = e.target;
@@ -447,6 +608,7 @@ document.addEventListener('input', e => {
     }
     if (t.id === 'settingPhotoSource') { appData.settings.photoSource = t.value; saveData(); }
     if (t.id === 'personName') updatePersonNameHint();
+    if (t.id === 'cCharPerson' && $('cCharNewPerson')) { $('cCharNewPerson').hidden = t.value !== '__new'; if (t.value === '__new') $('cCharNewPerson').focus(); }
 });
 document.addEventListener('paste', e => {
     const t = e.target;
