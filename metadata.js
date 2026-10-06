@@ -79,9 +79,9 @@ function parseTvmaze(json) {
 }
 /**
  * Personas que trae una fuente, con su foto y el personaje que interpretan:
- * [{ name, role: 'actor' | 'author' | 'director', image, character, characterRole }]
+ * [{ name, role: 'actor' | 'author' | 'director', image, character, characterRole, characterImage }]
  */
-const metaPerson = (name, role, image, extra = {}) => ({ name: String(name || '').trim(), role, image: httpsUrl(image), ...extra });
+const metaPerson = (name, role, image, extra = {}) => ({ name: String(name || '').trim(), role, image: httpsUrl(image), ...Object.fromEntries(Object.entries(extra).filter(([, v]) => v !== '')) });
 /** /shows/{id}?embed[]=episodes&embed[]=cast */
 function parseTvmazeDetails(json) {
     const emb = json._embedded || {};
@@ -92,7 +92,7 @@ function parseTvmazeDetails(json) {
         seasons: eps.length ? new Set(eps.map(e => e.season)).size : 0,
         actors: cast.slice(0, 4).map(c => c.person.name).join(', '),
         people: cast.slice(0, 4).map(c => metaPerson(c.person.name, 'actor', (c.person.image || {}).original || (c.person.image || {}).medium,
-            c.character && c.character.name ? { character: c.character.name, characterRole: 'protagonista' } : {}))
+            c.character && c.character.name ? { character: c.character.name, characterRole: 'protagonista', characterImage: httpsUrl((c.character.image || {}).original || (c.character.image || {}).medium) } : {}))
     };
 }
 /** /tv/{id}/credits o /movie/{id}/credits de TMDB */
@@ -113,7 +113,7 @@ function parseJikanCharacters(json) {
         const va = (c.voice_actors || []).find(v => v.language === 'Japanese');
         if (!va || !va.person) return null;
         const name = String(va.person.name || '').split(', ').reverse().join(' '); // MAL escribe "Apellido, Nombre"
-        return metaPerson(name, 'actor', (((va.person.images || {}).jpg) || {}).image_url, { character: String(c.character.name || '').split(', ').reverse().join(' '), characterRole: 'protagonista' });
+        return metaPerson(name, 'actor', (((va.person.images || {}).jpg) || {}).image_url, { character: String(c.character.name || '').split(', ').reverse().join(' '), characterRole: 'protagonista', characterImage: httpsUrl((((c.character.images || {}).jpg) || {}).image_url).replace(/.*questionmark.*/, '') });
     }).filter(Boolean);
 }
 function parseTmdb(json) {
@@ -148,7 +148,7 @@ const ANILIST_QUERY = `query ($q: String, $type: MediaType) {
       coverImage { large extraLarge }
       studios(isMain: true) { nodes { name } }
       staff(perPage: 4) { edges { role node { name { full } image { large } } } }
-      characters(perPage: 6, sort: [ROLE, RELEVANCE]) { edges { role node { name { full } } voiceActors(language: JAPANESE) { name { full } image { large } } } }
+      characters(perPage: 6, sort: [ROLE, RELEVANCE]) { edges { role node { name { full } image { large } } voiceActors(language: JAPANESE) { name { full } image { large } } } }
     }
   }
 }`;
@@ -160,7 +160,7 @@ function parseAniList(json, type) {
         const story = ((m.staff || {}).edges || []).find(e => /story|original/i.test(e.role)) || ((m.staff || {}).edges || [])[0];
         const people = type === 'anime'
             ? ((m.characters || {}).edges || []).filter(e => e.role === 'MAIN' && (e.voiceActors || [])[0]).slice(0, 4)
-                .map(e => metaPerson(e.voiceActors[0].name.full, 'actor', (e.voiceActors[0].image || {}).large, { character: e.node.name.full, characterRole: 'protagonista' }))
+                .map(e => metaPerson(e.voiceActors[0].name.full, 'actor', (e.voiceActors[0].image || {}).large, { character: e.node.name.full, characterRole: 'protagonista', characterImage: httpsUrl((e.node.image || {}).large).replace(/.*\/default\.jpg$/, '') }))
             : (story && story.node ? [metaPerson(story.node.name.full, 'author', (story.node.image || {}).large)] : []);
         return {
             source: 'anilist', sourceLabel: 'AniList', externalId: m.id, anilistId: m.id,

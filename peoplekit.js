@@ -172,7 +172,7 @@ function newCharacters(existing, metaPeople, persons, makeId) {
         if (!m.character || have.has(nameKey(m.character))) return;
         const p = persons.find(x => personHasName(x, m.name));
         have.add(nameKey(m.character));
-        out.push({ id: makeId(), name: m.character, role: m.characterRole || 'protagonista', ...(p ? { personId: p.id } : {}) });
+        out.push({ id: makeId(), name: m.character, role: m.characterRole || 'protagonista', ...(p ? { personId: p.id } : {}), ...(m.characterImage ? { image: m.characterImage } : {}) });
     });
     return out;
 }

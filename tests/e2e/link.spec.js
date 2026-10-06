@@ -9,7 +9,7 @@ const image = route => route.fulfill({ status: 200, contentType: 'image/png', bo
 async function mockSources(page, { wikiTitle = null } = {}) {
     await page.route('https://api.tvmaze.com/search/shows**', route => route.fulfill({ json: [{ show: { id: 42, name: 'Word of Honor', premiered: '2021-02-22', genres: ['Drama'], image: { medium: 'https://static.tvmaze.com/p.png' } } }] }));
     await page.route('https://api.tvmaze.com/shows/42**', route => route.fulfill({ json: { _embedded: { episodes: [{ season: 1 }, { season: 1 }], cast: [
-        { person: { name: 'Zhang Zhehan', image: { original: 'https://static.tvmaze.com/zhang.png' } }, character: { name: 'Zhou Zishu' } },
+        { person: { name: 'Zhang Zhehan', image: { original: 'https://static.tvmaze.com/zhang.png' } }, character: { name: 'Zhou Zishu', image: { medium: 'https://static.tvmaze.com/zhou.png' } } },
         { person: { name: 'Gong Jun', image: { original: 'https://static.tvmaze.com/gong.png' } }, character: { name: 'Wen Kexing' } }
     ] } } }));
     await page.route('https://static.tvmaze.com/**', image);
@@ -73,7 +73,7 @@ test('“Rellenar datos” trae el reparto con fotos y personajes, y al guardar 
     await expect.poll(() => page.evaluate(() => appData.persons.filter(p => ['Zhang Zhehan', 'Gong Jun'].includes(p.name) && /^idb:/.test(p.image || '')).length)).toBe(2);
     const w = await page.evaluate(() => appData.works.find(x => x.title === 'Word of Honor'));
     const ids = await page.evaluate(() => Object.fromEntries(appData.persons.map(p => [p.name, p.id])));
-    expect(w.characters.map(c => [c.name, c.personId])).toEqual([['Zhou Zishu', ids['Zhang Zhehan']], ['Wen Kexing', ids['Gong Jun']]]);
+    expect(w.characters.map(c => [c.name, c.personId, c.image || ''])).toEqual([['Zhou Zishu', ids['Zhang Zhehan'], 'https://static.tvmaze.com/zhou.png'], ['Wen Kexing', ids['Gong Jun'], '']]);
     // La ficha muestra "actor → personaje"
     await page.evaluate(id => openDetail(id), w.id);
     await expect(page.locator('#detailPanel .cast-line').first()).toContainText('Zhang Zhehan→Zhou Zishu');

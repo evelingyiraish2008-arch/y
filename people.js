@@ -473,7 +473,7 @@ function charactersListHtml(q = '') {
     const list = allCharacters(appData.works, appData.persons).filter(c => !q || norm(c.name).includes(q) || (c.person && norm(c.person.name).includes(q)) || norm(c.work.title).includes(q));
     if (!list.length) return `<div class="empty-state"><div class="big">🎭</div><h4>Aún no hay personajes</h4><p>Abre una obra → “✨ Más contenido” → “🎭 Personajes” y añade los que te gustan (puedes decir quién los interpreta).</p></div>`;
     return `<div class="characters-grid">${list.map(c => `<article class="character-card">
-        <div class="character-avatar">${c.person ? personAvatar(c.person, 56) : '<span class="pchip-initials" style="width:56px;height:56px">🎭</span>'}</div>
+        <div class="character-avatar">${c.image ? `<img class="pavatar" src="${esc(resolveImageSrc(c.image))}" alt="" width="56" height="56" loading="lazy" data-ph="person">` : c.person ? personAvatar(c.person, 56) : '<span class="pchip-initials" style="width:56px;height:56px">🎭</span>'}</div>
         <div class="info"><b>${c.fav ? '♥ ' : ''}${esc(c.name)}</b>
             <small>${esc(CHARACTER_ROLES[c.role] || '')}${c.person ? ` · <button class="link-btn" data-person="${c.person.id}">${esc(c.person.name)}</button>` : ' · sin intérprete'}</small>
             <small><button class="link-btn" data-open="${c.work.id}">${TYPE_META[c.work.type].icon} ${esc(c.work.title)}</button></small></div></article>`).join('')}</div>`;
