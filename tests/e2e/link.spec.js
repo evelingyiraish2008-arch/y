@@ -19,6 +19,9 @@ async function mockSources(page, { wikiTitle = null } = {}) {
         return route.fulfill({ json: { query: { pages: { 1: { index: 1, title, original: { source: 'https://img.test/wiki.png', width: 400, height: 500 }, thumbnail: { source: 'https://img.test/wiki.png' } } } } } });
     });
     await page.route('https://img.test/**', image);
+    // El resto de fuentes de fotos, sin resultados: la prueba no debe depender de internet
+    await page.route('https://graphql.anilist.co/**', route => route.fulfill({ json: { data: { Page: { staff: [], characters: [], media: [] } } } }));
+    await page.route(/commons\.wikimedia\.org|api\.jikan\.moe|api\.themoviedb\.org|googleapis\.com/, route => route.fulfill({ json: {} }));
 }
 
 test('al guardar una obra, los nombres nuevos se crean en Personas (con foto si se encuentra)', async ({ page }) => {
