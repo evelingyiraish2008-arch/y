@@ -39,6 +39,14 @@ const SOURCE_FETCH = {
         const json = await imgJson(`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q + ' filetype:bitmap')}&gsrnamespace=6&gsrlimit=20&gsroffset=${page * 20}&prop=imageinfo&iiprop=url|size|mime&iiurlwidth=500&format=json&origin=*`);
         return imgParseCommons(json);
     },
+    async commonsnew(q, use, page = 0) {
+        // Lo más recién subido a Commons primero (fotos actuales, no de archivo)
+        const json = await imgJson(`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q + ' filetype:bitmap')}&gsrnamespace=6&gsrsort=create_timestamp_desc&gsrlimit=20&gsroffset=${page * 20}&prop=imageinfo&iiprop=url|size|mime&iiurlwidth=500&format=json&origin=*`);
+        return imgParseCommons(json);
+    },
+    async openverse(q, use, page = 0) {
+        return imgParseOpenverse(await imgJson(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=20&page=${page + 1}&mature=false`));
+    },
     async jikan(q, use) {
         const path = use === 'photo' ? 'people' : 'anime';
         return imgParseJikan(await imgJson(`https://api.jikan.moe/v4/${path}?q=${encodeURIComponent(q)}&limit=8`));
@@ -51,7 +59,7 @@ const SOURCE_FETCH = {
         return imgParseGoogle(await imgJson(`https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(s.googleKey)}&cx=${encodeURIComponent(s.googleCx)}&searchType=image&num=10&start=${page * 10 + 1}&q=${encodeURIComponent(q)}`));
     }
 };
-const PAGED_SOURCES = ['commons', 'google'];
+const PAGED_SOURCES = ['commons', 'commonsnew', 'openverse', 'google'];
 
 // ---------- Panel ----------
 /**
@@ -270,9 +278,7 @@ async function storeRemoteImage(url, kind) {
     if (!mediaSetting('download') || !/^https?:/i.test(url)) return url;
     try {
         if (kind) { const { blob } = await downloadImage(url, kind); return await store.saveImage(blob); }
-        const res = await fetch(url, { mode: 'cors' });
-        if (!res.ok) throw new Error('HTTP');
-        const local = URL.createObjectURL(await res.blob());
+        const local = URL.createObjectURL(await fetchImageBlob(url));
         try { return await store.saveImage(await compressImage(local, 'gallery')); } finally { URL.revokeObjectURL(local); }
     } catch (e) { return url; }
 }

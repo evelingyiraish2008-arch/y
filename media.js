@@ -11,7 +11,15 @@
 // 2. PROCESAR IMÁGENES (subidas, enlaces y recortes)
 // ============================================================
 /** Carga una imagen; si es de otra web se pide con CORS para poder recortarla. */
-function loadImageCors(src, timeout = 15000) {
+async function loadImageCors(src, timeout = 15000) {
+    try { return await loadImageDirect(src, timeout); } catch (e) {
+        // La web no deja leer su imagen (CORS): se pide por el servicio gratuito que sí lo permite, para poder recortarla y moverla
+        const proxied = mediaSetting('proxy') ? corsProxyUrl(src) : '';
+        if (!proxied) throw e;
+        return loadImageDirect(proxied, timeout);
+    }
+}
+function loadImageDirect(src, timeout) {
     return new Promise((resolve, reject) => {
         const im = new Image();
         if (/^https?:/i.test(src)) im.crossOrigin = 'anonymous';
@@ -43,10 +51,17 @@ async function prepareImage(src, kind) {
     return { blob: await canvasToJpeg(canvas), plan };
 }
 /** Descarga una imagen de otra web (si la web lo permite) y la guarda ya preparada. */
+/** fetch con permiso; si la web no lo da, por el servicio gratuito de imágenes (si está activado). */
+async function fetchImageBlob(url) {
+    const attempt = async u => { const res = await fetch(u, { mode: 'cors' }); if (!res.ok) throw new Error('HTTP ' + res.status); return res.blob(); };
+    try { return await attempt(url); } catch (e) {
+        const proxied = mediaSetting('proxy') ? corsProxyUrl(url) : '';
+        if (!proxied) throw e;
+        return attempt(proxied);
+    }
+}
 async function downloadImage(url, kind) {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const blob = await res.blob();
+    const blob = await fetchImageBlob(url);
     if (blob.type && !blob.type.startsWith('image/')) throw new Error('not-image');
     const local = URL.createObjectURL(blob);
     try { return await prepareImage(local, kind); } finally { URL.revokeObjectURL(local); }
@@ -70,7 +85,7 @@ async function checkImageUrl(url) {
 }
 const mediaSetting = key => {
     const s = appData.settings || {};
-    return { download: s.bannerDownload !== false, resize: s.bannerResize !== false, sourceLink: s.imageSourceLink !== false }[key];
+    return { download: s.bannerDownload !== false, resize: s.bannerResize !== false, sourceLink: s.imageSourceLink !== false, proxy: s.imageProxy !== false }[key];
 };
 
 // ============================================================
@@ -424,6 +439,7 @@ function renderBannerPanel() {
         </div>
         <p class="hint" style="margin:6px 0 10px">${[['works', 'obras'], ['persons', 'personas'], ['couples', 'parejas'], ['collections', 'colecciones']].map(([k, l]) => `${by(k)} ${l}`).join(' · ')}${s.profileBanner ? ' · perfil' : ''}</p>
         ${toggle('bannerDownload', '⬇️ Descargar las imágenes de enlaces externos (así no se rompen si la web las borra)', mediaSetting('download'))}
+        ${toggle('imageProxy', '🔓 Si una web no deja recortar su imagen, pedirla por images.weserv.nl (servicio gratuito; ve el enlace de la imagen)', mediaSetting('proxy'))}
         ${toggle('bannerResize', '📐 Recortar y reducir automáticamente al subir', mediaSetting('resize'))}
         <div class="seg-inline wrap" style="margin-top:10px">
             <button class="btn btn-secondary btn-sm" data-act="banners-optimize" id="bannersOptimizeBtn" ${list.length ? '' : 'disabled'}>⚡ Optimizar todos los banners</button>

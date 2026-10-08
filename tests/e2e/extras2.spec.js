@@ -137,3 +137,26 @@ test('rellenar datos trae un reparto más amplio y la dirección (con Wikidata c
     await expect(page.locator('[data-field="directors"]')).toHaveValue('Jojo Tichakorn');
     expect(errors).toEqual([]);
 });
+
+test('buscador de imágenes: Openverse y Commons recientes aportan fotos más actuales sin salir de la app', async ({ page }) => {
+    const errors = await openApp(page);
+    const urls = [];
+    await page.route(/graphql\.anilist\.co|wikipedia\.org|api\.jikan\.moe/, route => route.fulfill({ json: {} }));
+    await page.route(/commons\.wikimedia\.org/, route => {
+        urls.push(route.request().url());
+        route.fulfill({ json: { query: { pages: { 1: { index: 1, title: 'File:Evento 2026.jpg', imageinfo: [{ url: 'https://up.test/evento.jpg', thumburl: 'https://up.test/evento-t.jpg', width: 1600, height: 900, mime: 'image/jpeg', descriptionurl: 'https://commons.test/evento' }] } } } } });
+    });
+    await page.route(/api\.openverse\.org/, route => route.fulfill({ json: { results: [{ url: 'https://ov.test/a.jpg', thumbnail: 'https://ov.test/a-t.jpg', width: 800, height: 1200, title: 'Retrato reciente', foreign_landing_url: 'https://ov.test/p' }] } }));
+    await page.route(/(up|ov)\.test/, route => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"/>' }));
+    await page.evaluate(() => openImageSearch({ use: 'photo', query: 'Perth Tanapon', onPick: () => {} }));
+    await expect(page.locator('#imgSearchSuggest')).toContainText(`Perth Tanapon ${new Date().getFullYear()}`);
+    await expect(page.locator('#imgSearchResults')).toContainText('Retrato reciente');
+    await expect(page.locator('#imgSearchResults')).toContainText('Evento 2026');
+    expect(urls.some(u => u.includes('gsrsort=create_timestamp_desc'))).toBe(true); // una de las dos pide lo último subido
+    await page.click('[data-act="img-search-more-sources"]');
+    await expect(page.locator('#imgSearchTabs')).toContainText('Openverse');
+    await expect(page.locator('#imgSearchTabs')).toContainText('Commons recientes');
+    await page.locator('[data-act="img-search-tab"][data-id="openverse"]').click();
+    await expect(page.locator('#imgSearchResults')).toContainText('Retrato reciente');
+    expect(errors).toEqual([]);
+});

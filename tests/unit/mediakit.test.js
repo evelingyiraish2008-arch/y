@@ -83,3 +83,17 @@ test('buscar en internet: enlaces de cada buscador y búsquedas sugeridas', () =
     assert.equal(webSuggestions({ name: 'PoohPavel', kind: 'couples' })[1].query, 'PoohPavel dramas juntos');
     assert.deepEqual(webSuggestions({ name: '' }), []);
 });
+
+test('imágenes de otras webs: servicio para poder recortarlas y fuentes más actuales', () => {
+    const mk = require('../../mediakit.js');
+    assert.equal(mk.corsProxyUrl('https://img.test/a b/foto.jpg?x=1&y=2'), 'https://images.weserv.nl/?url=img.test%2Fa%20b%2Ffoto.jpg%3Fx%3D1%26y%3D2&w=2400&we&output=jpg&q=90');
+    assert.equal(mk.corsProxyUrl('https://images.weserv.nl/?url=x'), ''); // no se vuelve a pasar por el servicio
+    assert.equal(mk.corsProxyUrl('blob:abc'), '');
+    assert.equal(mk.corsProxyUrl(''), '');
+    const r = mk.imgParseOpenverse({ results: [{ url: 'https://f/1.jpg', thumbnail: 'https://t/1.jpg', width: 1600, height: 900, title: 'Concierto', foreign_landing_url: 'https://flickr/1' }, { title: 'sin url' }] });
+    assert.deepEqual(r.map(x => [x.src, x.thumb, x.o, x.origin, x.page]), [['https://f/1.jpg', 'https://t/1.jpg', 'horizontal', 'openverse', 'https://flickr/1']]);
+    assert.ok(mk.DEFAULT_SOURCE_ORDER.includes('openverse') && mk.DEFAULT_SOURCE_ORDER.includes('commonsnew'));
+    assert.ok(mk.activeSources({}, 'photo').includes('commonsnew'));
+    assert.ok(!mk.activeSources({}, 'photo').includes('google')); // sin clave no
+    assert.equal(mk.suggestQueries({ name: 'Perth', kind: 'persons', year: 2026 })[1], 'Perth 2026');
+});
