@@ -190,6 +190,74 @@ function seasonLabel(w) {
     return `${prefix}${s.number || current + 1} ${Number(s.progress) || 0}/${Number(s.episodes) || '?'}`;
 }
 
+const pctOf = (done, total) => (total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0);
+/**
+ * Progreso doble de una obra con temporadas: el de la temporada en la que vas y el de toda la serie.
+ * partial = alguna temporada no tiene total, así que el total de la serie es aproximado.
+ */
+function seasonProgress(w) {
+    if (!hasSeasons(w)) return null;
+    const t = seasonTotals(w);
+    const list = w.seasonsList;
+    const s = list[t.current];
+    const sTotal = Number(s.episodes) || 0;
+    const sDone = Math.min(Number(s.progress) || 0, sTotal || Infinity);
+    const finishedSeasons = list.filter(x => seasonStatus(x) === 'terminado').length;
+    const nextItem = list[t.current + 1];
+    const seasonFinished = sTotal > 0 && sDone >= sTotal;
+    return {
+        index: t.current, number: s.number || t.current + 1, count: list.length, finishedSeasons,
+        season: { done: sDone, total: sTotal, pct: pctOf(sDone, sTotal), left: sTotal ? Math.max(0, sTotal - sDone) : 0, finished: seasonFinished },
+        all: { done: t.progress, total: t.total, pct: pctOf(t.progress, t.total), left: t.total ? Math.max(0, t.total - t.progress) : 0 },
+        partial: list.some(x => !(Number(x.episodes) > 0)),
+        next: nextItem ? { number: nextItem.number || t.current + 2, episodes: Number(nextItem.episodes) || 0 } : null,
+        allDone: t.total > 0 && t.progress >= t.total
+    };
+}
+/** Una frase que dice qué falta: "Te faltan 5 para cerrar la temporada", "Siguiente: T3 (12 eps)". */
+function seasonHint(w) {
+    const sp = seasonProgress(w);
+    if (!sp) return '';
+    const unit = w.type === 'manhwa' ? 'caps' : w.type === 'book' ? 'págs' : 'eps';
+    if (sp.allDone) return '🎉 Serie completa';
+    if (sp.season.finished) return sp.next ? `✅ Temporada ${sp.number} terminada · sigue la ${sp.next.number}${sp.next.episodes ? ` (${sp.next.episodes} ${unit})` : ''}` : '✅ Última temporada terminada';
+    if (sp.season.total && sp.season.left <= 3) return `🏁 Te ${sp.season.left === 1 ? 'falta 1' : `faltan ${sp.season.left}`} para cerrar la temporada ${sp.number}`;
+    return sp.season.total ? `Te faltan ${sp.season.left} ${unit} para cerrar la temporada ${sp.number}` : '';
+}
+/** Minutos que faltan para terminar todo (con la misma medida por episodio que usa la app). */
+function seasonTimeLeft(w) {
+    const sp = seasonProgress(w);
+    if (!sp || !sp.all.left) return 0;
+    return Math.round(estimateMinutes({ type: w.type, seriesType: 'Serie', status: 'viendo', progress: sp.all.left }));
+}
+/** "≈ 6 h 30 min", "≈ 45 min" o ''. */
+function formatMinutes(min) {
+    const m = Math.round(Number(min) || 0);
+    if (m < 5) return '';
+    const h = Math.floor(m / 60), r = m % 60;
+    return `≈ ${h ? `${h} h` : ''}${h && r ? ' ' : ''}${r && (h < 10) ? `${r} min` : ''}`.trim() || `≈ ${h} h`;
+}
+/** Reparte un progreso total entre las temporadas, de la primera a la última (para no perder lo que ya llevabas). */
+function distributeProgress(list, progress) {
+    let left = Math.max(0, Number(progress) || 0);
+    return (list || []).map(s => {
+        const eps = Number(s.episodes) || 0;
+        const take = eps ? Math.min(left, eps) : left;
+        left -= take;
+        return { ...s, progress: take };
+    });
+}
+/** Pone el progreso de una temporada (sin pasarse del total) y recalcula los totales de la obra. */
+function setSeasonProgress(w, index, value) {
+    const s = hasSeasons(w) && w.seasonsList[index];
+    if (!s) return false;
+    const eps = Number(s.episodes) || 0;
+    let v = Math.max(0, Math.round(Number(value) || 0));
+    if (eps) v = Math.min(v, eps);
+    s.progress = v;
+    syncSeasonAggregates(w);
+    return true;
+}
 // ============================================================
 // NOTAS CON TIPOS Y RESEÑAS
 // ============================================================
@@ -246,6 +314,7 @@ if (typeof module !== 'undefined' && module.exports) {
         tagKey, tagStats, dedupeTags, renameTag, removeTag, suggestTagFixes, suggestTagsFor,
         coupleWorks, coupleSummary, relatedCouples, couplesForPerson, rankCouples,
         hasSeasons, totalField, seasonTotals, syncSeasonAggregates, advanceSeason, seasonStatus, seasonLabel,
+        seasonProgress, seasonHint, seasonTimeLeft, formatMinutes, setSeasonProgress, distributeProgress,
         NOTE_TYPES, REVIEW_CRITERIA, noteType, reviewAverage, notesOfWork, wordCount,
         timesCompleted, rereadBadge, addReread, mostRevisited
     };

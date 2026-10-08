@@ -289,6 +289,53 @@ function onMultiSeasonToggle() {
         toggleAggregateInputs();
     }
 }
+/**
+ * Dos barras para una obra con temporadas: la temporada en la que vas y la serie completa.
+ * ctx = 'detail' (ficha), 'hero' (Inicio) o 'focus' (modo foco); cambia solo el aspecto (CSS).
+ */
+function dualProgressHtml(w, ctx = 'detail') {
+    const sp = seasonProgress(w);
+    if (!sp) return '';
+    const unit = w.type === 'manhwa' ? 'cap' : w.type === 'book' ? 'pág' : 'ep';
+    const word = SEASON_WORDS[w.type].one;
+    const left = formatMinutes(seasonTimeLeft(w));
+    const hint = seasonHint(w);
+    return `<div class="dual-progress ctx-${ctx}">
+        <div class="dual-row">
+          <div class="dual-label"><b>${word} ${sp.number}</b><span>${unit} ${sp.season.done}${sp.season.total ? ' / ' + sp.season.total : ''}</span><span class="dual-pct">${sp.season.pct} %</span></div>
+          <div class="progress-bar" role="progressbar" aria-label="Progreso de la ${word.toLowerCase()} ${sp.number}" aria-valuenow="${sp.season.pct}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${sp.season.pct}%"></div></div>
+        </div>
+        <div class="dual-row">
+          <div class="dual-label"><b>${w.type === 'book' ? 'Saga completa' : 'Serie completa'}</b><span>${sp.all.done}${sp.all.total ? ' / ' + (sp.partial ? '~' : '') + sp.all.total : ''} · ${sp.finishedSeasons}/${sp.count} ${word === 'Libro' ? 'libros' : word === 'Parte' ? 'partes' : 'temporadas'}</span><span class="dual-pct">${sp.all.pct} %</span></div>
+          <div class="progress-bar alt" role="progressbar" aria-label="Progreso de toda la serie" aria-valuenow="${sp.all.pct}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${sp.all.pct}%"></div></div>
+        </div>
+        ${ctx === 'detail' && (hint || left) ? `<div class="dual-hint">${hint ? `<span>${esc(hint)}</span>` : ''}${left ? `<span title="Tiempo aproximado para terminar todo">⏱️ ${esc(left)} para terminar</span>` : ''}</div>` : ''}
+    </div>`;
+}
+/** Texto de ayuda de la tarjeta: "Temporada 2: 58 % · Serie completa: 52 %". */
+function seasonCardTitle(w) {
+    const sp = seasonProgress(w);
+    return sp ? `${SEASON_WORDS[w.type].one} ${sp.number}: ${sp.season.pct} % · ${w.type === 'book' ? 'Saga' : 'Serie'} completa: ${sp.all.pct} %` : '';
+}
+/** Dos barras finas al pie de la portada: arriba la temporada actual y abajo la serie completa. */
+function seasonCardBars(w) {
+    const sp = seasonProgress(w);
+    return `<div class="card-progress dual" aria-hidden="true"><span class="s" style="width:${sp.season.pct}%"></span><span class="t" style="width:${sp.all.pct}%"></span></div>`;
+}
+const openEpGrids = new Set(); // cuadrículas abiertas ("obra:temporada"), para que no se cierren al repintar la ficha
+document.addEventListener('toggle', e => {
+    const d = e.target;
+    if (!d.classList || !d.classList.contains('ep-grid-wrap')) return;
+    if (d.open) openEpGrids.add(d.dataset.grid); else openEpGrids.delete(d.dataset.grid);
+}, true);
+/** Cuadrícula de episodios de una temporada: tocar el número k deja el progreso en k (tocar el último visto lo quita). */
+function episodeGridHtml(w, i) {
+    const s = w.seasonsList[i];
+    const eps = Number(s.episodes) || 0, p = Number(s.progress) || 0;
+    if (!eps || eps > 150) return '';
+    const cells = Array.from({ length: eps }, (_, k) => `<button type="button" class="ep-cell ${k < p ? 'is-seen' : ''}" data-act="season-set" data-id="${w.id}" data-season="${i}" data-value="${k + 1 === p ? k : k + 1}" aria-pressed="${k < p}" aria-label="${SEASON_WORDS[w.type].unit.slice(0, -1) || 'Ep'} ${k + 1}">${k + 1}</button>`).join('');
+    return `<details class="ep-grid-wrap" data-grid="${w.id}:${i}" ${openEpGrids.has(`${w.id}:${i}`) ? 'open' : ''}><summary>Marcar ${SEASON_WORDS[w.type].unit.toLowerCase()} uno a uno</summary><div class="ep-grid">${cells}</div></details>`;
+}
 function seasonsSectionHtml(w, openState) {
     if (!hasSeasons(w)) return '';
     const words = SEASON_WORDS[w.type];
@@ -309,12 +356,44 @@ function seasonsSectionHtml(w, openState) {
                     <button class="icon-btn sm" data-act="season-step" data-id="${w.id}" data-season="${i}" data-delta="1" aria-label="Avanzar">＋</button>
                   </span></div>
                 <div class="progress-bar sm"><div class="progress-fill" style="width:${eps ? Math.min(100, p / eps * 100) : 0}%"></div></div>
-                <small class="hint">${p}${eps ? ' / ' + eps : ''} ${words.unit.toLowerCase()}</small>
+                <div class="season-foot"><small class="hint">${p}${eps ? ' / ' + eps : ''} ${words.unit.toLowerCase()}${eps ? ` · ${Math.min(100, Math.round(p / eps * 100))} %` : ''}</small>
+                  ${st !== 'terminado' && eps ? `<button type="button" class="link-btn" data-act="season-finish" data-id="${w.id}" data-season="${i}">✓ Marcar terminada</button>` : ''}
+                  ${st !== 'pendiente' ? `<button type="button" class="link-btn" data-act="season-set" data-id="${w.id}" data-season="${i}" data-value="0">↺ Reiniciar</button>` : ''}</div>
+                ${episodeGridHtml(w, i)}
               </div>`;
           }).join('')}</div>
         </div>
     </details>`;
 }
+/** Pone el progreso de una temporada (cuadrícula, terminar o reiniciar) con aviso y deshacer. */
+function applySeasonValue(w, i, value) {
+    const s = w.seasonsList[i];
+    const eps = Number(s.episodes) || 0, before = Number(s.progress) || 0;
+    const next = Math.max(0, Math.min(eps || Infinity, Math.round(Number(value) || 0)));
+    if (next === before) return;
+    const words = SEASON_WORDS[w.type];
+    const nowFinished = eps > 0 && next >= eps && before < eps;
+    mutate(() => {
+        setSeasonProgress(w, i, next);
+        w.updatedAt = Date.now();
+        if (next > before) {
+            bumpActivity(w);
+            if (isPlanned(w)) { w.status = STATUS_BY_TYPE[w.type][0]; if (!w.startDate) w.startDate = todayISO(); }
+            if (getTotal(w) && w.progress >= getTotal(w)) finishWork(w);
+        }
+    }, nowFinished ? `🎉 ${words.one} ${s.number || i + 1} terminada` : `⏩ ${w.title} · ${words.one.charAt(0)}${s.number || i + 1}: ${next}${eps ? '/' + eps : ''}`, { label: `Progreso de “${w.title}”` });
+}
+FEATURE_ACTIONS['season-set'] = (id, el) => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !hasSeasons(w)) return;
+    applySeasonValue(w, Number(el.dataset.season), el.dataset.value);
+};
+FEATURE_ACTIONS['season-finish'] = (id, el) => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !hasSeasons(w)) return;
+    const i = Number(el.dataset.season);
+    applySeasonValue(w, i, Number(w.seasonsList[i].episodes) || 0);
+};
 FEATURE_ACTIONS['season-step'] = (id, el) => {
     const w = getWorkById(id);
     if (!w || isLocked(w) || !hasSeasons(w)) return;

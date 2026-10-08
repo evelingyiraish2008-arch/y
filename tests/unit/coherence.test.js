@@ -109,3 +109,48 @@ describe('notas y re-visionados', () => {
         assert.deepEqual(c.mostRevisited([w, { title: 'B' }]).map(x => x.times), [2]);
     });
 });
+
+describe('temporadas: dos porcentajes, qué falta y tiempo', () => {
+    const w = () => ({ type: 'series', seasonsList: [{ number: 1, episodes: 12, progress: 12 }, { number: 2, episodes: 12, progress: 7 }, { number: 3, episodes: 10, progress: 0 }] });
+    it('la temporada actual y la serie completa tienen cada una su porcentaje', () => {
+        const sp = c.seasonProgress(w());
+        assert.deepEqual([sp.number, sp.season.done, sp.season.total, sp.season.pct, sp.season.left], [2, 7, 12, 58, 5]);
+        assert.deepEqual([sp.all.done, sp.all.total, sp.all.pct, sp.all.left], [19, 34, 56, 15]);
+        assert.deepEqual([sp.finishedSeasons, sp.count, sp.next, sp.partial, sp.allDone], [1, 3, { number: 3, episodes: 10 }, false, false]);
+        assert.equal(c.seasonProgress({ type: 'series' }), null);
+    });
+    it('avisa cuando falta poco, cuando terminas una temporada y al acabar la serie', () => {
+        assert.equal(c.seasonHint(w()), 'Te faltan 5 eps para cerrar la temporada 2');
+        const near = w(); near.seasonsList[1].progress = 10;
+        assert.equal(c.seasonHint(near), '🏁 Te faltan 2 para cerrar la temporada 2');
+        near.seasonsList[1].progress = 11;
+        assert.equal(c.seasonHint(near), '🏁 Te falta 1 para cerrar la temporada 2');
+        const done2 = w(); done2.seasonsList[1].progress = 12;
+        assert.equal(c.seasonProgress(done2).index, 2); // pasa a la siguiente
+        const last = w(); last.seasonsList = last.seasonsList.map(s => ({ ...s, progress: s.episodes }));
+        assert.equal(c.seasonHint(last), '🎉 Serie completa');
+        const finishedNotLast = { type: 'series', seasonsList: [{ number: 1, episodes: 2, progress: 2 }, { number: 2, episodes: 0, progress: 0 }] };
+        assert.equal(c.seasonProgress(finishedNotLast).partial, true); // una temporada sin total: el de la serie es aproximado
+    });
+    it('el tiempo que falta usa la medida de la app y se escribe corto', () => {
+        assert.equal(c.seasonTimeLeft(w()), 750); // 15 episodios × 50 min
+        assert.equal(c.formatMinutes(750), '≈ 12 h');
+        assert.equal(c.formatMinutes(95), '≈ 1 h 35 min');
+        assert.equal(c.formatMinutes(45), '≈ 45 min');
+        assert.equal(c.formatMinutes(2), '');
+    });
+    it('poner el progreso de una temporada recalcula la obra y no se pasa del total', () => {
+        const x = w();
+        assert.equal(c.setSeasonProgress(x, 2, 99), true);
+        assert.deepEqual([x.seasonsList[2].progress, x.progress], [10, 12 + 7 + 10]);
+        c.setSeasonProgress(x, 1, 0);
+        assert.equal(x.progress, 22);
+        assert.equal(c.setSeasonProgress(x, 7, 1), false);
+    });
+    it('reparte el progreso que ya llevabas de la primera temporada a la última', () => {
+        const list = [{ number: 1, episodes: 12 }, { number: 2, episodes: 12 }, { number: 3, episodes: 10 }];
+        assert.deepEqual(c.distributeProgress(list, 15).map(s => s.progress), [12, 3, 0]);
+        assert.deepEqual(c.distributeProgress(list, 99).map(s => s.progress), [12, 12, 10]);
+        assert.deepEqual(c.distributeProgress(list, 0).map(s => s.progress), [0, 0, 0]);
+    });
+});

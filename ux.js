@@ -128,7 +128,7 @@ function renderFocus(bump = false) {
                 <h2>${esc(w.title)}</h2>
                 ${total ? `<div class="focus-progress">
                     <div class="focus-number ${bump ? 'bump' : ''}"><b>${Number(w.progress) || 0}</b><span>/ ${total} ${unit}</span></div>
-                    <div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div>
+                    ${hasSeasons(w) ? dualProgressHtml(w, 'focus') : `<div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div>`}
                     <div class="focus-pct">${done ? '🎉 ¡Terminada!' : `${p} % · te faltan ${total - (Number(w.progress) || 0)}`}${hasSeasons(w) ? ' · ' + esc(seasonLabel(w)) : ''}</div>
                 </div>` : `<p class="focus-hint">Añade el total de ${unit} al editarla para seguir tu progreso aquí.</p>`}
                 <div class="focus-actions">
@@ -209,7 +209,7 @@ function worksTable(list, page) {
             <td class="c-title"><b>${w.favorite ? '<span class="fav">♥</span> ' : ''}${esc(w.title)}</b><small>${esc(getSubtitle(w))}</small></td>
             <td>${TYPE_META[w.type].icon}<span class="c-hide-sm"> ${esc(getTypeLabel(w.type))}</span></td>
             <td><span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span></td>
-            <td class="c-progress">${getTotal(w) ? `<span>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span><span class="progress-bar sm"><span class="progress-fill" style="width:${getProgress(w)}%"></span></span>` : '–'}</td>
+            <td class="c-progress">${getTotal(w) ? `<span>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span><span class="progress-bar sm" ${hasSeasons(w) ? `title="${esc(seasonCardTitle(w))}"` : ''}><span class="progress-fill" style="width:${getProgress(w)}%"></span></span>` : '–'}</td>
             <td class="c-rating">${w.rating ? '★ ' + ratingText(w.rating) : '–'}</td>
             <td>${esc(w.year || '–')}</td>
         </tr>`).join('')}</tbody></table></div>`;

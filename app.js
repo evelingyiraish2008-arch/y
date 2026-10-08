@@ -265,7 +265,7 @@ function workCard(w, opts = {}) {
           ${w.rating ? `<span class="pill rating">★ ${ratingText(w.rating)}</span>` : ''}
         </div>
         <div class="card-bottom">
-          ${(isActive(w) || opts.showProgress) && getTotal(w) && !cardHides('progress') ? `<span class="pill">${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
+          ${(isActive(w) || opts.showProgress) && getTotal(w) && !cardHides('progress') ? `<span class="pill" ${hasSeasons(w) ? `title="${esc(seasonCardTitle(w))}"` : ''}>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
           ${rereadBadge(w) ? `<span class="pill">${esc(rereadBadge(w))}</span>` : ''}
           <div class="card-actions">
             ${quickPlus ? `<button class="card-act" data-act="progress" title="Avanzar progreso" aria-label="Avanzar progreso">＋</button>` : ''}
@@ -274,7 +274,7 @@ function workCard(w, opts = {}) {
             <button class="card-act danger" data-act="delete" title="Eliminar" aria-label="Eliminar">✕</button>
           </div>
         </div>
-        ${p > 0 && p < 100 && !cardHides('progress') ? `<div class="card-progress"><span style="width:${p}%"></span></div>` : ''}
+        ${p > 0 && p < 100 && !cardHides('progress') ? (hasSeasons(w) ? seasonCardBars(w) : `<div class="card-progress"><span style="width:${p}%"></span></div>`) : ''}
       </div>
       <div class="card-body">
         <h4 class="card-title">${w.favorite ? '<span class="fav">♥</span>' : ''}<span class="t">${esc(w.title)}</span></h4>
@@ -557,7 +557,7 @@ function renderHero(inProgress) {
                 ${getSubtitle(w) !== getTypeLabel(w.type) ? `<span>${esc(getSubtitle(w))}</span>` : ''}
                 ${w.bl ? '<span>💖 BL</span>' : ''}
             </div>
-            ${total ? `<div class="hero-progress"><div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div><div class="progress-text"><span>${esc(getProgressText(w))}</span><span>${p}%</span></div></div>`
+            ${total ? (hasSeasons(w) ? `<div class="hero-progress">${dualProgressHtml(w, 'hero')}</div>` : `<div class="hero-progress"><div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div><div class="progress-text"><span>${esc(getProgressText(w))}</span><span>${p}%</span></div></div>`)
                     : (w.synopsis ? `<p class="hero-text">${esc(w.synopsis)}</p>` : '')}
             <div class="hero-actions">
                 ${total && (Number(w.progress) || 0) < total ? `<button class="btn btn-primary" data-act="progress" data-id="${w.id}">＋${step} ${TYPE_META[w.type].unit}</button>` : ''}
@@ -1288,14 +1288,14 @@ function renderDetail(fresh = false) {
         ${suggestionsHtml(w)}
         ${total ? `
         <div class="detail-progress">
-          <div class="detail-progress-row"><span>${esc(getProgressText(w))}</span>
+          <div class="detail-progress-row"><span>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>
             <div class="stepper">
               <button class="icon-btn sm" data-act="progress-minus" data-id="${w.id}" aria-label="Retroceder">−</button>
               <button class="icon-btn sm" data-act="progress" data-id="${w.id}" aria-label="Avanzar">＋</button>
             </div>
           </div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div>
-          <div class="progress-text"><span>${p}% completado</span><span>${total - (Number(w.progress) || 0)} ${TYPE_META[w.type].unit} restantes</span></div>
+          ${hasSeasons(w) ? dualProgressHtml(w, 'detail') : `<div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div>
+          <div class="progress-text"><span>${p}% completado</span><span>${total - (Number(w.progress) || 0)} ${TYPE_META[w.type].unit} restantes</span></div>`}
         </div>` : ''}
         <div class="detail-stats">
           <div class="detail-stat detail-rating"><div class="k">Valoración ${w.rating ? '· ' + ratingText(w.rating) : ''}</div><div class="v">${starInput(w.id, w.rating)}</div></div>

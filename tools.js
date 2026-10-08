@@ -74,10 +74,19 @@ async function applyMeta(i) {
     if (patch.seriesType) setFormField('seriesType', patch.seriesType);
     let n = 0;
     Object.entries(patch).forEach(([f, v]) => { if (f !== 'seriesType' && setFormField(f, v)) n++; });
+    // Temporadas con los episodios de cada una (TVmaze, TMDB): solo si aún no las tenías, para no pisar lo que escribiste
+    let seasonsFilled = 0;
+    if ((meta.seasonsList || []).length > 1 && (!$('f_multi').checked || overwrite)) {
+        const progress = Number(workForm.querySelector('[data-field="progress"]').value) || 0;
+        renderSeasonsEditor(distributeProgress(meta.seasonsList, progress));
+        seasonsFilled = meta.seasonsList.length;
+        n++;
+    }
     updateRangeOutputs(workForm);
     const coverUrl = meta.coverLarge || meta.cover;
     if (coverUrl && (overwrite || !$('f_image').value)) { await useCover(coverUrl); n++; }
-    showToast(n ? `✨ ${n} ${n === 1 ? 'dato rellenado' : 'datos rellenados'} desde ${r.sourceLabel}` : 'Ya tenías todo rellenado 👌');
+    const extra = seasonsFilled ? ` · ${seasonsFilled} temporadas con sus episodios` : '';
+    showToast(n ? `✨ ${n} ${n === 1 ? 'dato rellenado' : 'datos rellenados'} desde ${r.sourceLabel}${extra}` : 'Ya tenías todo rellenado 👌');
 }
 /** Descarga la portada y la guarda reducida. Si el servidor no lo permite, se guarda el enlace. */
 async function useCover(url) {
