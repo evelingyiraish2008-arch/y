@@ -188,6 +188,40 @@ function suggestQueries({ name = '', kind = 'works', type = '', people = [] } = 
     const base = type === 'book' ? [n, `${n} cover`, `${n} fanart`, `${n} aesthetic`] : [n, `${n} poster`, `${n} wallpaper`, `${n} aesthetic`, `${n} scenes`, `${n} banner`];
     return [...base, ...people.slice(0, 2)];
 }
+/**
+ * Buscadores de toda la web. Google y Pinterest no dejan que otras apps busquen dentro de ellos,
+ * así que la búsqueda se abre en otra pestaña con lo escrito ya puesto. main = los dos grandes.
+ */
+const WEB_ENGINES = [
+    { id: 'google', name: 'Google', icon: '🔎', main: true, url: q => `https://www.google.com/search?q=${q}` },
+    { id: 'pinterest', name: 'Pinterest', icon: '📌', main: true, url: q => `https://www.pinterest.com/search/pins/?q=${q}` },
+    { id: 'googleimg', name: 'Google Imágenes', icon: '🖼️', url: q => `https://www.google.com/search?tbm=isch&q=${q}` },
+    { id: 'wikipedia', name: 'Wikipedia', icon: '📖', url: q => `https://es.wikipedia.org/w/index.php?search=${q}` },
+    { id: 'youtube', name: 'YouTube', icon: '▶️', url: q => `https://www.youtube.com/results?search_query=${q}` },
+    { id: 'mydramalist', name: 'MyDramaList', icon: '🎭', kinds: ['works', 'persons', 'couples'], url: q => `https://mydramalist.com/search?q=${q}` },
+    { id: 'bing', name: 'Bing', icon: '🅱️', url: q => `https://www.bing.com/search?q=${q}` }
+];
+/** Enlaces de búsqueda de un texto en todos los buscadores (los que no valen para ese tipo de cosa se quitan). */
+function webSearchLinks(query, kind = 'works') {
+    const q = encodeURIComponent(String(query || '').trim());
+    if (!q) return [];
+    return WEB_ENGINES.filter(e => !e.kinds || e.kinds.includes(kind)).map(e => ({ id: e.id, name: e.name, icon: e.icon, main: !!e.main, url: e.url(q) }));
+}
+/**
+ * Búsquedas que suelen dar buen resultado según qué buscas, para tocarlas en vez de escribirlas:
+ * reparto, sinopsis, etiquetas, dónde verla… Cada una es { label, query }.
+ */
+function webSuggestions({ name = '', kind = 'works', type = '', bl = false } = {}) {
+    const n = String(name || '').trim();
+    if (!n) return [];
+    const s = (label, extra) => ({ label, query: extra ? `${n} ${extra}` : n });
+    if (kind === 'persons') return [s('Todo sobre él/ella'), s('Filmografía', 'filmografía'), s('Nombre real', 'nombre real'), s('Dramas y series', 'dramas series'), s('Redes sociales', 'instagram')];
+    if (kind === 'couples') return [s('La pareja'), s('Sus dramas juntos', 'dramas juntos'), s('Momentos', 'moments'), s('Fanart', 'fanart'), s('Behind the scenes', 'behind the scenes')];
+    if (kind === 'collections') return [s('Ideas parecidas', 'recomendaciones'), s('Estética', 'aesthetic')];
+    if (type === 'book') return [s('La obra'), s('Autor/a', 'autor'), s('Sinopsis', 'sinopsis'), s('Reseñas', 'reseña'), s('Saga o continuación', 'saga')];
+    if (type === 'manhwa') return [s('La obra', 'manhwa'), s('Dónde leerla', 'dónde leer'), s('Capítulos', 'capítulos'), s('Autor/a', 'autor'), s('Etiquetas y géneros', 'tags géneros')];
+    return [s('La obra', bl ? 'BL' : ''), s('Reparto', 'reparto'), s('Sinopsis', 'sinopsis'), s('Etiquetas y géneros', 'tags géneros'), s('Dónde verla', 'dónde ver'), s('Wiki o ficha', 'wiki')];
+}
 /** Búsquedas en webs sin API abierta (se abren en otra pestaña). */
 function webSearchUrls(q) {
     const e = encodeURIComponent(String(q || '').trim());
@@ -202,7 +236,7 @@ function webSearchUrls(q) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         centerCrop, imagePlan, rotatedSize, coverScale, clampPan, cropOutputSize, looksLikeImageUrl, imageUrlProblem, bannerMode, bannerEntries, CROP_KINDS, BANNER_RATIOS,
-        IMAGE_SOURCES, DEFAULT_SOURCE_ORDER, activeSources, orientationOf, filterOrientation, interleave,
+        WEB_ENGINES, webSearchLinks, webSuggestions, IMAGE_SOURCES, DEFAULT_SOURCE_ORDER, activeSources, orientationOf, filterOrientation, interleave,
         imgParseCommons, imgParseWikiPages, imgParseAnilist, imgParseTmdb, imgParseJikan, imgParseOpenLibrary, imgParseGoogle, suggestQueries, webSearchUrls
     };
 }

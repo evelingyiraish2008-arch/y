@@ -177,33 +177,61 @@ function openCoupleDetail(id) {
     openSheet('💕 Pareja', () => {
         const c = getCoupleById(id);
         if (!c) return '<p>Pareja no encontrada.</p>';
-        $('sheetTitle').textContent = '💕 ' + c.name;
+        $('sheetTitle').textContent = '💕 ' + coupleTitle(c);
         const s = coupleInfo(c);
+        const st = coupleStatus(c, appData.works, appData.persons);
         const a = getPersonById(c.personA), b = getPersonById(c.personB);
         const related = relatedCouples(c, appData.couples);
+        const timeline = coupleTimeline(c, appData.works, appData.persons);
+        const names = coupleNames(c, appData.persons);
+        const facts = [
+            ['Obras juntos', s.count],
+            st && st.first ? ['Primera obra', st.first] : null,
+            st && st.last && st.last !== st.first ? ['Última obra', st.last] : null,
+            s.avgRating ? ['Media', '★ ' + ratingText(Math.round(s.avgRating * 10) / 10)] : (c.rating ? ['Nota', '★ ' + ratingText(c.rating)] : null)
+        ].filter(Boolean);
         return `
         <div class="couple-banner ${c.banner ? 'has-banner' : ''}">${bannerBgHtml(c.banner, c.image)}
             <button class="icon-btn sm detail-banner-btn" data-act="banner-quick" data-kind="couples" data-id="${c.id}" title="${c.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${c.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button></div>
-        <div class="couple-detail-hero">${img(c.image, 'couple', c.name)}</div>
-        <div class="couple-detail-people">
-            ${[a, b].map(p => (p ? `<button class="couple-person" data-person="${p.id}"><span class="avatar">${img(p.image, 'person', p.name)}</span><b>${esc(p.name)}</b></button>` : '')).join('<span class="couple-heart">💕</span>')}
+        ${c.image ? `<div class="couple-detail-hero">${img(c.image, 'couple', c.name)}</div>` : ''}
+        <div class="couple-detail-people ${c.image ? '' : 'no-hero'}">
+            ${[a, b].map(p => (p ? `<button class="couple-person" data-person="${p.id}"><span class="avatar">${img(p.image, 'person', p.name)}</span><b>${esc(p.name)}</b>${personOtherNames(p)[0] ? `<small>${esc(personOtherNames(p)[0])}</small>` : ''}</button>` : '')).join('<span class="couple-heart">💕</span>')}
         </div>
-        <div class="detail-chips" style="justify-content:center;margin:10px 0 16px">
-            <span class="chip chip-muted">🎬 ${s.count} ${s.count === 1 ? 'obra' : 'obras'} juntos</span>
-            ${s.avgRating ? `<span class="chip chip-orange">★ ${ratingText(Math.round(s.avgRating * 10) / 10)} de media en sus obras</span>` : c.rating ? `<span class="chip chip-orange">★ ${ratingText(c.rating)}</span>` : ''}
-            ${c.favorite ? '<span class="chip chip-pink">❤️ Favorita</span>' : ''}
+        <div class="couple-title-block">
+            <h3 class="couple-title">${esc(coupleTitle(c))}</h3>
+            ${names && norm(names) !== norm(coupleTitle(c)) ? `<p class="couple-fullnames">${esc(names)}</p>` : ''}
+            <div class="detail-chips" style="justify-content:center">
+                ${coupleStatusChip(st)}
+                ${st && st.span ? `<span class="chip chip-muted">📅 ${esc(st.span)}</span>` : ''}
+                ${c.favorite ? '<span class="chip chip-pink">❤️ Favorita</span>' : ''}
+            </div>
+            ${st ? `<p class="hint" style="text-align:center">${esc(st.hint)}${st.auto ? ' · se calcula con tus obras' : ' · lo elegiste tú'}</p>` : ''}
         </div>
+        ${facts.length ? `<div class="couple-facts">${facts.map(([k, v]) => `<div><b>${esc(v)}</b><small>${esc(k)}</small></div>`).join('')}</div>` : ''}
         ${!s.linked ? '<p class="hint" style="text-align:center">Edita la pareja y elige a los dos actores para ver sus obras juntos automáticamente.</p>' : ''}
-        ${s.works.length ? `<div class="detail-section-title">Sus obras juntos</div><div class="mini-grid">${s.works.map(miniCard).join('')}</div>` : ''}
-        ${related.length ? `<div class="detail-section-title" style="margin-top:16px">Parejas relacionadas</div><div class="tag-list">${related.map(r => `<button class="chip" data-couple="${r.id}">💕 ${esc(r.name)}</button>`).join('')}</div>` : ''}
+        ${timeline.length ? `<div class="detail-section-title">Sus obras juntos</div>
+            <ol class="couple-timeline">${timeline.map(({ work: w, year }) => `<li><span class="tl-year">${year || '—'}</span>
+                <button type="button" class="tl-work" data-open="${w.id}">${img(w.image, w.type, w.title)}<span class="info"><b>${esc(w.title)}</b><small>${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}${w.rating ? ' · ★ ' + ratingText(w.rating) : ''}</small></span></button></li>`).join('')}</ol>` : ''}
+        ${related.length ? `<div class="detail-section-title" style="margin-top:16px">Parejas relacionadas</div><div class="tag-list">${related.map(r => `<button class="chip" data-couple="${r.id}">💕 ${esc(coupleTitle(r))}</button>`).join('')}</div>` : ''}
         <div class="detail-section-title" style="margin-top:16px">🎨 Moodboard${(c.gallery || []).length ? ' · ' + c.gallery.length : ''}</div>
         ${moodboardHtml('couples', c)}
         <div class="seg-inline" style="justify-content:center;margin-top:18px">
             <button class="btn btn-secondary btn-sm" data-act="couple-edit" data-id="${c.id}">✏️ Editar</button>
             <button class="btn btn-secondary btn-sm" data-act="couple-fav" data-id="${c.id}">${c.favorite ? '🤍 Quitar de favoritas' : '❤️ Favorita'}</button>
+            <button class="btn btn-secondary btn-sm" data-act="web-couple" data-id="${c.id}" title="Buscar en Google, Pinterest…">🌐 Buscar</button>
         </div>`;
     });
 }
+/** Debajo del nombre de ship: sugiere el que sale de los nombres artísticos (Pooh + Pavel → PoohPavel). */
+function updateShipHint() {
+    const el = $('coupleShipHint');
+    if (!el) return;
+    const sug = suggestShip(getPersonById($('coupleA').value), getPersonById($('coupleB').value));
+    const cur = $('coupleShip').value.trim();
+    el.hidden = !sug || shipKey(sug) === shipKey(cur);
+    el.innerHTML = sug ? `💡 Sugerido: <button type="button" class="link-btn" data-act="ship-suggest" data-id="${esc(sug)}">${esc(sug)}</button>` : '';
+}
+FEATURE_ACTIONS['ship-suggest'] = sug => { $('coupleShip').value = sug; updateShipHint(); };
 FEATURE_ACTIONS['couple-edit'] = id => { closeModal('sheetModal'); openCoupleModal(getCoupleById(id)); };
 
 // ============================================================
@@ -289,6 +317,53 @@ function onMultiSeasonToggle() {
         toggleAggregateInputs();
     }
 }
+/**
+ * Dos barras para una obra con temporadas: la temporada en la que vas y la serie completa.
+ * ctx = 'detail' (ficha), 'hero' (Inicio) o 'focus' (modo foco); cambia solo el aspecto (CSS).
+ */
+function dualProgressHtml(w, ctx = 'detail') {
+    const sp = seasonProgress(w);
+    if (!sp) return '';
+    const unit = w.type === 'manhwa' ? 'cap' : w.type === 'book' ? 'pág' : 'ep';
+    const word = SEASON_WORDS[w.type].one;
+    const left = formatMinutes(seasonTimeLeft(w));
+    const hint = seasonHint(w);
+    return `<div class="dual-progress ctx-${ctx}">
+        <div class="dual-row">
+          <div class="dual-label"><b>${word} ${sp.number}</b><span>${unit} ${sp.season.done}${sp.season.total ? ' / ' + sp.season.total : ''}</span><span class="dual-pct">${sp.season.pct} %</span></div>
+          <div class="progress-bar" role="progressbar" aria-label="Progreso de la ${word.toLowerCase()} ${sp.number}" aria-valuenow="${sp.season.pct}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${sp.season.pct}%"></div></div>
+        </div>
+        <div class="dual-row">
+          <div class="dual-label"><b>${w.type === 'book' ? 'Saga completa' : 'Serie completa'}</b><span>${sp.all.done}${sp.all.total ? ' / ' + (sp.partial ? '~' : '') + sp.all.total : ''} · ${sp.finishedSeasons}/${sp.count} ${word === 'Libro' ? 'libros' : word === 'Parte' ? 'partes' : 'temporadas'}</span><span class="dual-pct">${sp.all.pct} %</span></div>
+          <div class="progress-bar alt" role="progressbar" aria-label="Progreso de toda la serie" aria-valuenow="${sp.all.pct}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${sp.all.pct}%"></div></div>
+        </div>
+        ${ctx === 'detail' && (hint || left) ? `<div class="dual-hint">${hint ? `<span>${esc(hint)}</span>` : ''}${left ? `<span title="Tiempo aproximado para terminar todo">⏱️ ${esc(left)} para terminar</span>` : ''}</div>` : ''}
+    </div>`;
+}
+/** Texto de ayuda de la tarjeta: "Temporada 2: 58 % · Serie completa: 52 %". */
+function seasonCardTitle(w) {
+    const sp = seasonProgress(w);
+    return sp ? `${SEASON_WORDS[w.type].one} ${sp.number}: ${sp.season.pct} % · ${w.type === 'book' ? 'Saga' : 'Serie'} completa: ${sp.all.pct} %` : '';
+}
+/** Dos barras finas al pie de la portada: arriba la temporada actual y abajo la serie completa. */
+function seasonCardBars(w) {
+    const sp = seasonProgress(w);
+    return `<div class="card-progress dual" aria-hidden="true"><span class="s" style="width:${sp.season.pct}%"></span><span class="t" style="width:${sp.all.pct}%"></span></div>`;
+}
+const openEpGrids = new Set(); // cuadrículas abiertas ("obra:temporada"), para que no se cierren al repintar la ficha
+document.addEventListener('toggle', e => {
+    const d = e.target;
+    if (!d.classList || !d.classList.contains('ep-grid-wrap')) return;
+    if (d.open) openEpGrids.add(d.dataset.grid); else openEpGrids.delete(d.dataset.grid);
+}, true);
+/** Cuadrícula de episodios de una temporada: tocar el número k deja el progreso en k (tocar el último visto lo quita). */
+function episodeGridHtml(w, i) {
+    const s = w.seasonsList[i];
+    const eps = Number(s.episodes) || 0, p = Number(s.progress) || 0;
+    if (!eps || eps > 150) return '';
+    const cells = Array.from({ length: eps }, (_, k) => `<button type="button" class="ep-cell ${k < p ? 'is-seen' : ''}" data-act="season-set" data-id="${w.id}" data-season="${i}" data-value="${k + 1 === p ? k : k + 1}" aria-pressed="${k < p}" aria-label="${SEASON_WORDS[w.type].unit.slice(0, -1) || 'Ep'} ${k + 1}">${k + 1}</button>`).join('');
+    return `<details class="ep-grid-wrap" data-grid="${w.id}:${i}" ${openEpGrids.has(`${w.id}:${i}`) ? 'open' : ''}><summary>Marcar ${SEASON_WORDS[w.type].unit.toLowerCase()} uno a uno</summary><div class="ep-grid">${cells}</div></details>`;
+}
 function seasonsSectionHtml(w, openState) {
     if (!hasSeasons(w)) return '';
     const words = SEASON_WORDS[w.type];
@@ -309,12 +384,44 @@ function seasonsSectionHtml(w, openState) {
                     <button class="icon-btn sm" data-act="season-step" data-id="${w.id}" data-season="${i}" data-delta="1" aria-label="Avanzar">＋</button>
                   </span></div>
                 <div class="progress-bar sm"><div class="progress-fill" style="width:${eps ? Math.min(100, p / eps * 100) : 0}%"></div></div>
-                <small class="hint">${p}${eps ? ' / ' + eps : ''} ${words.unit.toLowerCase()}</small>
+                <div class="season-foot"><small class="hint">${p}${eps ? ' / ' + eps : ''} ${words.unit.toLowerCase()}${eps ? ` · ${Math.min(100, Math.round(p / eps * 100))} %` : ''}</small>
+                  ${st !== 'terminado' && eps ? `<button type="button" class="link-btn" data-act="season-finish" data-id="${w.id}" data-season="${i}">✓ Marcar terminada</button>` : ''}
+                  ${st !== 'pendiente' ? `<button type="button" class="link-btn" data-act="season-set" data-id="${w.id}" data-season="${i}" data-value="0">↺ Reiniciar</button>` : ''}</div>
+                ${episodeGridHtml(w, i)}
               </div>`;
           }).join('')}</div>
         </div>
     </details>`;
 }
+/** Pone el progreso de una temporada (cuadrícula, terminar o reiniciar) con aviso y deshacer. */
+function applySeasonValue(w, i, value) {
+    const s = w.seasonsList[i];
+    const eps = Number(s.episodes) || 0, before = Number(s.progress) || 0;
+    const next = Math.max(0, Math.min(eps || Infinity, Math.round(Number(value) || 0)));
+    if (next === before) return;
+    const words = SEASON_WORDS[w.type];
+    const nowFinished = eps > 0 && next >= eps && before < eps;
+    mutate(() => {
+        setSeasonProgress(w, i, next);
+        w.updatedAt = Date.now();
+        if (next > before) {
+            bumpActivity(w);
+            if (isPlanned(w)) { w.status = STATUS_BY_TYPE[w.type][0]; if (!w.startDate) w.startDate = todayISO(); }
+            if (getTotal(w) && w.progress >= getTotal(w)) finishWork(w);
+        }
+    }, nowFinished ? `🎉 ${words.one} ${s.number || i + 1} terminada` : `⏩ ${w.title} · ${words.one.charAt(0)}${s.number || i + 1}: ${next}${eps ? '/' + eps : ''}`, { label: `Progreso de “${w.title}”` });
+}
+FEATURE_ACTIONS['season-set'] = (id, el) => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !hasSeasons(w)) return;
+    applySeasonValue(w, Number(el.dataset.season), el.dataset.value);
+};
+FEATURE_ACTIONS['season-finish'] = (id, el) => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !hasSeasons(w)) return;
+    const i = Number(el.dataset.season);
+    applySeasonValue(w, i, Number(w.seasonsList[i].episodes) || 0);
+};
 FEATURE_ACTIONS['season-step'] = (id, el) => {
     const w = getWorkById(id);
     if (!w || isLocked(w) || !hasSeasons(w)) return;

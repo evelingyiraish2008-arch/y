@@ -82,18 +82,42 @@ function parseTvmaze(json) {
  * [{ name, role: 'actor' | 'author' | 'director', image, character, characterRole, characterImage }]
  */
 const metaPerson = (name, role, image, extra = {}) => ({ name: String(name || '').trim(), role, image: httpsUrl(image), ...Object.fromEntries(Object.entries(extra).filter(([, v]) => v !== '')) });
+/**
+ * Temporadas a partir de una lista de episodios o de temporadas de una fuente (TVmaze, TMDB):
+ * [{ number, episodes, year, progress: 0, rating: 0 }]. Ignora la temporada 0 (extras) y las vacías.
+ */
+function seasonsFromSource(items) {
+    const bySeason = new Map();
+    (items || []).forEach(e => {
+        const n = Number(e.season ?? e.number);
+        if (!n || n < 1) return;
+        const cur = bySeason.get(n) || { number: n, episodes: 0, year: '' };
+        cur.episodes += e.episodes !== undefined ? Number(e.episodes) || 0 : 1;
+        const y = parseInt(String(e.airdate || e.year || '').slice(0, 4), 10);
+        if (y > 1800 && (!cur.year || y < cur.year)) cur.year = y;
+        bySeason.set(n, cur);
+    });
+    return [...bySeason.values()].filter(x => x.episodes > 0).sort((a, b) => a.number - b.number).map((x, i) => ({ number: i + 1, year: x.year, episodes: x.episodes, progress: 0, rating: 0 }));
+}
 /** /shows/{id}?embed[]=episodes&embed[]=cast */
 function parseTvmazeDetails(json) {
     const emb = json._embedded || {};
     const eps = emb.episodes || [];
     const cast = (emb.cast || []).filter(c => c.person && c.person.name).slice(0, 6);
+    const seasonsList = seasonsFromSource(eps);
     return {
         totalEpisodes: eps.length || 0,
         seasons: eps.length ? new Set(eps.map(e => e.season)).size : 0,
+        ...(seasonsList.length > 1 ? { seasonsList } : {}),
         actors: cast.slice(0, 4).map(c => c.person.name).join(', '),
         people: cast.slice(0, 4).map(c => metaPerson(c.person.name, 'actor', (c.person.image || {}).original || (c.person.image || {}).medium,
             c.character && c.character.name ? { character: c.character.name, characterRole: 'protagonista', characterImage: httpsUrl((c.character.image || {}).original || (c.character.image || {}).medium) } : {}))
     };
+}
+/** /tv/{id} de TMDB: temporadas con sus episodios (la temporada 0 son extras y no cuenta). */
+function parseTmdbSeasons(json) {
+    const seasonsList = seasonsFromSource(((json || {}).seasons || []).map(x => ({ season: x.season_number, episodes: x.episode_count, airdate: x.air_date })));
+    return seasonsList.length > 1 ? { seasonsList } : {};
 }
 /** /tv/{id}/credits o /movie/{id}/credits de TMDB */
 function parseTmdbCredits(json) {
@@ -241,7 +265,13 @@ async function searchMetadata(type, query, opts = {}) {
 /** Datos extra que solo se piden al elegir un resultado (episodios, reparto con fotos y personajes, sinopsis del libro…). */
 async function fetchMetadataDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}) {
     try {
-        if (meta.source === 'tmdb' && tmdbKey) return parseTmdbCredits(await getJson(`https://api.themoviedb.org/3/${meta.externalId}/credits?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }));
+        if (meta.source === 'tmdb' && tmdbKey) {
+            const credits = parseTmdbCredits(await getJson(`https://api.themoviedb.org/3/${meta.externalId}/credits?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }));
+            // Las series también traen sus temporadas con los episodios de cada una (si falla, se sigue sin ellas)
+            const seasons = /^tv\//.test(String(meta.externalId))
+                ? await getJson(`https://api.themoviedb.org/3/${meta.externalId}?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }).then(parseTmdbSeasons).catch(() => ({})) : {};
+            return { ...credits, ...seasons };
+        }
         if (meta.source === 'jikan') return { people: parseJikanCharacters(await getJson(`https://api.jikan.moe/v4/anime/${enc(meta.externalId)}/characters`, { fetchFn })) };
         if (meta.source === 'tvmaze') return parseTvmazeDetails(await getJson(`https://api.tvmaze.com/shows/${enc(meta.externalId)}?embed[]=episodes&embed[]=cast`, { fetchFn }));
         if (meta.source === 'openlibrary' && !meta.synopsis) return parseOpenLibraryWork(await getJson(`https://openlibrary.org${meta.externalId}.json`, { fetchFn }));
@@ -301,6 +331,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseAniListAiring, parseTvmazeNext, fetchNextEpisodes,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
-        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseJikanCharacters, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
+        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };
 }

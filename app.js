@@ -265,7 +265,7 @@ function workCard(w, opts = {}) {
           ${w.rating ? `<span class="pill rating">★ ${ratingText(w.rating)}</span>` : ''}
         </div>
         <div class="card-bottom">
-          ${(isActive(w) || opts.showProgress) && getTotal(w) && !cardHides('progress') ? `<span class="pill">${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
+          ${(isActive(w) || opts.showProgress) && getTotal(w) && !cardHides('progress') ? `<span class="pill" ${hasSeasons(w) ? `title="${esc(seasonCardTitle(w))}"` : ''}>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>` : ''}
           ${rereadBadge(w) ? `<span class="pill">${esc(rereadBadge(w))}</span>` : ''}
           <div class="card-actions">
             ${quickPlus ? `<button class="card-act" data-act="progress" title="Avanzar progreso" aria-label="Avanzar progreso">＋</button>` : ''}
@@ -274,7 +274,7 @@ function workCard(w, opts = {}) {
             <button class="card-act danger" data-act="delete" title="Eliminar" aria-label="Eliminar">✕</button>
           </div>
         </div>
-        ${p > 0 && p < 100 && !cardHides('progress') ? `<div class="card-progress"><span style="width:${p}%"></span></div>` : ''}
+        ${p > 0 && p < 100 && !cardHides('progress') ? (hasSeasons(w) ? seasonCardBars(w) : `<div class="card-progress"><span style="width:${p}%"></span></div>`) : ''}
       </div>
       <div class="card-body">
         <h4 class="card-title">${w.favorite ? '<span class="fav">♥</span>' : ''}<span class="t">${esc(w.title)}</span></h4>
@@ -557,10 +557,11 @@ function renderHero(inProgress) {
                 ${getSubtitle(w) !== getTypeLabel(w.type) ? `<span>${esc(getSubtitle(w))}</span>` : ''}
                 ${w.bl ? '<span>💖 BL</span>' : ''}
             </div>
-            ${total ? `<div class="hero-progress"><div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div><div class="progress-text"><span>${esc(getProgressText(w))}</span><span>${p}%</span></div></div>`
+            ${total ? (hasSeasons(w) ? `<div class="hero-progress">${dualProgressHtml(w, 'hero')}</div>` : `<div class="hero-progress"><div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div><div class="progress-text"><span>${esc(getProgressText(w))}</span><span>${p}%</span></div></div>`)
                     : (w.synopsis ? `<p class="hero-text">${esc(w.synopsis)}</p>` : '')}
             <div class="hero-actions">
                 ${total && (Number(w.progress) || 0) < total ? `<button class="btn btn-primary" data-act="progress" data-id="${w.id}">＋${step} ${TYPE_META[w.type].unit}</button>` : ''}
+                ${watchPrimaryHtml(w, 'btn btn-secondary')}
                 <button class="btn btn-secondary" data-open="${w.id}">Ver detalles</button>
                 <button class="btn btn-secondary" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ En Mi lista' : '＋ Mi lista'}</button>
             </div>
@@ -657,8 +658,14 @@ function searchAll(raw, limit = 12) {
         if (norm([w.title, w.tags, w.author, w.actors, w.studio].join(' ')).includes(q))
             results.push({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type });
     });
-    appData.persons.forEach(p => { if (norm(p.name).includes(q)) results.push({ kind: 'person', id: p.id, title: p.name, sub: '👤 ' + (PERSON_TYPE_LABEL[p.type] || p.type), image: p.image, ph: 'person' }); });
-    appData.couples.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'couple', id: c.id, title: c.name, sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
+    // Personas: por su nombre artístico, nativo, de nacimiento o apodo (si coincide otro nombre, se dice cuál)
+    appData.persons.forEach(p => {
+        const hit = personNames(p).find(n => norm(n).includes(q));
+        if (hit) results.push({ kind: 'person', id: p.id, title: p.name, sub: '👤 ' + (PERSON_TYPE_LABEL[p.type] || p.type) + (norm(p.name).includes(q) ? '' : ` · ${hit}`), image: p.image, ph: 'person' });
+    });
+    // Etiquetas: al tocarla salen las obras que la llevan
+    tagStats(appData.works).filter(t => norm(t.label).includes(q)).slice(0, 3).forEach(t => results.push({ kind: 'tag', id: t.label, title: '#' + t.label, sub: `🏷️ Etiqueta · ${t.count} ${t.count === 1 ? 'obra' : 'obras'}`, icon: '🏷️' }));
+    appData.couples.forEach(c => { if (coupleMatches(c, raw, appData.persons)) results.push({ kind: 'couple', id: c.id, title: coupleTitle(c), sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
     appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `${isSmart(c) ? '✨ Colección inteligente' : '🗂️ Colección'} · ${collectionWorks(c).length} obras`, icon: isSmart(c) ? '✨' : '🗂️' }); });
     appData.notes.forEach(n => { if (norm(n.content + ' ' + n.workTitle).includes(q)) results.push({ kind: 'note', id: n.workId, title: n.workTitle || 'Nota', sub: '📝 ' + n.content.slice(0, 50), icon: '📝' }); });
     appData.works.forEach(w => (w.quotes || []).forEach(qq => { if (norm(qq.text + ' ' + (qq.context || '')).includes(q)) results.push({ kind: 'work', id: w.id, title: w.title, sub: '❝ ' + qq.text.slice(0, 60), icon: '❝' }); }));
@@ -668,6 +675,7 @@ function openResult(r) {
     if (r.kind === 'work' || r.kind === 'note') openDetail(r.id);
     else if (r.kind === 'person') openPersonDetail(r.id);
     else if (r.kind === 'couple') openCoupleDetail(r.id);
+    else if (r.kind === 'tag') FEATURE_ACTIONS['tag-open'](r.id);
     else if (r.kind === 'collection') { navigateTo('collections'); openCollectionView(r.id); }
 }
 function runGlobalSearch() {
@@ -679,7 +687,7 @@ function runGlobalSearch() {
         <button class="search-result" data-result="${i}" role="option">
           ${r.icon ? `<div class="thumb">${r.icon}</div>` : img(r.image, r.ph, '', 'class="thumb"')}
           <div class="info"><span class="title">${esc(r.title)}</span><span class="type">${esc(r.sub)}</span></div>
-        </button>`).join('') : `<div class="search-empty">Sin resultados para “${esc($('globalSearch').value)}”</div>`;
+        </button>`).join('') + webFooterHtml($('globalSearch').value) : `<div class="search-empty">Sin resultados para “${esc($('globalSearch').value)}”</div>${webFooterHtml($('globalSearch').value)}`;
     box.classList.add('active');
 }
 function openSearchResult(i) {
@@ -746,8 +754,14 @@ function renderPalette() {
     if (found.length) groups.push(['Resultados', found]);
     const actions = paletteActions().filter(a => match(a.title));
     if (actions.length) groups.push(['Acciones', actions]);
+    const web = raw.trim().length >= 2 ? [
+        { icon: '🔎', title: `Buscar “${raw.trim()}” en Google`, sub: 'Se abre en otra pestaña', run: () => webOpen(webLink('google', raw)) },
+        { icon: '📌', title: `Buscar “${raw.trim()}” en Pinterest`, sub: 'Se abre en otra pestaña', run: () => webOpen(webLink('pinterest', raw)) },
+        { icon: '🌐', title: 'Más buscadores y sugerencias…', run: () => openWebSearch({ query: raw }) }
+    ] : [];
     const pages = Object.entries(PAGE_NAMES).filter(([, name]) => match(name)).map(([page, name]) => ({ icon: name.split(' ')[0], title: name.slice(name.indexOf(' ') + 1), sub: 'Ir a la sección', run: () => navigateTo(page) }));
     if (pages.length) groups.push(['Ir a', pages]);
+    if (web.length) groups.push(['Buscar en internet', web]);
     paletteItems = groups.flatMap(g => g[1]);
     paletteIndex = 0;
     let i = 0;
@@ -1156,7 +1170,7 @@ const FIELD_LABELS = {
     studio: 'Estudio', platform: 'Plataforma', country: 'País', genre: 'Género', year: 'Año', actors: 'Actores', directors: 'Directores',
     pages: 'Páginas', totalEpisodes: 'Episodios', totalChapters: 'Capítulos', seasons: 'Temporadas', season: 'Temporada',
     airDay: 'Día de emisión', startDate: 'Inicio', endDate: 'Fin', tags: 'Etiquetas', synopsis: 'Sinopsis', spicy: 'Spicy',
-    sadness: 'Tristeza', image: 'Portada', banner: 'Banner', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
+    sadness: 'Tristeza', image: 'Portada', banner: 'Banner', watchLinks: 'Dónde verla', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
 };
 function fieldValueText(field, v) {
     if (v === null || v === undefined || v === '') return '—';
@@ -1164,6 +1178,7 @@ function fieldValueText(field, v) {
     if (field === 'status') return getStatusLabel(v);
     if (field === 'type') return getTypeLabel(v);
     if (field === 'image' || field === 'banner') return 'imagen';
+    if (field === 'watchLinks') return Array.isArray(v) ? `${v.length} ${v.length === 1 ? 'enlace' : 'enlaces'}` : '—';
     if (field === 'rating') return Number(v) ? '★ ' + ratingText(v) : '—';
     if (field === 'airDay') return (WEEK.find(d => d.day === Number(v)) || {}).short || '—';
     if (field === 'startDate' || field === 'endDate') return fmtDate(v);
@@ -1283,19 +1298,21 @@ function renderDetail(fresh = false) {
           <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
           <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
           <button class="btn btn-secondary btn-sm" data-act="share-work" data-id="${w.id}" title="Compartir">📤</button>
+          <button class="btn btn-secondary btn-sm" data-act="web-work" data-id="${w.id}" title="Buscar en Google, Pinterest…">🌐 Buscar</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
         ${suggestionsHtml(w)}
+        ${(w.watchLinks || []).length ? `<div class="watch-quick">${watchPrimaryHtml(w)}<button type="button" class="link-btn" data-act="watch-open-section" data-id="${w.id}">Otros enlaces…</button></div>` : ''}
         ${total ? `
         <div class="detail-progress">
-          <div class="detail-progress-row"><span>${esc(getProgressText(w))}</span>
+          <div class="detail-progress-row"><span>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>
             <div class="stepper">
               <button class="icon-btn sm" data-act="progress-minus" data-id="${w.id}" aria-label="Retroceder">−</button>
               <button class="icon-btn sm" data-act="progress" data-id="${w.id}" aria-label="Avanzar">＋</button>
             </div>
           </div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div>
-          <div class="progress-text"><span>${p}% completado</span><span>${total - (Number(w.progress) || 0)} ${TYPE_META[w.type].unit} restantes</span></div>
+          ${hasSeasons(w) ? dualProgressHtml(w, 'detail') : `<div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div>
+          <div class="progress-text"><span>${p}% completado</span><span>${total - (Number(w.progress) || 0)} ${TYPE_META[w.type].unit} restantes</span></div>`}
         </div>` : ''}
         <div class="detail-stats">
           <div class="detail-stat detail-rating"><div class="k">Valoración ${w.rating ? '· ' + ratingText(w.rating) : ''}</div><div class="v">${starInput(w.id, w.rating)}</div></div>
@@ -1318,6 +1335,7 @@ function renderDetail(fresh = false) {
             ${castLinesHtml(w) ? `<div class="detail-section-title" style="margin-top:12px">🎭 Reparto</div>${castLinesHtml(w)}` : ''}
           </div>
         </details>
+        ${watchSectionHtml(w, open.watch)}
         ${notesSectionHtml(w, open.notes, composer)}
         ${contentSectionHtml(w, open.content)}
         ${rereadsSectionHtml(w, open.rereads)}
@@ -1531,13 +1549,14 @@ function renderPersonDetail() {
             ${p.rating ? `<span class="chip chip-orange">★ ${ratingText(p.rating)}</span>` : ''}
             ${p.bl ? '<span class="chip chip-pink">💖 BL</span>' : ''}
           </div>
-          ${p.aliases ? `<p class="person-aka">También conocida como <b>${esc(splitList(p.aliases).join(', '))}</b></p>` : ''}
+          ${p.nativeName || p.birthName || p.aliases ? `<p class="person-aka">${[p.nativeName ? `<b>${esc(p.nativeName)}</b>` : '', p.birthName ? `Nombre de nacimiento: <b>${esc(p.birthName)}</b>` : '', p.aliases ? `También: <b>${esc(splitList(p.aliases).join(', '))}</b>` : ''].filter(Boolean).join(' · ')}</p>` : ''}
           ${p.bio ? `<div class="person-bio">${esc(p.bio)}</div>` : ''}
-          ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(c.name)}</button>`).join('')}</div>` : ''}
+          ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(coupleTitle(c))}</button>`).join('')}</div>` : ''}
           ${social ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${social}</div>` : ''}
-          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" data-act="person-edit" data-id="${p.id}">✏️ Editar</button>
             <button class="btn btn-secondary btn-sm" data-act="person-duplicate" data-id="${p.id}">⧉ Duplicar</button>
+            <button class="btn btn-secondary btn-sm" data-act="web-person" data-id="${p.id}" title="Buscar en Google, Pinterest…">🌐 Buscar</button>
           </div>
           <div class="detail-section-title">📚 Obras asociadas (${totalLinked})</div>
           ${totalLinked ? `
@@ -1570,6 +1589,8 @@ function openPersonModal(p = null) {
     $('personModalTitle').textContent = p ? '✏️ Editar persona' : '＋ Agregar persona';
     updateRangeOutputs($('personModal'));
     $('personAliases').value = p ? (p.aliases || '') : '';
+    $('personNativeName').value = p ? (p.nativeName || '') : '';
+    $('personBirthName').value = p ? (p.birthName || '') : '';
     document.querySelectorAll('#personRoles input').forEach(c => { c.checked = !!p && (p.roles || []).includes(c.value); });
     updatePersonNameHint();
     refreshImgField('personImage'); refreshImgField('personBanner');
@@ -1589,7 +1610,7 @@ function savePerson() {
         name, type: $('personType').value, works: Number($('personWorks').value) || 0, rating: Number($('personRating').value) || 0,
         nationality: $('personNationality').value.trim(), birthDate: $('personBirthDate').value, bio: $('personBio').value.trim(),
         socialLinks: $('personSocialLinks').value.trim(), image: $('personImage').value.trim(), banner: $('personBanner').value.trim(),
-        bl: $('personBl').checked, aliases: $('personAliases').value.trim(), roles
+        bl: $('personBl').checked, aliases: $('personAliases').value.trim(), nativeName: $('personNativeName').value.trim(), birthName: $('personBirthName').value.trim(), roles
     };
     data.type = type;
     if (!roles.length) delete data.roles;
@@ -1598,7 +1619,7 @@ function savePerson() {
     const ok = mutate(() => {
         // Si cambias el nombre, también cambia en las obras donde aparece
         if (renamed) renamePersonInWorks(appData.works.filter(w => workHasPerson(w, old)), old, renamed, name);
-        if (id) { Object.assign(old, data, { updatedAt: Date.now() }); if (!roles.length) delete old.roles; if (!data.aliases) delete old.aliases; }
+        if (id) { Object.assign(old, data, { updatedAt: Date.now() }); if (!roles.length) delete old.roles; ['aliases', 'nativeName', 'birthName'].forEach(k => { if (!data[k]) delete old[k]; }); }
         else appData.persons.push({ id: generateId(), ...data, createdAt: Date.now() });
     }, id ? '✅ Persona actualizada' : '✅ Persona agregada');
     if (ok) closeModal('personModal', { force: true });
@@ -1620,23 +1641,44 @@ function deletePerson(id) {
 // 16. PAREJAS BL
 // ============================================================
 let coupleFilter = 'all';
+/** Las dos fotos redondas de la pareja, una sobre otra, con un corazón entre las dos. */
+function coupleDuoHtml(c) {
+    const a = getPersonById(c.personA), b = getPersonById(c.personB);
+    if (!a && !b) return '';
+    const av = p => (p ? `<span class="duo-av" title="${esc(p.name)}">${img(p.image, 'person', p.name)}</span>` : '');
+    return `<div class="couple-duo">${av(a)}<span class="duo-heart" aria-hidden="true">💕</span>${av(b)}</div>`;
+}
+/** Etiqueta suave de cómo van (la explica al pasar el ratón). */
+function coupleStatusChip(st) {
+    return st ? `<span class="chip couple-st st-${st.key}" title="${esc(st.hint)}${st.auto ? '' : ' (elegido por ti)'}">${st.icon} ${esc(st.label)}</span>` : '';
+}
 function renderCouples() {
-    const q = norm(val('couplesSearch'));
-    let list = appData.couples.filter(c => norm(c.name).includes(q));
+    const q = val('couplesSearch');
+    const statusOf = c => coupleStatus(c, appData.works, appData.persons);
+    let list = appData.couples.filter(c => coupleMatches(c, q, appData.persons));
     if (coupleFilter === 'favorite') list = list.filter(c => c.favorite);
+    if (coupleFilter === 'consolidada') list = list.filter(c => (statusOf(c) || {}).key === 'consolidada');
     if (coupleFilter === 'rating') { const order = rankCouples(list, appData.works, appData.persons).map(r => r.couple); list = order; }
     document.querySelectorAll('#coupleTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === coupleFilter));
     $('coupleCount').textContent = `${list.length} ${list.length === 1 ? 'pareja' : 'parejas'}`;
-    $('couplesGrid').innerHTML = list.length ? list.map(c => { const info = coupleInfo(c); return `
+    $('couplesGrid').innerHTML = list.length ? list.map(c => {
+        const info = coupleInfo(c), st = statusOf(c), duo = coupleDuoHtml(c), names = coupleNames(c, appData.persons);
+        const title = coupleTitle(c);
+        const sub = names && norm(names) !== norm(title) ? names : '';
+        return `
         <article class="couple-card" data-couple="${c.id}" data-id="${c.id}" tabindex="0">
-          <div class="couple-image">${img(c.image, 'couple', c.name)}</div>
+          <div class="couple-image ${duo ? 'has-duo' : ''}">
+            ${duo ? `${bannerBgHtml(c.banner, c.image)}${duo}` : img(c.image, 'couple', c.name)}
+          </div>
           <div class="couple-actions">
             <button class="card-act ${c.favorite ? 'is-fav' : ''}" data-act="couple-fav" title="Favorita" aria-label="Favorita">${c.favorite ? '♥' : '♡'}</button>
             <button class="card-act danger" data-act="couple-delete" title="Eliminar" aria-label="Eliminar">✕</button>
           </div>
           <div class="couple-info">
-            <div class="couple-name">${esc(c.name)}</div>
-            <div class="couple-works">${info.count} ${info.count === 1 ? 'obra' : 'obras'} juntos${info.linked ? ' · 🔗' : ''}</div>
+            <div class="couple-name">${esc(title)}</div>
+            ${sub ? `<div class="couple-sub">${esc(sub)}</div>` : ''}
+            <div class="couple-chips">${coupleStatusChip(st)}</div>
+            <div class="couple-works">${info.count} ${info.count === 1 ? 'obra' : 'obras'} juntos${st && st.span ? ` · ${esc(st.span)}` : ''}${info.linked ? ' · 🔗' : ''}</div>
             <div class="couple-rating"><span class="stars">${getStars(info.avgRating || c.rating)}</span><span class="value">${ratingText(Math.round((info.avgRating || c.rating || 0) * 10) / 10)}</span></div>
           </div>
         </article>`; }).join('')
@@ -1646,7 +1688,7 @@ function renderCouples() {
         <button class="ranking-item" data-couple="${c.id}">
           <div class="ranking-number ${['gold', 'silver', 'bronze'][i] || ''}">${i + 1}</div>
           <div class="ranking-avatar">${img(c.image, 'couple', c.name)}</div>
-          <div class="ranking-info"><div class="ranking-name">${esc(c.name)}</div><div class="ranking-detail">${count} obras${c.favorite ? ' · ❤️' : ''}</div></div>
+          <div class="ranking-info"><div class="ranking-name">${esc(coupleTitle(c))}</div><div class="ranking-detail">${count} obras${c.favorite ? ' · ❤️' : ''}</div></div>
           <div class="ranking-rating">★ ${ratingText(Math.round(score * 10) / 10)}</div>
         </button>`).join('') : '<p class="panel-desc" style="margin:0">Sin datos todavía.</p>';
 }
@@ -1654,6 +1696,9 @@ const updateCouplePreview = bindPreview('coupleImage', 'coupleImagePreview', 'co
 function openCoupleModal(c = null) {
     $('editCoupleId').value = c ? c.id : '';
     $('coupleName').value = c ? c.name : '';
+    $('coupleShip').value = c ? (c.ship || '') : '';
+    $('coupleStatus').value = c && c.status ? c.status : '';
+    $('coupleSince').value = c && c.since ? c.since : '';
     $('coupleWorks').value = c ? (c.works || '') : '';
     $('coupleRating').value = c ? (c.rating || 0) : 0;
     $('coupleImage').value = c ? (c.image || '') : '';
@@ -1664,6 +1709,7 @@ function openCoupleModal(c = null) {
     fillCoupleLinks(c);
     updateRangeOutputs($('coupleModal'));
     updateCouplePreview();
+    updateShipHint();
     openModal('coupleModal');
 }
 function saveCouple() {
@@ -1674,17 +1720,20 @@ function saveCouple() {
     // Si no escribes nombre, se usa "A & B"
     const name = $('coupleName').value.trim() || (a && b ? `${a.name} & ${b.name}` : '');
     if (!name) { showToast('⚠️ Escribe un nombre o elige a los dos actores', 'error'); $('coupleName').focus(); return; }
-    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), banner: $('coupleBanner').value.trim(), favorite: $('coupleFavorite').checked, ...links };
+    const ship = $('coupleShip').value.trim(), status = $('coupleStatus').value, since = Number($('coupleSince').value) || 0;
+    const data = { name, ship, status, since, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), banner: $('coupleBanner').value.trim(), favorite: $('coupleFavorite').checked, ...links };
     const ok = mutate(() => {
-        if (id) Object.assign(getCoupleById(id), data);
-        else appData.couples.push({ id: generateId(), ...data, createdAt: Date.now() });
+        // Lo que se deja vacío no se guarda (así el estado vuelve a calcularse solo)
+        const clean = Object.fromEntries(Object.entries(data).filter(([k, v]) => !['ship', 'status', 'since'].includes(k) || v));
+        if (id) { const cur = getCoupleById(id); ['ship', 'status', 'since'].forEach(k => delete cur[k]); Object.assign(cur, clean); }
+        else appData.couples.push({ id: generateId(), ...clean, createdAt: Date.now() });
     }, id ? '✅ Pareja actualizada' : '✅ Pareja añadida');
     if (ok) closeModal('coupleModal', { force: true });
 }
 function deleteCouple(id) {
     const c = getCoupleById(id);
     if (!c) return;
-    mutate(() => { trashRecord(appData, 'couples', id, Date.now(), { from: 'Parejas BL' }); }, `🗑️ “${c.name}” enviada a la papelera`, { label: `Eliminar pareja “${c.name}”` });
+    mutate(() => { trashRecord(appData, 'couples', id, Date.now(), { from: 'Parejas BL' }); }, `🗑️ “${coupleTitle(c)}” enviada a la papelera`, { label: `Eliminar pareja “${coupleTitle(c)}”` });
 }
 
 // ============================================================
@@ -1969,7 +2018,7 @@ function renderSettings() {
 const TRASH_KIND = {
     works: ['Obras', w => w.title, w => img(w.image, w.type, w.title)],
     persons: ['Personas', p => p.name, p => img(p.image, 'person', p.name)],
-    couples: ['Parejas BL', c => c.name, c => img(c.image, 'couple', c.name)],
+    couples: ['Parejas BL', c => coupleTitle(c), c => img(c.image, 'couple', c.name)],
     collections: ['Colecciones', c => c.name, () => '🗂️'],
     notes: ['Notas', n => `Nota de “${n.workTitle || 'obra'}”`, () => '📝']
 };
@@ -2318,6 +2367,7 @@ document.addEventListener('input', e => {
         $('tagSearch').setSelectionRange(caret, caret);
     }
     if (t.id === 'coupleWorksSearch') renderCoupleWorksPicker();
+    if (t.id === 'coupleShip') updateShipHint();
     if (t.dataset.render && RENDERERS[t.dataset.render]) RENDERERS[t.dataset.render]();
     if (t.type === 'range' && t.dataset.out) updateRangeOutputs(t.closest('.modal, .panel-card') || document);
     if (t.id === 'pdSearch') renderPersonDetail();
@@ -2343,7 +2393,7 @@ document.addEventListener('change', e => {
     if (t.dataset.field === 'airDay' || t.id === 'f_status') updateAirDayHint();
     if (t.closest && t.closest('#workForm')) saveDraft();
     if (t.dataset.tagColor) onTagColorChange(t);
-    if (t.id === 'coupleA' || t.id === 'coupleB') renderCoupleWorksPicker();
+    if (t.id === 'coupleA' || t.id === 'coupleB') { renderCoupleWorksPicker(); updateShipHint(); }
     if (t.dataset.coupleWork) {
         if (t.checked) coupleWorkPick.add(t.dataset.coupleWork); else coupleWorkPick.delete(t.dataset.coupleWork);
         renderCoupleWorksPicker();

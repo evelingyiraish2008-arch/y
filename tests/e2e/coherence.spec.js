@@ -51,7 +51,8 @@ test('parejas vinculadas: obras juntos automáticas, ficha de la pareja y pareja
     await expect(card).toContainText('1 obra juntos');
     await card.locator('.couple-info').click();
     await expect(page.locator('#sheetBody')).toContainText('Semantic Error');
-    await expect(page.locator('#sheetBody')).toContainText('★ 5 de media');
+    await expect(page.locator('#sheetBody .couple-facts')).toContainText('Media');
+    await expect(page.locator('#sheetBody .couple-facts')).toContainText('★ 5');
 
     // Nueva pareja eligiendo los actores: el nombre se pone solo
     await page.evaluate(() => closeModal('sheetModal'));

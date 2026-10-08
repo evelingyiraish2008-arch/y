@@ -149,6 +149,8 @@ test('buscar la foto de una persona nueva en varias fuentes y guardarla en cuadr
     await expect(page.locator('#imgSearchNotice')).toBeVisible(); // aviso de derechos, una vez por sesión
     await expect(page.locator('#imgSearchSuggest')).toContainText('Xiao Zhan photoshoot');
     await expect(page.locator('#imgSearchResults .img-result')).toHaveCount(3); // AniList, Wikipedia y Commons
+    await expect(page.locator('[data-act="img-search-tab"][data-id="wikipedia"]')).toHaveCount(0); // escondidas en "Más fuentes"
+    await page.locator('[data-act="img-search-more-sources"]').click();
     await page.locator('[data-act="img-search-tab"][data-id="wikipedia"]').click();
     await expect(page.locator('#imgSearchResults .img-result')).toHaveCount(1);
     await page.locator('#imgSearchResults .img-result-pick').first().click();

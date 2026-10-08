@@ -119,7 +119,7 @@ describe('búsqueda de datos', () => {
         const tv = md.parseTvmaze([{ show: { id: 7, name: 'The Untamed', premiered: '2019-06-27', summary: '<p>Wuxia</p>', genres: ['Drama', 'Fantasy'], webChannel: { name: 'Tencent', country: { name: 'China' } }, image: { medium: 'http://m', original: 'http://o' } } }]);
         assert.deepEqual([tv[0].platform, tv[0].country, tv[0].coverLarge, tv[0].genre], ['Tencent', 'China', 'https://o', 'Drama, Fantasía']);
         assert.deepEqual(md.parseTvmazeDetails({ _embedded: { episodes: [{ season: 1 }, { season: 1 }, { season: 2 }], cast: [{ person: { name: 'Xiao Zhan', image: { medium: 'http://tv/m.jpg', original: 'http://tv/o.jpg' } }, character: { name: 'Wei Wuxian' } }] } }),
-            { totalEpisodes: 3, seasons: 2, actors: 'Xiao Zhan', people: [{ name: 'Xiao Zhan', role: 'actor', image: 'https://tv/o.jpg', character: 'Wei Wuxian', characterRole: 'protagonista' }] });
+            { totalEpisodes: 3, seasons: 2, seasonsList: [{ number: 1, year: '', episodes: 2, progress: 0, rating: 0 }, { number: 2, year: '', episodes: 1, progress: 0, rating: 0 }], actors: 'Xiao Zhan', people: [{ name: 'Xiao Zhan', role: 'actor', image: 'https://tv/o.jpg', character: 'Wei Wuxian', characterRole: 'protagonista' }] });
         const al = md.parseAniList({ data: { Page: { media: [
             { id: 1, countryOfOrigin: 'JP', chapters: 10, title: { romaji: 'A', english: null }, genres: [], tags: [] },
             { id: 2, countryOfOrigin: 'KR', chapters: 80, title: { romaji: 'Jinx', english: 'Jinx' }, genres: ['Drama'], tags: [{ name: 'Boys Love', rank: 90 }], staff: { edges: [{ role: 'Story & Art', node: { name: { full: 'Mingwa' } } }] }, coverImage: { large: 'L' } }
@@ -179,4 +179,12 @@ describe('próximos episodios', () => {
         assert.deepEqual(out, { a: { at: 10000, episode: 2 }, b: null });
         assert.equal(calls.length, 2);
     });
+});
+
+it('temporadas desde las fuentes: TVmaze (episodios) y TMDB (temporadas)', () => {
+    const eps = [{ season: 1, airdate: '2021-02-22' }, { season: 1, airdate: '2021-02-23' }, { season: 2, airdate: '2023-05-01' }, { season: 2 }, { season: 0 }];
+    assert.deepEqual(md.seasonsFromSource(eps), [{ number: 1, year: 2021, episodes: 2, progress: 0, rating: 0 }, { number: 2, year: 2023, episodes: 2, progress: 0, rating: 0 }]);
+    const tm = md.parseTmdbSeasons({ seasons: [{ season_number: 0, episode_count: 5 }, { season_number: 1, episode_count: 12, air_date: '2019-06-27' }, { season_number: 2, episode_count: 10, air_date: '2023-01-01' }] });
+    assert.deepEqual(tm.seasonsList.map(s => [s.number, s.episodes, s.year]), [[1, 12, 2019], [2, 10, 2023]]);
+    assert.deepEqual(md.parseTmdbSeasons({ seasons: [{ season_number: 1, episode_count: 12 }] }), {}); // con una sola no hace falta
 });
