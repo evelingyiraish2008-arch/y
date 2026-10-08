@@ -2012,6 +2012,7 @@ function renderSettings() {
     if (document.activeElement !== $('settingTmdbKey')) $('settingTmdbKey').value = s.tmdbKey || '';
     $('settingLang').value = s.lang || 'es';
     $('readOnlyToggle').setAttribute('aria-checked', String(!!s.readOnly));
+    $('autoEnrichToggle').setAttribute('aria-checked', String(s.autoEnrich !== false));
     $('clipperLink').href = clipperBookmarklet();
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
     $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
@@ -2658,6 +2659,7 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     document.documentElement.dataset.ready = 'true';
     setTimeout(() => { const sp = $('splash'); if (sp) sp.remove(); }, 450);
     cloud.init();
+    maybeAutoEnrich();
     checkNotifications().catch(() => {});
     if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-work' && getWorkById(e.data.id)) openDetail(e.data.id); });

@@ -568,3 +568,92 @@ FEATURE_ACTIONS['work-translate'] = async id => {
         mutate(() => { w.synopsisOriginal = w.synopsis; w.synopsis = es; w.updatedAt = Date.now(); }, '🌐 Sinopsis traducida', { label: `Traducir sinopsis de “${w.title}”` });
     } catch (e) { showToast('🌐 No pude traducirla ahora (sin conexión o cupo diario agotado)', 'error'); }
 };
+
+// ============================================================
+// 7. PONER AL DÍA LAS OBRAS YA AGREGADAS (etiquetas, país, sinopsis en español…)
+// ============================================================
+const ENRICH_AUTO_EVERY_MS = 6 * 3600000;   // la tanda automática no se repite antes de 6 horas
+const ENRICH_AUTO_BATCHES = 3;               // en segundo plano: hasta 24 obras por apertura
+let enrichRunning = false;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function setEnrichStatus(text) { const el = $('enrichStatus'); if (el) el.textContent = text || ''; }
+/**
+ * Busca los datos de las obras a las que les falta información y se los añade (nunca pisa lo escrito).
+ * auto: segundo plano, pocas tandas y sin avisos si no hay nada. manual: todas las que falten, con avance.
+ */
+async function enrichWorks({ auto = false } = {}) {
+    if (enrichRunning) return;
+    if (!navigator.onLine) { if (!auto) showToast('📶 Sin conexión', 'error'); return; }
+    enrichRunning = true;
+    const seen = new Set();
+    const results = [];
+    let quota = false, done = 0;
+    const total = enrichPending(appData.works, { needsTranslationFn: needsTranslation });
+    try {
+        for (let b = 0; b < (auto ? ENRICH_AUTO_BATCHES : 50); b++) {
+            const batch = enrichCandidates(appData.works.filter(w => !seen.has(w.id)), { needsTranslationFn: needsTranslation });
+            if (!batch.length) break;
+            for (const w of batch) {
+                seen.add(w.id);
+                let patch = {};
+                try {
+                    const { results: found } = await searchMetadata(w.type, w.title, { tmdbKey: appData.settings.tmdbKey || '', seriesType: w.seriesType || 'Serie' });
+                    const best = pickBestMatch(w, found);
+                    if (best) {
+                        const details = ['tmdb', 'openlibrary'].includes(best.source) ? await fetchMetadataDetails(best, { tmdbKey: appData.settings.tmdbKey || '' }) : {};
+                        patch = enrichPatch(w, { ...best, ...details });
+                    }
+                } catch (e) { /* sin esa fuente: se sigue con la siguiente obra */ }
+                // Sinopsis en otro idioma → español (guarda la original); si se acabó el cupo diario, se reintenta otro día
+                const synopsis = patch.synopsis || w.synopsis;
+                let retry = false;
+                if (synopsis && needsTranslation(synopsis)) {
+                    if (quota) retry = true;
+                    else {
+                        try { patch.synopsis = await translateToSpanish(synopsis); if (!patch.synopsisOriginal) patch.synopsisOriginal = synopsis; }
+                        catch (e) { quota = true; retry = true; delete patch.synopsis; }
+                    }
+                }
+                results.push({ w, patch, retry });
+                done++;
+                if (!auto) setEnrichStatus(`Revisando ${done} de ${total}…`);
+                await wait(auto ? 800 : 400);
+            }
+        }
+        const changed = results.filter(r => Object.keys(r.patch).length);
+        const now = Date.now();
+        if (results.length) {
+            mutate(() => results.forEach(({ w, patch, retry }) => {
+                Object.assign(w, patch);
+                if (!retry) w.enrichedAt = now;
+                if (Object.keys(patch).length) w.updatedAt = now;
+            }), changed.length ? `✨ Puse al día ${changed.length} ${changed.length === 1 ? 'obra' : 'obras'} con datos nuevos` : null,
+            { label: `Poner al día ${changed.length} obras`, undo: changed.length > 0 });
+        }
+        appData.settings.enrichRunAt = now;
+        saveData();
+        if (!auto) {
+            setEnrichStatus(changed.length ? `Listo: ${changed.length} de ${results.length} obras con datos nuevos.` : results.length ? 'Todo estaba al día 👌' : 'No hay obras por revisar 👌');
+            if (quota) showToast('🌐 Se acabó el cupo diario de traducción: las sinopsis que faltan se traducirán mañana.', 'info', 6000);
+            if (!results.length) showToast('👌 Todas tus obras ya están al día');
+        }
+    } finally { enrichRunning = false; }
+}
+/** Al abrir la app: si está activado, hay conexión y pasaron 6 horas, pone al día unas cuantas obras en segundo plano. */
+function maybeAutoEnrich() {
+    const s = appData.settings;
+    if (s.autoEnrich === false || s.readOnly || !navigator.onLine || navigator.webdriver) return; // (los navegadores automatizados de las pruebas no consultan internet solos)
+    if (Date.now() - (Number(s.enrichRunAt) || 0) < ENRICH_AUTO_EVERY_MS) return;
+    if (!enrichCandidates(appData.works, { needsTranslationFn: needsTranslation, limit: 1 }).length) return;
+    setTimeout(() => enrichWorks({ auto: true }).catch(() => { enrichRunning = false; }), 6000);
+}
+FEATURE_ACTIONS['enrich-now'] = () => {
+    if (appData.settings.readOnly) { showToast('👀 Estás en modo solo lectura', 'error'); return; }
+    enrichWorks().catch(() => { enrichRunning = false; setEnrichStatus('No se pudo completar. Inténtalo de nuevo.'); });
+};
+FEATURE_ACTIONS['auto-enrich-toggle'] = () => {
+    appData.settings.autoEnrich = appData.settings.autoEnrich === false;
+    saveData();
+    renderSettings();
+    showToast(appData.settings.autoEnrich === false ? '🔄 Puesta al día automática desactivada' : '🔄 Puesta al día automática activada');
+};

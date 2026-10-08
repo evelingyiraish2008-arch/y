@@ -22,6 +22,7 @@ const APP_SHELL = [
     './coherence.js',
     './tagkit.js',
     './translatekit.js',
+    './enrichkit.js',
     './metadata.js',
     './importers.js',
     './features.js',
