@@ -561,6 +561,7 @@ function renderHero(inProgress) {
                     : (w.synopsis ? `<p class="hero-text">${esc(w.synopsis)}</p>` : '')}
             <div class="hero-actions">
                 ${total && (Number(w.progress) || 0) < total ? `<button class="btn btn-primary" data-act="progress" data-id="${w.id}">＋${step} ${TYPE_META[w.type].unit}</button>` : ''}
+                ${watchPrimaryHtml(w, 'btn btn-secondary')}
                 <button class="btn btn-secondary" data-open="${w.id}">Ver detalles</button>
                 <button class="btn btn-secondary" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ En Mi lista' : '＋ Mi lista'}</button>
             </div>
@@ -1156,7 +1157,7 @@ const FIELD_LABELS = {
     studio: 'Estudio', platform: 'Plataforma', country: 'País', genre: 'Género', year: 'Año', actors: 'Actores', directors: 'Directores',
     pages: 'Páginas', totalEpisodes: 'Episodios', totalChapters: 'Capítulos', seasons: 'Temporadas', season: 'Temporada',
     airDay: 'Día de emisión', startDate: 'Inicio', endDate: 'Fin', tags: 'Etiquetas', synopsis: 'Sinopsis', spicy: 'Spicy',
-    sadness: 'Tristeza', image: 'Portada', banner: 'Banner', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
+    sadness: 'Tristeza', image: 'Portada', banner: 'Banner', watchLinks: 'Dónde verla', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
 };
 function fieldValueText(field, v) {
     if (v === null || v === undefined || v === '') return '—';
@@ -1164,6 +1165,7 @@ function fieldValueText(field, v) {
     if (field === 'status') return getStatusLabel(v);
     if (field === 'type') return getTypeLabel(v);
     if (field === 'image' || field === 'banner') return 'imagen';
+    if (field === 'watchLinks') return Array.isArray(v) ? `${v.length} ${v.length === 1 ? 'enlace' : 'enlaces'}` : '—';
     if (field === 'rating') return Number(v) ? '★ ' + ratingText(v) : '—';
     if (field === 'airDay') return (WEEK.find(d => d.day === Number(v)) || {}).short || '—';
     if (field === 'startDate' || field === 'endDate') return fmtDate(v);
@@ -1286,6 +1288,7 @@ function renderDetail(fresh = false) {
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
         ${suggestionsHtml(w)}
+        ${(w.watchLinks || []).length ? `<div class="watch-quick">${watchPrimaryHtml(w)}<button type="button" class="link-btn" data-act="watch-open-section" data-id="${w.id}">Otros enlaces…</button></div>` : ''}
         ${total ? `
         <div class="detail-progress">
           <div class="detail-progress-row"><span>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>
@@ -1318,6 +1321,7 @@ function renderDetail(fresh = false) {
             ${castLinesHtml(w) ? `<div class="detail-section-title" style="margin-top:12px">🎭 Reparto</div>${castLinesHtml(w)}` : ''}
           </div>
         </details>
+        ${watchSectionHtml(w, open.watch)}
         ${notesSectionHtml(w, open.notes, composer)}
         ${contentSectionHtml(w, open.content)}
         ${rereadsSectionHtml(w, open.rereads)}

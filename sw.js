@@ -38,6 +38,8 @@ const APP_SHELL = [
     './imagefind.js',
     './people.js',
     './moodboard.js',
+    './watchkit.js',
+    './watch.js',
     './extras.js',
     './i18n.js',
     './play.js',
