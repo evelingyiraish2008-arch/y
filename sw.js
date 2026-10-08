@@ -20,6 +20,8 @@ const APP_SHELL = [
     './insights.js',
     './history.js',
     './coherence.js',
+    './tagkit.js',
+    './translatekit.js',
     './metadata.js',
     './importers.js',
     './features.js',

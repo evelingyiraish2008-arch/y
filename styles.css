@@ -2033,3 +2033,7 @@ a.btn { text-decoration: none; }
 .meta-web .search-web { border-top: 0; }
 .web-main { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .web-main .btn { flex: 1; min-width: 130px; justify-content: center; }
+
+/* Etiquetas detalladas en el formulario */
+#tagsHint > div { margin: 4px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#tagsHint .tag-group { padding: 6px 0; border-top: 1px dashed var(--border, rgba(128,128,128,.3)); }

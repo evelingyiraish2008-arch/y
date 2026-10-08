@@ -311,9 +311,10 @@ function renderGrid(gridId, list, empty, countId, page = currentPage, cardOpts =
 // 6. PÁGINAS DE OBRAS
 // ============================================================
 function renderBooks() {
+    populateCountryFilter('booksCountryFilter', getWorksByType('book'));
     let list = filterWorks(getWorksByType('book'), {
         search: val('booksSearch'), status: val('booksStatusFilter'), bl: checked('booksBlFilter'), fav: checked('booksFavFilter'),
-        spicy: val('booksSpicyFilter'), sadness: val('booksSadnessFilter')
+        spicy: val('booksSpicyFilter'), sadness: val('booksSadnessFilter'), country: val('booksCountryFilter')
     });
     list = filterByDate(list, val('booksDateFilter'));
     renderSavedViews('books');
@@ -324,9 +325,10 @@ let seriesTab = 'all';
 function renderSeries() {
     const all = getWorksByType('series');
     populateYearFilter('seriesYearFilter', all);
+    populateCountryFilter('seriesCountryFilter', all);
     let list = filterWorks(all, {
         search: val('seriesSearch'), fav: checked('seriesFavFilter'),
-        spicy: val('seriesSpicyFilter'), sadness: val('seriesSadnessFilter')
+        spicy: val('seriesSpicyFilter'), sadness: val('seriesSadnessFilter'), country: val('seriesCountryFilter')
     });
     if (seriesTab === 'bl') list = list.filter(w => w.bl);
     else if (seriesTab !== 'all') list = list.filter(w => w.status === seriesTab);
@@ -346,6 +348,15 @@ function renderSeries() {
     renderSavedViews('series');
     renderGrid('seriesGrid', sortWorks(list, val('seriesSort')), ['🎬', 'No hay series aquí', 'Prueba con otra pestaña o agrega una serie.', 'series'], null, 'series');
 }
+/** Rellena el filtro de país con los países que ya tienen tus obras (con bandera y cuántas hay). */
+function populateCountryFilter(selectId, items) {
+    const select = $(selectId);
+    if (!select) return;
+    const current = select.value;
+    const opts = countryOptions(items);
+    select.innerHTML = '<option value="all">🌍 País: todos</option>' + opts.map(o => `<option value="${esc(o.key)}">${countryFlag(o.label) ? countryFlag(o.label) + ' ' : ''}${esc(o.label)} (${o.count})</option>`).join('');
+    select.value = opts.some(o => o.key === current) ? current : 'all';
+}
 function populateYearFilter(selectId, items) {
     const select = $(selectId);
     const current = select.value;
@@ -354,26 +365,29 @@ function populateYearFilter(selectId, items) {
     select.value = years.map(String).includes(current) ? current : 'all';
 }
 function renderAnime() {
+    populateCountryFilter('animeCountryFilter', getWorksByType('anime'));
     let list = filterWorks(getWorksByType('anime'), {
         search: val('animeSearch'), status: val('animeStatusFilter'), bl: checked('animeBlFilter'), fav: checked('animeFavFilter'),
-        spicy: val('animeSpicyFilter'), sadness: val('animeSadnessFilter')
+        spicy: val('animeSpicyFilter'), sadness: val('animeSadnessFilter'), country: val('animeCountryFilter')
     });
     list = filterByDate(list, val('animeDateFilter'));
     renderSavedViews('anime');
     renderGrid('animeGrid', sortWorks(list, val('animeSort')), ['🎌', 'No hay animes aquí', 'Prueba con otros filtros o agrega un anime.', 'anime'], 'animeCount', 'anime');
 }
 function renderManhwa() {
+    populateCountryFilter('manhwaCountryFilter', getWorksByType('manhwa'));
     let list = filterWorks(getWorksByType('manhwa'), {
         search: val('manhwaSearch'), status: val('manhwaStatusFilter'), bl: checked('manhwaBlFilter'), fav: checked('manhwaFavFilter'),
-        spicy: val('manhwaSpicyFilter'), sadness: val('manhwaSadnessFilter')
+        spicy: val('manhwaSpicyFilter'), sadness: val('manhwaSadnessFilter'), country: val('manhwaCountryFilter')
     });
     list = filterByDate(list, val('manhwaDateFilter'));
     renderSavedViews('manhwa');
     renderGrid('manhwaGrid', sortWorks(list, val('manhwaSort')), ['📕', 'No hay manhwas aquí', 'Prueba con otros filtros o agrega un manhwa.', 'manhwa'], 'manhwaCount', 'manhwa');
 }
 function renderBL() {
+    populateCountryFilter('blCountryFilter', appData.works.filter(w => w.bl));
     let list = filterWorks(appData.works.filter(w => w.bl), {
-        search: val('blSearch'), type: val('blTypeFilter'), status: val('blStatusFilter'), minRating: checked('blMinRating') ? 4 : 0
+        search: val('blSearch'), type: val('blTypeFilter'), status: val('blStatusFilter'), country: val('blCountryFilter'), minRating: checked('blMinRating') ? 4 : 0
     });
     list = sortWorks(filterByDate(list, val('blDateFilter')), val('blSort'));
     renderSavedViews('bl');
@@ -1324,7 +1338,7 @@ function renderDetail(fresh = false) {
         </div>
         <div class="detail-section">
           <div class="detail-section-title">Sinopsis</div>
-          <p class="detail-text">${esc(w.synopsis || 'Sin sinopsis todavía.')}</p>
+          <p class="detail-text">${esc(w.synopsis || 'Sin sinopsis todavía.')}</p>${w.synopsis && needsTranslation(w.synopsis) ? `<button type="button" class="link-btn" data-act="work-translate" data-id="${w.id}">🌐 Traducir al español</button>` : ''}
         </div>
         ${tags.length ? `<div class="detail-section"><div class="detail-section-title">Etiquetas</div><div class="tag-list">${tags.map(tagChip).join('')}</div></div>` : ''}
         ${seasonsSectionHtml(w, open.seasons)}

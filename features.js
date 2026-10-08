@@ -113,29 +113,41 @@ function onTagColorChange(input) {
     mutate(() => setTagMeta(tag, { color: input.value }), '🎨 Color de la etiqueta guardado', { label: `Color de “${tag}”` });
 }
 
-/** Debajo del campo de etiquetas: "¿Quisiste decir…?" y etiquetas sugeridas. */
+/** Debajo del campo de etiquetas: "¿Quisiste decir…?", etiquetas de tus obras, del catálogo detallado y "Más etiquetas". */
+let tagsMoreOpen = false;
 function updateTagsHint() {
     const el = $('tagsHint'), input = $('f_tags');
     if (!el || !input) return;
+    const own = splitList(input.value);
+    const typed = /,\s*$/.test(input.value) ? '' : (input.value.split(',').pop() || '').trim();
     const fixes = suggestTagFixes(input.value, knownTags());
     const draft = { ...collectWorkForm(), type: formType, id: editingWorkId };
     let suggested = suggestTagsFor(draft, appData.works, 5);
     // Sin pistas todavía: las etiquetas que más usas
-    if (!suggested.length && !splitList(input.value).length) suggested = tagStats(appData.works).slice(0, 6).map(t => t.label);
-    el.hidden = !fixes.length && !suggested.length;
+    if (!suggested.length && !own.length) suggested = tagStats(appData.works).slice(0, 6).map(t => t.label);
+    const have = new Set([...own, ...suggested].map(tagKey));
+    const catalog = catalogSuggest(draft, { typed, own, limit: typed ? 8 : 10 }).filter(t => !have.has(tagKey(t)));
+    const chip = (t, complete) => `<button type="button" class="chip chip-muted" data-act="tag-add" data-id="${esc(t)}"${complete ? ' data-complete="1"' : ''}>＋ ${esc(t)}</button>`;
+    el.hidden = false;
     el.innerHTML = [
-        fixes.length ? `🤔 ¿Quisiste decir ${fixes.map(f => `<button type="button" class="link-btn" data-act="tag-fix" data-id="${esc(f.typed)}" data-to="${esc(f.suggestion)}">${esc(f.suggestion)}</button>`).join(', ')}?` : '',
-        suggested.length ? `<span>✨ Sugeridas: ${suggested.map(t => `<button type="button" class="chip chip-muted" data-act="tag-add" data-id="${esc(t)}">＋ ${esc(t)}</button>`).join(' ')}</span>` : ''
-    ].filter(Boolean).join(' ');
+        fixes.length ? `<div>🤔 ¿Quisiste decir ${fixes.map(f => `<button type="button" class="link-btn" data-act="tag-fix" data-id="${esc(f.typed)}" data-to="${esc(f.suggestion)}">${esc(f.suggestion)}</button>`).join(', ')}?</div>` : '',
+        suggested.length ? `<div>✨ De tus obras: ${suggested.map(t => chip(t)).join(' ')}</div>` : '',
+        catalog.length ? `<div>🏷️ ${typed ? 'Etiquetas que encajan' : 'Más específicas'}: ${catalog.map(t => chip(t, !!typed)).join(' ')}</div>` : '',
+        `<div><button type="button" class="link-btn" data-act="tags-more" aria-expanded="${tagsMoreOpen}">${tagsMoreOpen ? '▴ Menos etiquetas' : '▾ Ver todas las etiquetas por grupos'}</button></div>`,
+        tagsMoreOpen ? catalogGroups(own).map(g => `<div class="tag-group"><strong>${esc(g.group)}</strong> ${g.tags.map(t => chip(t)).join(' ')}</div>`).join('') : ''
+    ].filter(Boolean).join('');
 }
+FEATURE_ACTIONS['tags-more'] = () => { tagsMoreOpen = !tagsMoreOpen; updateTagsHint(); };
 FEATURE_ACTIONS['tag-fix'] = (typed, el) => {
     const input = $('f_tags');
     input.value = splitList(input.value).map(t => (tagKey(t) === tagKey(typed) ? el.dataset.to : t)).join(', ');
     input.dispatchEvent(new Event('input', { bubbles: true }));
 };
-FEATURE_ACTIONS['tag-add'] = tag => {
+FEATURE_ACTIONS['tag-add'] = (tag, el) => {
     const input = $('f_tags');
-    input.value = dedupeTags([...splitList(input.value), tag]).join(', ');
+    // Si estaba escribiendo una etiqueta a medias, la sugerida la completa en vez de añadirse al lado
+    const base = el && el.dataset.complete ? splitList(input.value).slice(0, -1) : splitList(input.value);
+    input.value = dedupeTags([...base, tag]).join(', ');
     input.dispatchEvent(new Event('input', { bubbles: true }));
 };
 

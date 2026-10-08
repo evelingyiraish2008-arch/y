@@ -176,6 +176,38 @@ function tagCounts(works) {
     return [...counts.values()].sort((a, b) => b[1] - a[1]);
 }
 
+// ---------- País ----------
+const COUNTRY_FLAGS = {
+    'japon': '🇯🇵', 'corea del sur': '🇰🇷', 'corea': '🇰🇷', 'china': '🇨🇳', 'taiwan': '🇹🇼', 'tailandia': '🇹🇭', 'estados unidos': '🇺🇸', 'reino unido': '🇬🇧',
+    'espana': '🇪🇸', 'mexico': '🇲🇽', 'filipinas': '🇵🇭', 'argentina': '🇦🇷', 'francia': '🇫🇷', 'alemania': '🇩🇪', 'italia': '🇮🇹', 'india': '🇮🇳',
+    'vietnam': '🇻🇳', 'brasil': '🇧🇷', 'colombia': '🇨🇴', 'chile': '🇨🇱', 'peru': '🇵🇪', 'indonesia': '🇮🇩', 'malasia': '🇲🇾', 'hong kong': '🇭🇰',
+    'canada': '🇨🇦', 'australia': '🇦🇺', 'rusia': '🇷🇺', 'turquia': '🇹🇷', 'suecia': '🇸🇪', 'dinamarca': '🇩🇰'
+};
+// Escrituras habituales que son el mismo país
+const COUNTRY_ALIASES = { 'korea': 'corea del sur', 'south korea': 'corea del sur', 'corea del sur': 'corea del sur', 'republica de corea': 'corea del sur', 'japan': 'japon', 'thailand': 'tailandia', 'usa': 'estados unidos', 'ee uu': 'estados unidos', 'eeuu': 'estados unidos', 'united states': 'estados unidos', 'uk': 'reino unido', 'united kingdom': 'reino unido', 'spain': 'espana', 'mexico': 'mexico', 'philippines': 'filipinas', 'taiwan': 'taiwan' };
+/** Clave para comparar países: sin tildes ni mayúsculas, y con el mismo valor para "Korea" y "Corea del Sur". */
+function countryKey(c) {
+    const k = norm(c).replace(/[.]/g, '').trim();
+    return COUNTRY_ALIASES[k] || k;
+}
+const countryFlag = c => COUNTRY_FLAGS[countryKey(c)] || '';
+/** País(es) de una obra: puede escribir varios ("Corea del Sur, Tailandia"). */
+const countriesOf = w => splitList(w.country);
+/** Opciones del filtro de país: [{ key, label, count }] de más a menos obras. El texto es el más usado de cada país. */
+function countryOptions(works) {
+    const map = new Map();
+    works.forEach(w => countriesOf(w).forEach(c => {
+        const key = countryKey(c);
+        if (!key) return;
+        const cur = map.get(key) || { key, count: 0, spellings: new Map() };
+        cur.count++;
+        cur.spellings.set(c, (cur.spellings.get(c) || 0) + 1);
+        map.set(key, cur);
+    }));
+    return [...map.values()].map(o => ({ key: o.key, count: o.count, label: [...o.spellings.entries()].sort((a, b) => b[1] - a[1])[0][0] }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'es'));
+}
+
 function filterWorks(list, f) {
     // Búsqueda avanzada (query.js): "BL nota:5", "estado:pendiente año:>2020"…
     const advanced = f.search && typeof isAdvancedQuery === 'function' && isAdvancedQuery(f.search) ? parseQuery(f.search) : null;
@@ -196,6 +228,7 @@ function filterWorks(list, f) {
         if (f.spicy && f.spicy !== 'all' && Number(w.spicy) !== Number(f.spicy)) return false;
         if (f.sadness && f.sadness !== 'all' && Number(w.sadness) !== Number(f.sadness)) return false;
         if (f.type && f.type !== 'all' && w.type !== f.type) return false;
+        if (f.country && f.country !== 'all' && !countriesOf(w).some(c => countryKey(c) === f.country)) return false;
         if (f.minRating && (Number(w.rating) || 0) < f.minRating) return false;
         return true;
     });
@@ -258,6 +291,10 @@ if (typeof module !== 'undefined' && module.exports) {
         getAirDay,
         tagCounts,
         filterWorks,
+        countryKey,
+        countryFlag,
+        countriesOf,
+        countryOptions,
         sortWorks,
     };
 }

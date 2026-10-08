@@ -26,13 +26,14 @@ const GENRE_ES = {
     war: 'bélico', western: 'western', anime: 'anime', 'young adult fiction': 'juvenil', fiction: 'ficción', 'legal': 'legal', ecchi: 'ecchi',
     'mahou shoujo': 'magical girl', shounen: 'shonen', shoujo: 'shojo', seinen: 'seinen', josei: 'josei', isekai: 'isekai', 'martial arts': 'artes marciales'
 };
-const translateGenre = g => GENRE_ES[String(g).trim().toLowerCase()] || String(g).trim().toLowerCase();
+// tagkit.js (si está cargado) conoce muchas más etiquetas: tropos, tono, ambientación…
+const translateGenre = g => GENRE_ES[String(g).trim().toLowerCase()] || (typeof translateTagName === 'function' ? translateTagName(g) : String(g).trim().toLowerCase());
 const stripHtml = s => String(s || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\n{3,}/g, '\n\n').trim();
 const httpsUrl = u => (u ? String(u).replace(/^http:\/\//i, 'https://') : '');
 const yearOf = d => { const y = parseInt(String(d || '').slice(0, 4), 10); return y > 1000 ? y : ''; };
 function genreFields(genres) {
     const list = [...new Set((genres || []).map(translateGenre).filter(Boolean))];
-    return { tags: list.slice(0, 6).join(', '), genre: list.filter(g => g !== 'BL').slice(0, 2).map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', '), bl: list.includes('BL') };
+    return { tags: list.slice(0, 12).join(', '), genre: list.filter(g => g !== 'BL').slice(0, 2).map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', '), bl: list.includes('BL') };
 }
 
 // ---------- Lectores de cada servicio (puros) ----------
@@ -168,7 +169,7 @@ const ANILIST_QUERY = `query ($q: String, $type: MediaType) {
       startDate { year }
       description(asHtml: false)
       genres
-      tags { name rank }
+      tags { name rank isGeneralSpoiler }
       coverImage { large extraLarge }
       studios(isMain: true) { nodes { name } }
       staff(perPage: 4) { edges { role node { name { full } image { large } } } }
@@ -179,7 +180,7 @@ const ANILIST_QUERY = `query ($q: String, $type: MediaType) {
 function parseAniList(json, type) {
     const list = (((json || {}).data || {}).Page || {}).media || [];
     return list.map(m => {
-        const tags = (m.tags || []).filter(t => t.rank >= 70).map(t => t.name);
+        const tags = (m.tags || []).filter(t => t.rank >= 55 && !t.isGeneralSpoiler).map(t => t.name);
         const g = genreFields([...(m.genres || []), ...tags]);
         const story = ((m.staff || {}).edges || []).find(e => /story|original/i.test(e.role)) || ((m.staff || {}).edges || [])[0];
         const people = type === 'anime'
@@ -210,8 +211,20 @@ function parseJikan(json) {
         totalEpisodes: a.episodes || 0, synopsis: stripHtml(a.synopsis).replace(/\[Written by MAL Rewrite\]/i, '').trim().slice(0, 1500),
         studio: ((a.studios || [])[0] || {}).name || '', country: 'Japón',
         cover: (((a.images || {}).jpg) || {}).image_url || '', coverLarge: (((a.images || {}).jpg) || {}).large_image_url || '',
-        ...genreFields((a.genres || []).map(x => x.name))
+        ...genreFields([...(a.genres || []), ...(a.themes || []), ...(a.demographics || [])].map(x => x.name))
     }));
+}
+
+/** Une etiquetas ya escritas ("a, b") con más (lista) sin repetir; máx. 14. */
+function joinTags(current, extra) {
+    const seen = new Set(), out = [];
+    [...String(current || '').split(','), ...extra].map(x => String(x).trim()).filter(Boolean).forEach(t => { const k = t.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(t); } });
+    return out.slice(0, 14).join(', ');
+}
+/** /tv/{id}/keywords (results) o /movie/{id}/keywords (keywords) → etiquetas en español. */
+function parseTmdbKeywords(json) {
+    const list = (json || {}).keywords || (json || {}).results || [];
+    return [...new Set(list.map(k => translateGenre(k.name)).filter(Boolean))].slice(0, 8);
 }
 
 // ---------- Peticiones ----------
@@ -270,7 +283,9 @@ async function fetchMetadataDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}
             // Las series también traen sus temporadas con los episodios de cada una (si falla, se sigue sin ellas)
             const seasons = /^tv\//.test(String(meta.externalId))
                 ? await getJson(`https://api.themoviedb.org/3/${meta.externalId}?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }).then(parseTmdbSeasons).catch(() => ({})) : {};
-            return { ...credits, ...seasons };
+            // Palabras clave de TMDB: etiquetas más específicas que los géneros
+            const kw = await getJson(`https://api.themoviedb.org/3/${meta.externalId}/keywords?api_key=${enc(tmdbKey)}`, { fetchFn }).then(parseTmdbKeywords).catch(() => []);
+            return { ...credits, ...seasons, ...(kw.length ? { tags: joinTags(meta.tags, kw) } : {}) };
         }
         if (meta.source === 'jikan') return { people: parseJikanCharacters(await getJson(`https://api.jikan.moe/v4/anime/${enc(meta.externalId)}/characters`, { fetchFn })) };
         if (meta.source === 'tvmaze') return parseTvmazeDetails(await getJson(`https://api.tvmaze.com/shows/${enc(meta.externalId)}?embed[]=episodes&embed[]=cast`, { fetchFn }));
@@ -331,6 +346,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseAniListAiring, parseTvmazeNext, fetchNextEpisodes,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
-        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
+        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };
 }

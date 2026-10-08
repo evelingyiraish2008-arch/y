@@ -41,6 +41,7 @@ function renderMetaSheet() {
     }
     return `${failed}
         <label class="checkbox-wrapper" style="margin-bottom:12px"><input type="checkbox" id="metaOverwrite" ${s.overwrite ? 'checked' : ''}> Reemplazar también lo que ya escribí</label>
+        <label class="checkbox-wrapper" style="margin-bottom:12px"><input type="checkbox" id="metaTranslate" ${appData.settings.autoTranslate !== false ? 'checked' : ''}> 🌐 Traducir la sinopsis al español si viene en otro idioma</label>
         <div class="pick-list">${s.results.map((r, i) => `
         <button class="pick-item meta-result" data-act="meta-apply" data-id="${i}">
             <div class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" data-ph="${s.type}">` : TYPE_META[s.type].icon}</div>
@@ -72,6 +73,13 @@ async function applyMeta(i) {
     const current = collectWorkForm();
     const patch = mergeMetadata(current, meta, { overwrite });
     delete patch.title; // el título lo dejas como lo escribiste
+    // Sinopsis en español: si la fuente la trae en otro idioma se traduce (si falla, se deja la original)
+    const wantTranslate = $('metaTranslate') ? $('metaTranslate').checked : appData.settings.autoTranslate !== false;
+    if ($('metaTranslate') && wantTranslate !== (appData.settings.autoTranslate !== false)) { appData.settings.autoTranslate = wantTranslate; saveData(); }
+    let translated = false, translateFailed = false;
+    if (patch.synopsis && wantTranslate && needsTranslation(patch.synopsis)) {
+        try { patch.synopsis = await translateToSpanish(patch.synopsis); translated = true; } catch (e) { translateFailed = true; }
+    }
     if (patch.seriesType) setFormField('seriesType', patch.seriesType);
     let n = 0;
     Object.entries(patch).forEach(([f, v]) => { if (f !== 'seriesType' && setFormField(f, v)) n++; });
@@ -86,8 +94,9 @@ async function applyMeta(i) {
     updateRangeOutputs(workForm);
     const coverUrl = meta.coverLarge || meta.cover;
     if (coverUrl && (overwrite || !$('f_image').value)) { await useCover(coverUrl); n++; }
-    const extra = seasonsFilled ? ` · ${seasonsFilled} temporadas con sus episodios` : '';
+    const extra = (seasonsFilled ? ` · ${seasonsFilled} temporadas con sus episodios` : '') + (translated ? ' · sinopsis traducida 🌐' : '');
     showToast(n ? `✨ ${n} ${n === 1 ? 'dato rellenado' : 'datos rellenados'} desde ${r.sourceLabel}${extra}` : 'Ya tenías todo rellenado 👌');
+    if (translateFailed) showToast('🌐 No pude traducir la sinopsis ahora (sin conexión o cupo diario). Pulsa “Traducir al español” más tarde.', 'error');
 }
 /** Descarga la portada y la guarda reducida. Si el servidor no lo permite, se guarda el enlace. */
 async function useCover(url) {
@@ -536,3 +545,26 @@ function maybeRefreshAiring() {
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = {};
+
+// ---------- Sinopsis en español ----------
+/** Traduce el texto de la sinopsis del formulario. */
+FEATURE_ACTIONS['synopsis-translate'] = async (id, el) => {
+    const field = workForm.querySelector('[data-field="synopsis"]');
+    const text = field.value.trim();
+    if (!text) { showToast('✍️ Escribe o rellena primero la sinopsis', 'error'); return; }
+    if (!needsTranslation(text)) { showToast('Ya parece estar en español 👌'); return; }
+    if (el) el.disabled = true;
+    try { field.value = await translateToSpanish(text); field.dispatchEvent(new Event('input', { bubbles: true })); showToast('🌐 Sinopsis traducida'); }
+    catch (e) { showToast('🌐 No pude traducirla ahora (sin conexión o cupo diario agotado)', 'error'); }
+    finally { if (el) el.disabled = false; }
+};
+/** Traduce la sinopsis de una obra ya guardada (con deshacer; guarda la original por si la quieres de vuelta). */
+FEATURE_ACTIONS['work-translate'] = async id => {
+    const w = getWorkById(id);
+    if (!w || !w.synopsis) return;
+    showToast('🌐 Traduciendo…');
+    try {
+        const es = await translateToSpanish(w.synopsis);
+        mutate(() => { w.synopsisOriginal = w.synopsis; w.synopsis = es; w.updatedAt = Date.now(); }, '🌐 Sinopsis traducida', { label: `Traducir sinopsis de “${w.title}”` });
+    } catch (e) { showToast('🌐 No pude traducirla ahora (sin conexión o cupo diario agotado)', 'error'); }
+};
