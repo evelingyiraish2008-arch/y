@@ -215,12 +215,12 @@ function webSuggestions({ name = '', kind = 'works', type = '', bl = false } = {
     const n = String(name || '').trim();
     if (!n) return [];
     const s = (label, extra) => ({ label, query: extra ? `${n} ${extra}` : n });
-    if (kind === 'persons') return [s('Todo sobre él/ella'), s('Filmografía', 'filmografía'), s('Nombre real', 'nombre real'), s('Dramas y series', 'dramas series'), s('Redes sociales', 'instagram')];
+    if (kind === 'persons') return [s('Todo sobre él/ella'), s('Filmografía', 'filmografía'), s('Nombre real', 'nombre real'), s('Dramas y series', 'dramas series'), s('Como director/a', 'director'), s('Redes sociales', 'instagram')];
     if (kind === 'couples') return [s('La pareja'), s('Sus dramas juntos', 'dramas juntos'), s('Momentos', 'moments'), s('Fanart', 'fanart'), s('Behind the scenes', 'behind the scenes')];
     if (kind === 'collections') return [s('Ideas parecidas', 'recomendaciones'), s('Estética', 'aesthetic')];
     if (type === 'book') return [s('La obra'), s('Autor/a', 'autor'), s('Sinopsis', 'sinopsis'), s('Reseñas', 'reseña'), s('Saga o continuación', 'saga')];
-    if (type === 'manhwa') return [s('La obra', 'manhwa'), s('Dónde leerla', 'dónde leer'), s('Capítulos', 'capítulos'), s('Autor/a', 'autor'), s('Etiquetas y géneros', 'tags géneros')];
-    return [s('La obra', bl ? 'BL' : ''), s('Reparto', 'reparto'), s('Sinopsis', 'sinopsis'), s('Etiquetas y géneros', 'tags géneros'), s('Dónde verla', 'dónde ver'), s('Wiki o ficha', 'wiki')];
+    if (type === 'manhwa') return [s('La obra', 'manhwa'), s('Dónde leerla', 'dónde leer'), s('Capítulos', 'capítulos'), s('Autor/a', 'autor'), s('Personajes', 'personajes'), s('Etiquetas y géneros', 'tags géneros')];
+    return [s('La obra', bl ? 'BL' : ''), s('Reparto', 'reparto'), s('Director/a', 'director'), s('Personajes y actores', 'personajes actores'), s('Sinopsis', 'sinopsis'), s('Etiquetas y géneros', 'tags géneros'), s('Dónde verla', 'dónde ver'), s('Wiki o ficha', 'wiki')];
 }
 /** Búsquedas en webs sin API abierta (se abren en otra pestaña). */
 function webSearchUrls(q) {

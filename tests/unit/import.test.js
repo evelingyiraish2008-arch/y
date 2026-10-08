@@ -131,15 +131,33 @@ describe('búsqueda de datos', () => {
         assert.deepEqual([jk[0].title, jk[0].synopsis, jk[0].studio, jk[0].tags], ['Attack on Titan', 'Titanes.', 'WIT', 'acción']);
     });
     it('reparto con fotos y personajes: AniList (seiyuus), TMDB, Jikan y Open Library', () => {
-        const an = md.parseAniList({ data: { Page: { media: [{ id: 9, title: { romaji: 'Given' }, characters: { edges: [
+        const an = md.parseAniList({ data: { Page: { media: [{ id: 9, title: { romaji: 'Given' }, staff: { edges: [
+            { role: 'Director', node: { name: { full: 'Hikaru Yamaguchi' }, image: { large: 'https://s4/d.png' } } },
+            { role: 'Assistant Director', node: { name: { full: 'Ayudante' } } },
+            { role: 'Chief Director', node: { name: { full: 'Jefe Dir' } } }
+        ] }, characters: { edges: [
             { role: 'MAIN', node: { name: { full: 'Mafuyu Satou' } }, voiceActors: [{ name: { full: 'Shougo Yano' }, image: { large: 'https://s4/yano.png' } }] },
             { role: 'SUPPORTING', node: { name: { full: 'Otro' } }, voiceActors: [{ name: { full: 'X' }, image: {} }] },
             { role: 'MAIN', node: { name: { full: 'Sin voz' } }, voiceActors: [] }
         ] } }] } } }, 'anime');
-        assert.deepEqual(an[0].people, [{ name: 'Shougo Yano', role: 'actor', image: 'https://s4/yano.png', character: 'Mafuyu Satou', characterRole: 'protagonista' }]);
+        assert.deepEqual(an[0].people, [
+            { name: 'Shougo Yano', role: 'actor', image: 'https://s4/yano.png', character: 'Mafuyu Satou', characterRole: 'protagonista' },
+            { name: 'X', role: 'actor', image: '', character: 'Otro', characterRole: 'secundario' },
+            { name: 'Hikaru Yamaguchi', role: 'director', image: 'https://s4/d.png' },
+            { name: 'Jefe Dir', role: 'director', image: '' }
+        ]);
+        assert.deepEqual([an[0].actors, an[0].directors], ['Shougo Yano, X', 'Hikaru Yamaguchi, Jefe Dir']); // los ayudantes no cuentan
         const tm = md.parseTmdbCredits({ cast: [{ name: 'Gong Jun', profile_path: '/g.jpg', character: 'Wen Kexing / Zhou' }], crew: [{ name: 'Ma Hua Gan', job: 'Director', profile_path: null }, { name: 'Otro', job: 'Writer' }] });
         assert.deepEqual([tm.actors, tm.directors], ['Gong Jun', 'Ma Hua Gan']);
         assert.deepEqual(tm.people.map(p => [p.name, p.role, p.image, p.character || '']), [['Gong Jun', 'actor', 'https://image.tmdb.org/t/p/h632/g.jpg', 'Wen Kexing'], ['Ma Hua Gan', 'director', '', '']]);
+        // Series de TMDB (aggregate_credits): hasta 10 de reparto y los directores que más episodios dirigieron
+        const agg = md.parseTmdbCredits({ cast: Array.from({ length: 12 }, (_, i) => ({ name: 'Actor ' + i, roles: [{ character: 'Pers ' + i }] })), crew: [
+            { name: 'Pocos', jobs: [{ job: 'Director', episode_count: 2 }] }, { name: 'Muchos', jobs: [{ job: 'Director', episode_count: 9 }, { job: 'Writer', episode_count: 1 }] }, { name: 'Guionista', jobs: [{ job: 'Writer', episode_count: 5 }] }] });
+        assert.equal(agg.actors.split(', ').length, 10);
+        assert.equal(agg.directors, 'Muchos, Pocos');
+        assert.deepEqual(agg.people.slice(0, 5).map(p => p.characterRole || ''), ['protagonista', 'protagonista', 'protagonista', 'protagonista', 'secundario']);
+        const staff = md.parseJikanStaff({ data: [{ person: { name: 'Yamaguchi, Hikaru' }, positions: ['Director', 'Storyboard'] }, { person: { name: 'Otro, A' }, positions: ['Sound Director'] }] });
+        assert.deepEqual(staff.map(p => [p.name, p.role]), [['Hikaru Yamaguchi', 'director']]);
         const jc = md.parseJikanCharacters({ data: [{ role: 'Main', character: { name: 'Satou, Mafuyu' }, voice_actors: [{ language: 'English', person: { name: 'Smith, John' } }, { language: 'Japanese', person: { name: 'Yano, Shougo', images: { jpg: { image_url: 'https://cdn/y.jpg' } } } }] }, { role: 'Supporting', character: { name: 'B' }, voice_actors: [] }] });
         assert.deepEqual(jc, [{ name: 'Shougo Yano', role: 'actor', image: 'https://cdn/y.jpg', character: 'Mafuyu Satou', characterRole: 'protagonista' }]);
         const ol = md.parseOpenLibrary({ docs: [{ key: '/works/1', title: 'Dune', author_name: ['Frank Herbert'], author_key: ['OL79034A'] }] });
@@ -187,4 +205,40 @@ it('temporadas desde las fuentes: TVmaze (episodios) y TMDB (temporadas)', () =>
     const tm = md.parseTmdbSeasons({ seasons: [{ season_number: 0, episode_count: 5 }, { season_number: 1, episode_count: 12, air_date: '2019-06-27' }, { season_number: 2, episode_count: 10, air_date: '2023-01-01' }] });
     assert.deepEqual(tm.seasonsList.map(s => [s.number, s.episodes, s.year]), [[1, 12, 2019], [2, 10, 2023]]);
     assert.deepEqual(md.parseTmdbSeasons({ seasons: [{ season_number: 1, episode_count: 12 }] }), {}); // con una sola no hace falta
+});
+
+describe('Wikidata (dirección y reparto cuando la fuente no los trae)', () => {
+    it('elige la obra por tipo, título y año, y lee dirección y reparto', async () => {
+        const search = { search: [
+            { id: 'Q1', label: 'Only Friends', description: 'banda de música', match: { text: 'Only Friends' } },
+            { id: 'Q2', label: 'Only Friends', description: 'serie de televisión tailandesa de 2023', match: { text: 'Only Friends' } }] };
+        assert.equal(md.pickWikidataItem(search, 'only friends', 2023), 'Q2');
+        assert.equal(md.pickWikidataItem(search, 'Only Friends', 1990), ''); // otro año: otra obra
+        assert.equal(md.pickWikidataItem(search, 'Otra', 2023), '');
+        const claims = { entities: { Q2: { claims: { P57: [{ mainsnak: { datavalue: { value: { id: 'Q10' } } } }], P161: [{ mainsnak: { datavalue: { value: { id: 'Q11' } } } }, { mainsnak: { datavalue: { value: { id: 'Q12' } } } }] } } } };
+        assert.deepEqual(md.wikidataClaimIds(claims, 'Q2', 'P161'), ['Q11', 'Q12']);
+        assert.deepEqual(md.wikidataLabels({ entities: { Q10: { labels: { en: { value: 'Jojo Tichakorn' } } }, Q11: { labels: { es: { value: 'First' } } } } }), { Q10: 'Jojo Tichakorn', Q11: 'First' });
+        const fetchFn = async url => ({ ok: true, json: async () => (url.includes('wbsearchentities') ? search : url.includes('props=claims') ? claims
+            : { entities: { Q10: { labels: { en: { value: 'Jojo Tichakorn' } } }, Q11: { labels: { en: { value: 'First Kanaphan' } } }, Q12: { labels: { en: { value: 'Khaotung Thanawat' } } } } }) });
+        const r = await md.fetchWikidataCredits('Only Friends', 2023, { fetchFn });
+        assert.deepEqual([r.directors, r.actors], ['Jojo Tichakorn', 'First Kanaphan, Khaotung Thanawat']);
+        assert.deepEqual(r.people.map(p => [p.name, p.role]), [['First Kanaphan', 'actor'], ['Khaotung Thanawat', 'actor'], ['Jojo Tichakorn', 'director']]);
+    });
+    it('al elegir un resultado de TVmaze sin dirección, se completa con Wikidata', async () => {
+        const fetchFn = async url => ({ ok: true, json: async () => {
+            if (url.includes('tvmaze.com')) return { _embedded: { episodes: [], cast: [{ person: { name: 'First Kanaphan' }, character: { name: 'Boston' } }] } };
+            if (url.includes('wbsearchentities')) return { search: [{ id: 'Q2', label: 'Only Friends', description: 'serie de televisión de 2023', match: { text: 'Only Friends' } }] };
+            if (url.includes('props=claims')) return { entities: { Q2: { claims: { P57: [{ mainsnak: { datavalue: { value: { id: 'Q10' } } } }] } } } };
+            return { entities: { Q10: { labels: { en: { value: 'Jojo Tichakorn' } } } } };
+        } });
+        const d = await md.fetchMetadataDetails({ source: 'tvmaze', externalId: 9, title: 'Only Friends', year: 2023 }, { fetchFn });
+        assert.equal(d.directors, 'Jojo Tichakorn');
+        assert.equal(d.actors, 'First Kanaphan'); // el reparto de TVmaze se respeta
+        assert.deepEqual(d.people.map(p => p.name), ['First Kanaphan', 'Jojo Tichakorn']);
+        // Si Wikidata falla, quedan los datos de la fuente
+        const bad = async url => (url.includes('wikidata') ? { ok: false, status: 500 } : fetchFn(url));
+        const d2 = await md.fetchMetadataDetails({ source: 'tvmaze', externalId: 9, title: 'Only Friends', year: 2023 }, { fetchFn: bad });
+        assert.equal(d2.actors, 'First Kanaphan');
+        assert.equal(d2.directors, undefined);
+    });
 });

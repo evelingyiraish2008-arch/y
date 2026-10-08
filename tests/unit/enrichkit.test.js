@@ -46,3 +46,12 @@ test('el parche solo añade: nada de pisar, ni título, ni tipo, ni BL', () => {
     // sin etiquetas nuevas no hay cambio de etiquetas
     assert.ok(!('tags' in ek.enrichPatch({ tags: 'a, b' }, { tags: 'A, B' })));
 });
+
+test('reparto y dirección: se suman los que faltan sin repetir ni quitar a nadie', () => {
+    assert.equal(ek.joinNames('First Kanaphan, Mi Amigo', ['first kanaphan', 'Khaotung Thanawat'], 10), 'First Kanaphan, Mi Amigo, Khaotung Thanawat');
+    assert.equal(ek.joinNames('', ['A', 'B', 'C', 'D'], 3), 'A, B, C');
+    assert.equal(ek.joinNames('A, B, C, D', ['E'], 3), 'A, B, C, D'); // lo que ya tenías nunca se recorta
+    const patch = ek.enrichPatch({ title: 'X', actors: 'Zhan Xiao', directors: '' }, { actors: 'Xiao Zhan, Wang Yibo', directors: 'Chen Jialin' });
+    assert.deepEqual(patch, { actors: 'Zhan Xiao, Xiao Zhan, Wang Yibo', directors: 'Chen Jialin' });
+    assert.ok(!('actors' in ek.enrichPatch({ actors: 'A, B' }, { actors: 'b, a' })));
+});

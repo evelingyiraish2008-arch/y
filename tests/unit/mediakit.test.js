@@ -76,7 +76,7 @@ test('buscar en internet: enlaces de cada buscador y búsquedas sugeridas', () =
     assert.deepEqual(webSearchLinks('  ', 'works'), []);
     assert.equal(webSearchLinks('a&b=c#d', 'works')[0].url, 'https://www.google.com/search?q=a%26b%3Dc%23d'); // lo escrito no rompe la dirección
     const w = webSuggestions({ name: 'Only Friends', kind: 'works', type: 'series', bl: true });
-    assert.deepEqual(w.map(x => x.query), ['Only Friends BL', 'Only Friends reparto', 'Only Friends sinopsis', 'Only Friends tags géneros', 'Only Friends dónde ver', 'Only Friends wiki']);
+    assert.deepEqual(w.map(x => x.query), ['Only Friends BL', 'Only Friends reparto', 'Only Friends director', 'Only Friends personajes actores', 'Only Friends sinopsis', 'Only Friends tags géneros', 'Only Friends dónde ver', 'Only Friends wiki']);
     assert.equal(webSuggestions({ name: 'Dune', type: 'book' })[1].query, 'Dune autor');
     assert.equal(webSuggestions({ name: 'Solo Leveling', type: 'manhwa' })[1].query, 'Solo Leveling dónde leer');
     assert.equal(webSuggestions({ name: 'Pooh Krittin', kind: 'persons' })[2].query, 'Pooh Krittin nombre real');

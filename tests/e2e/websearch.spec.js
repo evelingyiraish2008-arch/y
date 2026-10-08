@@ -65,7 +65,7 @@ test('fichas: buscar la obra, la persona o la pareja con sugerencias que sirven'
     await page.locator('#detailPanel [data-act="web-work"]').click();
     await expect(page.locator('#webQ')).toHaveValue('Only Friends');
     const sugg = page.locator('#sheetBody .tag-list .chip');
-    await expect(sugg).toContainText(['La obra', 'Reparto', 'Sinopsis', 'Etiquetas y géneros', 'Dónde verla', 'Wiki o ficha']);
+    await expect(sugg).toContainText(['La obra', 'Reparto', 'Director/a', 'Personajes y actores', 'Sinopsis', 'Etiquetas y géneros', 'Dónde verla', 'Wiki o ficha']);
     expect(await popupUrl(page, () => sugg.filter({ hasText: 'Reparto' }).click())).toContain('google.com/search?q=Only%20Friends%20reparto');
     await page.locator('#sheetBody details summary').click();
     expect(await popupUrl(page, () => page.locator('#sheetBody [data-act="web-go"][data-id="mydramalist"]').click())).toContain('mydramalist.com/search?q=Only%20Friends');

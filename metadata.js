@@ -104,14 +104,14 @@ function seasonsFromSource(items) {
 function parseTvmazeDetails(json) {
     const emb = json._embedded || {};
     const eps = emb.episodes || [];
-    const cast = (emb.cast || []).filter(c => c.person && c.person.name).slice(0, 6);
+    const cast = (emb.cast || []).filter(c => c.person && c.person.name).slice(0, 10);
     const seasonsList = seasonsFromSource(eps);
     return {
         totalEpisodes: eps.length || 0,
         seasons: eps.length ? new Set(eps.map(e => e.season)).size : 0,
         ...(seasonsList.length > 1 ? { seasonsList } : {}),
-        actors: cast.slice(0, 4).map(c => c.person.name).join(', '),
-        people: cast.slice(0, 4).map(c => metaPerson(c.person.name, 'actor', (c.person.image || {}).original || (c.person.image || {}).medium,
+        actors: cast.map(c => c.person.name).join(', '),
+        people: cast.map(c => metaPerson(c.person.name, 'actor', (c.person.image || {}).original || (c.person.image || {}).medium,
             c.character && c.character.name ? { character: c.character.name, characterRole: 'protagonista', characterImage: httpsUrl((c.character.image || {}).original || (c.character.image || {}).medium) } : {}))
     };
 }
@@ -120,26 +120,38 @@ function parseTmdbSeasons(json) {
     const seasonsList = seasonsFromSource(((json || {}).seasons || []).map(x => ({ season: x.season_number, episodes: x.episode_count, airdate: x.air_date })));
     return seasonsList.length > 1 ? { seasonsList } : {};
 }
-/** /tv/{id}/credits o /movie/{id}/credits de TMDB */
+/**
+ * /movie/{id}/credits o /tv/{id}/aggregate_credits de TMDB: hasta 10 del reparto (con su personaje) y 3 directores.
+ * En las series, los directores son los que más episodios dirigieron.
+ */
 function parseTmdbCredits(json) {
     const img = p => (p ? `https://image.tmdb.org/t/p/h632${p}` : '');
-    const cast = ((json || {}).cast || []).slice(0, 4);
-    const dirs = ((json || {}).crew || []).filter(c => c.job === 'Director').slice(0, 2);
+    const cast = ((json || {}).cast || []).filter(c => c.name).slice(0, 10);
+    const isDirector = c => c.job === 'Director' || (c.jobs || []).some(j => j.job === 'Director');
+    const episodes = c => Number(c.total_episode_count) || (c.jobs || []).reduce((n, j) => n + (Number(j.episode_count) || 0), 0);
+    const dirs = ((json || {}).crew || []).filter(c => c.name && isDirector(c)).sort((a, b) => episodes(b) - episodes(a)).slice(0, 3);
+    const character = c => String(c.character || ((c.roles || [])[0] || {}).character || '').split(' / ')[0];
     return {
         actors: cast.map(c => c.name).join(', '),
         directors: dirs.map(c => c.name).join(', '),
-        people: [...cast.map(c => metaPerson(c.name, 'actor', img(c.profile_path), c.character ? { character: c.character.split(' / ')[0], characterRole: 'protagonista' } : {})),
+        people: [...cast.map((c, i) => metaPerson(c.name, 'actor', img(c.profile_path), character(c) ? { character: character(c), characterRole: i < 4 ? 'protagonista' : 'secundario' } : {})),
             ...dirs.map(c => metaPerson(c.name, 'director', img(c.profile_path)))]
     };
 }
-/** /anime/{id}/characters de Jikan: personajes principales con su seiyuu japonés. */
+/** /anime/{id}/characters de Jikan: personajes (principales primero) con su seiyuu japonés. Hasta 8. */
 function parseJikanCharacters(json) {
-    return ((json || {}).data || []).filter(c => c.role === 'Main').slice(0, 6).map(c => {
+    const list = ((json || {}).data || []);
+    return [...list.filter(c => c.role === 'Main'), ...list.filter(c => c.role !== 'Main')].map(c => {
         const va = (c.voice_actors || []).find(v => v.language === 'Japanese');
         if (!va || !va.person) return null;
         const name = String(va.person.name || '').split(', ').reverse().join(' '); // MAL escribe "Apellido, Nombre"
-        return metaPerson(name, 'actor', (((va.person.images || {}).jpg) || {}).image_url, { character: String(c.character.name || '').split(', ').reverse().join(' '), characterRole: 'protagonista', characterImage: httpsUrl((((c.character.images || {}).jpg) || {}).image_url).replace(/.*questionmark.*/, '') });
-    }).filter(Boolean);
+        return metaPerson(name, 'actor', (((va.person.images || {}).jpg) || {}).image_url, { character: String(c.character.name || '').split(', ').reverse().join(' '), characterRole: c.role === 'Main' ? 'protagonista' : 'secundario', characterImage: httpsUrl((((c.character.images || {}).jpg) || {}).image_url).replace(/.*questionmark.*/, '') });
+    }).filter(Boolean).slice(0, 8);
+}
+/** /anime/{id}/staff de Jikan: quién dirige (solo "Director" y "Chief Director"). */
+function parseJikanStaff(json) {
+    return ((json || {}).data || []).filter(s => s.person && (s.positions || []).some(p => /^(chief )?director$/i.test(String(p).trim()))).slice(0, 3)
+        .map(s => metaPerson(String(s.person.name || '').split(', ').reverse().join(' '), 'director', (((s.person.images || {}).jpg) || {}).image_url));
 }
 function parseTmdb(json) {
     return (json.results || []).filter(r => r.media_type !== 'person').map(r => ({
@@ -172,8 +184,8 @@ const ANILIST_QUERY = `query ($q: String, $type: MediaType) {
       tags { name rank isGeneralSpoiler }
       coverImage { large extraLarge }
       studios(isMain: true) { nodes { name } }
-      staff(perPage: 4) { edges { role node { name { full } image { large } } } }
-      characters(perPage: 6, sort: [ROLE, RELEVANCE]) { edges { role node { name { full } image { large } } voiceActors(language: JAPANESE) { name { full } image { large } } } }
+      staff(perPage: 14) { edges { role node { name { full } image { large } } } }
+      characters(perPage: 16, sort: [ROLE, RELEVANCE]) { edges { role node { name { full } image { large } } voiceActors(language: JAPANESE) { name { full } image { large } } } }
     }
   }
 }`;
@@ -182,10 +194,15 @@ function parseAniList(json, type) {
     return list.map(m => {
         const tags = (m.tags || []).filter(t => t.rank >= 55 && !t.isGeneralSpoiler).map(t => t.name);
         const g = genreFields([...(m.genres || []), ...tags]);
-        const story = ((m.staff || {}).edges || []).find(e => /story|original/i.test(e.role)) || ((m.staff || {}).edges || [])[0];
+        const staff = (m.staff || {}).edges || [];
+        const story = staff.find(e => /story|original/i.test(e.role)) || staff[0];
+        // Dirección: "Director" y "Chief Director" (no los ayudantes, de sonido, etc.)
+        const dirs = staff.filter(e => /^(chief )?director$/i.test(String(e.role).trim()) && e.node && e.node.name).slice(0, 3);
+        const voiced = ((m.characters || {}).edges || []).filter(e => (e.voiceActors || [])[0]);
+        const cast = [...voiced.filter(e => e.role === 'MAIN'), ...voiced.filter(e => e.role !== 'MAIN')].slice(0, 8);
         const people = type === 'anime'
-            ? ((m.characters || {}).edges || []).filter(e => e.role === 'MAIN' && (e.voiceActors || [])[0]).slice(0, 4)
-                .map(e => metaPerson(e.voiceActors[0].name.full, 'actor', (e.voiceActors[0].image || {}).large, { character: e.node.name.full, characterRole: 'protagonista', characterImage: httpsUrl((e.node.image || {}).large).replace(/.*\/default\.jpg$/, '') }))
+            ? [...cast.map(e => metaPerson(e.voiceActors[0].name.full, 'actor', (e.voiceActors[0].image || {}).large, { character: e.node.name.full, characterRole: e.role === 'MAIN' ? 'protagonista' : 'secundario', characterImage: httpsUrl((e.node.image || {}).large).replace(/.*\/default\.jpg$/, '') })),
+                ...dirs.map(e => metaPerson(e.node.name.full, 'director', (e.node.image || {}).large))]
             : (story && story.node ? [metaPerson(story.node.name.full, 'author', (story.node.image || {}).large)] : []);
         return {
             source: 'anilist', sourceLabel: 'AniList', externalId: m.id, anilistId: m.id,
@@ -195,7 +212,7 @@ function parseAniList(json, type) {
             cover: (m.coverImage || {}).large || '', coverLarge: (m.coverImage || {}).extraLarge || (m.coverImage || {}).large || '',
             country: COUNTRY_ES[m.countryOfOrigin] || '',
             ...(type === 'anime'
-                ? { totalEpisodes: m.episodes || 0, studio: (((m.studios || {}).nodes || [])[0] || {}).name || '' }
+                ? { totalEpisodes: m.episodes || 0, studio: (((m.studios || {}).nodes || [])[0] || {}).name || '', actors: cast.map(e => e.voiceActors[0].name.full).join(', '), directors: dirs.map(e => e.node.name.full).join(', ') }
                 : { totalChapters: m.chapters || 0, author: story && story.node ? story.node.name.full : '' }),
             ...g,
             people: people.filter(p => p.name).map(p => (/default\.jpg$/.test(p.image) ? { ...p, image: '' } : p)),
@@ -275,11 +292,71 @@ async function searchMetadata(type, query, opts = {}) {
     for (let i = 0; i < 8; i++) bySource.forEach(list => { if (list[i]) mixed.push(list[i]); });
     return { results: mixed, errors };
 }
-/** Datos extra que solo se piden al elegir un resultado (episodios, reparto con fotos y personajes, sinopsis del libro…). */
+// ---------- Wikidata: dirección y reparto cuando la fuente no los trae (gratis, sin clave) ----------
+const WIKIDATA_WORK = /serie|televis|pel[ií]cula|film|anime|drama|miniserie|novela|manga|manhwa|ova|ona/i;
+/** wbsearchentities → id de la obra que corresponde (por tipo de cosa, título y año) o ''. */
+function pickWikidataItem(json, title, year) {
+    const norm2 = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const t = norm2(title);
+    const hit = ((json || {}).search || []).find(r => {
+        if (!WIKIDATA_WORK.test(r.description || '')) return false;
+        if (norm2(r.label) !== t && norm2((r.match || {}).text) !== t) return false;
+        const y = (String(r.description).match(/\b(19|20)\d{2}\b/) || [])[0];
+        return !(year && y && Math.abs(Number(y) - Number(year)) > 1);
+    });
+    return hit ? hit.id : '';
+}
+/** Ids de las entidades de una propiedad (P57 director, P161 reparto) de wbgetentities. */
+function wikidataClaimIds(json, id, prop) {
+    const claims = ((((json || {}).entities || {})[id] || {}).claims || {})[prop] || [];
+    return claims.map(c => (((c.mainsnak || {}).datavalue || {}).value || {}).id).filter(Boolean);
+}
+/** wbgetentities con labels → { Qid: nombre } (en inglés, que suele ser el nombre artístico romanizado; si no, en español). */
+function wikidataLabels(json) {
+    const out = {};
+    Object.entries((json || {}).entities || {}).forEach(([id, e]) => { const l = (e.labels || {}); const name = (l.en || l.es || {}).value; if (name) out[id] = name; });
+    return out;
+}
+/** Dirección (hasta 3) y reparto (hasta 10) de una obra según Wikidata. Devuelve {} si no encuentra algo claro. */
+async function fetchWikidataCredits(title, year, { fetchFn = fetch } = {}) {
+    const api = 'https://www.wikidata.org/w/api.php';
+    const search = await getJson(`${api}?action=wbsearchentities&search=${enc(title)}&language=es&uselang=es&type=item&limit=8&format=json&origin=*`, { fetchFn });
+    const id = pickWikidataItem(search, title, year);
+    if (!id) return {};
+    const item = await getJson(`${api}?action=wbgetentities&ids=${id}&props=claims&format=json&origin=*`, { fetchFn });
+    const dirIds = wikidataClaimIds(item, id, 'P57').slice(0, 3), castIds = wikidataClaimIds(item, id, 'P161').slice(0, 10);
+    const ids = [...new Set([...dirIds, ...castIds])];
+    if (!ids.length) return {};
+    const names = wikidataLabels(await getJson(`${api}?action=wbgetentities&ids=${ids.join('|')}&props=labels&languages=en|es&format=json&origin=*`, { fetchFn }));
+    const dirs = dirIds.map(q => names[q]).filter(Boolean), cast = castIds.map(q => names[q]).filter(Boolean);
+    return {
+        directors: dirs.join(', '), actors: cast.join(', '),
+        people: [...cast.map(n => metaPerson(n, 'actor', '')), ...dirs.map(n => metaPerson(n, 'director', ''))]
+    };
+}
+
+/** Datos extra que solo se piden al elegir un resultado (episodios, reparto con fotos y personajes, dirección, sinopsis del libro…). */
 async function fetchMetadataDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}) {
+    const own = await fetchSourceDetails(meta, { fetchFn, tmdbKey });
+    // Si la fuente no trae dirección (TVmaze, iTunes…), se intenta con Wikidata; es opcional y nunca estropea lo ya obtenido
+    const isBook = ['openlibrary', 'googlebooks'].includes(meta.source);
+    if (!isBook && !own.directors && !meta.directors && meta.title) {
+        try {
+            const wiki = await fetchWikidataCredits(meta.title, meta.year, { fetchFn });
+            if (wiki.directors) {
+                const haveActors = own.actors || meta.actors;
+                const people = [...(own.people || meta.people || [])];
+                [...(wiki.people || [])].filter(p => p.role === 'director' || !haveActors).forEach(p => { if (!people.some(x => x.name === p.name)) people.push(p); });
+                return { ...own, directors: wiki.directors, ...(haveActors ? {} : { actors: wiki.actors }), people };
+            }
+        } catch (e) { /* sin Wikidata no pasa nada */ }
+    }
+    return own;
+}
+async function fetchSourceDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}) {
     try {
         if (meta.source === 'tmdb' && tmdbKey) {
-            const credits = parseTmdbCredits(await getJson(`https://api.themoviedb.org/3/${meta.externalId}/credits?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }));
+            const credits = parseTmdbCredits(await getJson(`https://api.themoviedb.org/3/${meta.externalId}/${/^tv\//.test(String(meta.externalId)) ? 'aggregate_credits' : 'credits'}?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }));
             // Las series también traen sus temporadas con los episodios de cada una (si falla, se sigue sin ellas)
             const seasons = /^tv\//.test(String(meta.externalId))
                 ? await getJson(`https://api.themoviedb.org/3/${meta.externalId}?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }).then(parseTmdbSeasons).catch(() => ({})) : {};
@@ -287,7 +364,12 @@ async function fetchMetadataDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}
             const kw = await getJson(`https://api.themoviedb.org/3/${meta.externalId}/keywords?api_key=${enc(tmdbKey)}`, { fetchFn }).then(parseTmdbKeywords).catch(() => []);
             return { ...credits, ...seasons, ...(kw.length ? { tags: joinTags(meta.tags, kw) } : {}) };
         }
-        if (meta.source === 'jikan') return { people: parseJikanCharacters(await getJson(`https://api.jikan.moe/v4/anime/${enc(meta.externalId)}/characters`, { fetchFn })) };
+        if (meta.source === 'jikan') {
+            const cast = parseJikanCharacters(await getJson(`https://api.jikan.moe/v4/anime/${enc(meta.externalId)}/characters`, { fetchFn }));
+            // La dirección es opcional: si falla su petición se sigue con el reparto
+            const dirs = await getJson(`https://api.jikan.moe/v4/anime/${enc(meta.externalId)}/staff`, { fetchFn }).then(parseJikanStaff).catch(() => []);
+            return { people: [...cast, ...dirs], actors: cast.map(p => p.name).join(', '), directors: dirs.map(p => p.name).join(', ') };
+        }
         if (meta.source === 'tvmaze') return parseTvmazeDetails(await getJson(`https://api.tvmaze.com/shows/${enc(meta.externalId)}?embed[]=episodes&embed[]=cast`, { fetchFn }));
         if (meta.source === 'openlibrary' && !meta.synopsis) return parseOpenLibraryWork(await getJson(`https://openlibrary.org${meta.externalId}.json`, { fetchFn }));
     } catch (e) { /* los detalles son opcionales */ }
@@ -346,6 +428,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseAniListAiring, parseTvmazeNext, fetchNextEpisodes,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
-        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
+        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseJikanStaff, pickWikidataItem, wikidataClaimIds, wikidataLabels, fetchWikidataCredits, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };
 }

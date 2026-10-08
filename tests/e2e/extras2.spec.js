@@ -117,3 +117,23 @@ test('si la traducción falla, se queda la sinopsis original y se avisa', async 
     await expect(page.locator('#toastStack')).toContainText('No pude traducirla');
     await expect(page.locator('[data-field="synopsis"]')).toHaveValue(/Two young men/);
 });
+
+test('rellenar datos trae un reparto más amplio y la dirección (con Wikidata cuando la fuente no la da)', async ({ page }) => {
+    const errors = await openApp(page);
+    await page.route('https://api.tvmaze.com/search/**', route => route.fulfill({ json: [{ show: { id: 7, name: 'Gran Reparto', premiered: '2023-01-01', genres: ['Drama'], summary: '<p>Una historia con mucho reparto para todos los que la ven en casa.</p>' } }] }));
+    await page.route('https://api.tvmaze.com/shows/**', route => route.fulfill({ json: { _embedded: { episodes: [], cast: Array.from({ length: 12 }, (_, i) => ({ person: { name: 'Actor ' + (i + 1) }, character: { name: 'Pers ' + (i + 1) } })) } } }));
+    await page.route(/wikidata\.org/, route => {
+        const u = route.request().url();
+        route.fulfill({ json: u.includes('wbsearchentities') ? { search: [{ id: 'Q2', label: 'Gran Reparto', description: 'serie de televisión de 2023', match: { text: 'Gran Reparto' } }] }
+            : u.includes('props=claims') ? { entities: { Q2: { claims: { P57: [{ mainsnak: { datavalue: { value: { id: 'Q10' } } } }] } } } }
+            : { entities: { Q10: { labels: { en: { value: 'Jojo Tichakorn' } } } } } });
+    });
+    await page.evaluate(() => openWorkModal('series'));
+    await page.fill('#f_title', 'Gran Reparto');
+    await page.click('[data-act="meta-search"]');
+    await page.locator('#sheetBody .meta-result').first().click();
+    await expect(page.locator('[data-field="actors"]')).toHaveValue(/Actor 1, .*Actor 10$/);
+    expect((await page.locator('[data-field="actors"]').inputValue()).split(', ')).toHaveLength(10);
+    await expect(page.locator('[data-field="directors"]')).toHaveValue('Jojo Tichakorn');
+    expect(errors).toEqual([]);
+});

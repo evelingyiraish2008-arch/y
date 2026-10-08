@@ -600,7 +600,7 @@ async function enrichWorks({ auto = false } = {}) {
                     const { results: found } = await searchMetadata(w.type, w.title, { tmdbKey: appData.settings.tmdbKey || '', seriesType: w.seriesType || 'Serie' });
                     const best = pickBestMatch(w, found);
                     if (best) {
-                        const details = ['tmdb', 'openlibrary'].includes(best.source) ? await fetchMetadataDetails(best, { tmdbKey: appData.settings.tmdbKey || '' }) : {};
+                        const details = await fetchMetadataDetails(best, { tmdbKey: appData.settings.tmdbKey || '' }); // reparto, dirección, palabras clave…
                         patch = enrichPatch(w, { ...best, ...details });
                     }
                 } catch (e) { /* sin esa fuente: se sigue con la siguiente obra */ }

@@ -48,6 +48,13 @@ function pickBestMatch(work, results, sim = titleSimilarity) {
     });
     return best;
 }
+/** Une nombres ya escritos con otros nuevos sin repetir (sin tildes ni mayúsculas); los tuyos van primero. */
+function joinNames(current, extra, max = 10) {
+    const out = [], seen = new Set();
+    [...splitList(current), ...extra].forEach(n => { const k = norm(n).replace(/[.\-']/g, ' ').replace(/\s+/g, ' ').trim(); if (k && !seen.has(k)) { seen.add(k); out.push(String(n).trim()); } });
+    const mine = splitList(current).length;
+    return out.slice(0, Math.max(max, mine)).join(', ');
+}
 /**
  * Qué se le añade a la obra: lo que tiene vacío + etiquetas nuevas (las suyas se conservan siempre).
  * No cambia el título, el tipo (película/serie), si es BL ni nada que ya tuviera escrito (progreso, totales…).
@@ -55,6 +62,12 @@ function pickBestMatch(work, results, sim = titleSimilarity) {
 function enrichPatch(work, meta, mergeFn = mergeMetadata, joinFn = joinTags) {
     const patch = mergeFn(work, meta, { overwrite: false });
     ['title', 'seriesType', 'seasons', 'bl'].forEach(f => delete patch[f]);
+    // Reparto y dirección: se suman los que faltan (sin repetir y sin quitar a nadie), hasta 10 actores y 3 directores
+    [['actors', 10], ['directors', 3]].forEach(([f, max]) => {
+        if (!meta[f]) return;
+        const joined = joinNames(work[f], splitList(meta[f]), max);
+        if (joined !== splitList(work[f]).join(', ')) patch[f] = joined; else delete patch[f];
+    });
     if (meta.tags) {
         const joined = joinFn(work.tags, splitList(meta.tags));
         if (joined && joined !== String(work.tags || '').trim()) patch.tags = joined; else delete patch.tags;
@@ -63,5 +76,5 @@ function enrichPatch(work, meta, mergeFn = mergeMetadata, joinFn = joinTags) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { ENRICH_RECHECK_DAYS, ENRICH_BATCH, ENRICH_MIN_MATCH, enrichGaps, enrichCandidates, enrichPending, pickBestMatch, enrichPatch };
+    module.exports = { ENRICH_RECHECK_DAYS, ENRICH_BATCH, ENRICH_MIN_MATCH, enrichGaps, enrichCandidates, enrichPending, pickBestMatch, enrichPatch, joinNames };
 }
