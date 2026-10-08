@@ -63,3 +63,23 @@ test('bannerEntries: lista los banners de todo (también el del perfil)', () => 
     const data = { works: [{ id: 'w', banner: 'idb:1' }, { id: 'x' }], persons: [{ id: 'p', banner: 'https://a/b.jpg' }], couples: [], collections: [{ id: 'c', banner: 'idb:2' }], settings: { profileBanner: 'idb:3' } };
     assert.deepEqual(bannerEntries(data).map(e => [e.kind, e.ref]), [['works', 'idb:1'], ['persons', 'https://a/b.jpg'], ['collections', 'idb:2'], ['profile', 'idb:3']]);
 });
+
+test('buscar en internet: enlaces de cada buscador y búsquedas sugeridas', () => {
+    const { webSearchLinks, webSuggestions } = require('../../mediakit.js');
+    const links = webSearchLinks('The Untamed BL', 'works');
+    assert.deepEqual(links.filter(l => l.main).map(l => l.id), ['google', 'pinterest']);
+    assert.equal(links.find(l => l.id === 'google').url, 'https://www.google.com/search?q=The%20Untamed%20BL');
+    assert.equal(links.find(l => l.id === 'pinterest').url, 'https://www.pinterest.com/search/pins/?q=The%20Untamed%20BL');
+    assert.equal(links.find(l => l.id === 'googleimg').url, 'https://www.google.com/search?tbm=isch&q=The%20Untamed%20BL');
+    assert.ok(links.some(l => l.id === 'mydramalist'));
+    assert.ok(!webSearchLinks('Dune', 'collections').some(l => l.id === 'mydramalist')); // solo para obras, personas y parejas
+    assert.deepEqual(webSearchLinks('  ', 'works'), []);
+    assert.equal(webSearchLinks('a&b=c#d', 'works')[0].url, 'https://www.google.com/search?q=a%26b%3Dc%23d'); // lo escrito no rompe la dirección
+    const w = webSuggestions({ name: 'Only Friends', kind: 'works', type: 'series', bl: true });
+    assert.deepEqual(w.map(x => x.query), ['Only Friends BL', 'Only Friends reparto', 'Only Friends sinopsis', 'Only Friends tags géneros', 'Only Friends dónde ver', 'Only Friends wiki']);
+    assert.equal(webSuggestions({ name: 'Dune', type: 'book' })[1].query, 'Dune autor');
+    assert.equal(webSuggestions({ name: 'Solo Leveling', type: 'manhwa' })[1].query, 'Solo Leveling dónde leer');
+    assert.equal(webSuggestions({ name: 'Pooh Krittin', kind: 'persons' })[2].query, 'Pooh Krittin nombre real');
+    assert.equal(webSuggestions({ name: 'PoohPavel', kind: 'couples' })[1].query, 'PoohPavel dramas juntos');
+    assert.deepEqual(webSuggestions({ name: '' }), []);
+});

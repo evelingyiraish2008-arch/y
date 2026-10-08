@@ -90,8 +90,11 @@ function renderImgSearchTabs() {
     const s = imgSearch;
     const srcs = activeSources(appData.settings, s.use);
     const count = k => (s.results[k] || []).length;
-    const tabs = [['all', '✨ Recomendadas'], ...srcs.map(k => [k, `${IMAGE_SOURCES[k].icon} ${IMAGE_SOURCES[k].label.replace(' (con tu clave)', '')}`]), ['web', '🌐 Pinterest y web']];
-    $('imgSearchTabs').innerHTML = tabs.map(([k, l]) => `<button type="button" class="chip chip-muted ${s.tab === k ? 'is-on' : ''}" data-act="img-search-tab" data-id="${k}">${esc(l)}${k !== 'all' && k !== 'web' ? (s.pending.has(k) ? ' ⏳' : count(k) ? ` · ${count(k)}` : s.errors[k] ? ' ⚠️' : '') : ''}</button>`).join('');
+    // Lo normal: Recomendadas y Google/Pinterest. Las fuentes sueltas están escondidas en "Más fuentes" para no sobrecargar.
+    const showSources = s.moreSources || !['all', 'web'].includes(s.tab);
+    const tabs = [['all', '✨ Recomendadas'], ['web', '🌐 Google y Pinterest'], ...(showSources ? srcs.map(k => [k, `${IMAGE_SOURCES[k].icon} ${IMAGE_SOURCES[k].label.replace(' (con tu clave)', '')}`]) : [])];
+    const moreBtn = `<button type="button" class="chip chip-muted tab-more" data-act="img-search-more-sources" aria-expanded="${showSources}">${showSources ? '▴ Menos fuentes' : '⋯ Más fuentes'}</button>`;
+    $('imgSearchTabs').innerHTML = tabs.map(([k, l]) => `<button type="button" class="chip chip-muted ${s.tab === k ? 'is-on' : ''}" data-act="img-search-tab" data-id="${k}">${esc(l)}${k !== 'all' && k !== 'web' ? (s.pending.has(k) ? ' ⏳' : count(k) ? ` · ${count(k)}` : s.errors[k] ? ' ⚠️' : '') : ''}</button>`).join('') + moreBtn;
 }
 async function runImageSearch() {
     const s = imgSearch;
@@ -186,6 +189,14 @@ function updateImgSearchBar() {
 }
 
 FEATURE_ACTIONS['img-search-q'] = q => { imgSearch.query = q; $('imgSearchQ').value = q; renderImgSearchSuggest(); runImageSearch(); };
+FEATURE_ACTIONS['img-search-more-sources'] = () => {
+    const s = imgSearch;
+    const open = s.moreSources || !['all', 'web'].includes(s.tab);
+    s.moreSources = !open;
+    if (!s.moreSources && !['all', 'web'].includes(s.tab)) s.tab = 'all';
+    renderImgSearchTabs();
+    renderImgSearchResults();
+};
 FEATURE_ACTIONS['img-search-tab'] = k => { imgSearch.tab = k; renderImgSearchTabs(); renderImgSearchResults(); };
 FEATURE_ACTIONS['img-search-wait'] = () => { imgSearch.slow = false; clearTimeout(imgSearch.slowTimer); imgSearch.slowTimer = setTimeout(() => { if (imgSearch.pending.size) { imgSearch.slow = true; renderImgSearchResults(); } }, IMG_SEARCH_SLOW_MS); renderImgSearchResults(); };
 FEATURE_ACTIONS['img-search-stop'] = () => { imgSearch.abort.abort(); imgSearch.pending.clear(); imgSearch.slow = false; renderImgSearchTabs(); renderImgSearchResults(); };

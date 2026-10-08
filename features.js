@@ -218,6 +218,7 @@ function openCoupleDetail(id) {
         <div class="seg-inline" style="justify-content:center;margin-top:18px">
             <button class="btn btn-secondary btn-sm" data-act="couple-edit" data-id="${c.id}">✏️ Editar</button>
             <button class="btn btn-secondary btn-sm" data-act="couple-fav" data-id="${c.id}">${c.favorite ? '🤍 Quitar de favoritas' : '❤️ Favorita'}</button>
+            <button class="btn btn-secondary btn-sm" data-act="web-couple" data-id="${c.id}" title="Buscar en Google, Pinterest…">🌐 Buscar</button>
         </div>`;
     });
 }

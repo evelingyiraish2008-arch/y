@@ -30,7 +30,8 @@ function renderMetaSheet() {
     const sources = metadataSources(s.type, metaOptions()).map(x => x.label).join(', ');
     if (s.loading) return `<div class="meta-loading"><span class="spinner"></span> Buscando “${esc(s.query)}” en ${esc(sources)}…</div>`;
     const failed = s.errors.length ? `<p class="hint">⚠️ No respondió: ${esc(s.errors.join(', '))}.${s.errors.includes('sin conexión') ? ' Conéctate a internet para buscar.' : ''}</p>` : '';
-    if (!s.results.length) return failed + emptyState('🔍', 'Sin resultados', `No encontré “${s.query}”. Prueba con el título original o en inglés.`);
+    const more = `<div class="meta-web">${webFooterHtml(s.query)}</div>`;
+    if (!s.results.length) return failed + emptyState('🔍', 'Sin resultados', `No encontré “${s.query}”. Prueba con el título original o en inglés.`) + more;
     if (s.mode === 'cover') {
         const covers = [];
         s.results.forEach((r, i) => { const url = r.coverLarge || r.cover; if (url && !covers.some(c => c.url === url)) covers.push({ url, thumb: r.cover || url, i, r }); });
@@ -48,7 +49,7 @@ function renderMetaSheet() {
                 ${r.synopsis ? `<small class="meta-synopsis">${esc(r.synopsis.slice(0, 120))}${r.synopsis.length > 120 ? '…' : ''}</small>` : ''}
             </span>
             <span class="chip chip-muted">${esc(r.sourceLabel)}</span>
-        </button>`).join('')}</div>`;
+        </button>`).join('')}</div>${more}`;
 }
 /** Pone un valor en el campo del formulario de obra y avisa como si se hubiera escrito. */
 function setFormField(field, value) {

@@ -658,7 +658,13 @@ function searchAll(raw, limit = 12) {
         if (norm([w.title, w.tags, w.author, w.actors, w.studio].join(' ')).includes(q))
             results.push({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type });
     });
-    appData.persons.forEach(p => { if (norm(p.name).includes(q)) results.push({ kind: 'person', id: p.id, title: p.name, sub: '👤 ' + (PERSON_TYPE_LABEL[p.type] || p.type), image: p.image, ph: 'person' }); });
+    // Personas: por su nombre artístico, nativo, de nacimiento o apodo (si coincide otro nombre, se dice cuál)
+    appData.persons.forEach(p => {
+        const hit = personNames(p).find(n => norm(n).includes(q));
+        if (hit) results.push({ kind: 'person', id: p.id, title: p.name, sub: '👤 ' + (PERSON_TYPE_LABEL[p.type] || p.type) + (norm(p.name).includes(q) ? '' : ` · ${hit}`), image: p.image, ph: 'person' });
+    });
+    // Etiquetas: al tocarla salen las obras que la llevan
+    tagStats(appData.works).filter(t => norm(t.label).includes(q)).slice(0, 3).forEach(t => results.push({ kind: 'tag', id: t.label, title: '#' + t.label, sub: `🏷️ Etiqueta · ${t.count} ${t.count === 1 ? 'obra' : 'obras'}`, icon: '🏷️' }));
     appData.couples.forEach(c => { if (coupleMatches(c, raw, appData.persons)) results.push({ kind: 'couple', id: c.id, title: coupleTitle(c), sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
     appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `${isSmart(c) ? '✨ Colección inteligente' : '🗂️ Colección'} · ${collectionWorks(c).length} obras`, icon: isSmart(c) ? '✨' : '🗂️' }); });
     appData.notes.forEach(n => { if (norm(n.content + ' ' + n.workTitle).includes(q)) results.push({ kind: 'note', id: n.workId, title: n.workTitle || 'Nota', sub: '📝 ' + n.content.slice(0, 50), icon: '📝' }); });
@@ -669,6 +675,7 @@ function openResult(r) {
     if (r.kind === 'work' || r.kind === 'note') openDetail(r.id);
     else if (r.kind === 'person') openPersonDetail(r.id);
     else if (r.kind === 'couple') openCoupleDetail(r.id);
+    else if (r.kind === 'tag') FEATURE_ACTIONS['tag-open'](r.id);
     else if (r.kind === 'collection') { navigateTo('collections'); openCollectionView(r.id); }
 }
 function runGlobalSearch() {
@@ -680,7 +687,7 @@ function runGlobalSearch() {
         <button class="search-result" data-result="${i}" role="option">
           ${r.icon ? `<div class="thumb">${r.icon}</div>` : img(r.image, r.ph, '', 'class="thumb"')}
           <div class="info"><span class="title">${esc(r.title)}</span><span class="type">${esc(r.sub)}</span></div>
-        </button>`).join('') : `<div class="search-empty">Sin resultados para “${esc($('globalSearch').value)}”</div>`;
+        </button>`).join('') + webFooterHtml($('globalSearch').value) : `<div class="search-empty">Sin resultados para “${esc($('globalSearch').value)}”</div>${webFooterHtml($('globalSearch').value)}`;
     box.classList.add('active');
 }
 function openSearchResult(i) {
@@ -747,8 +754,14 @@ function renderPalette() {
     if (found.length) groups.push(['Resultados', found]);
     const actions = paletteActions().filter(a => match(a.title));
     if (actions.length) groups.push(['Acciones', actions]);
+    const web = raw.trim().length >= 2 ? [
+        { icon: '🔎', title: `Buscar “${raw.trim()}” en Google`, sub: 'Se abre en otra pestaña', run: () => webOpen(webLink('google', raw)) },
+        { icon: '📌', title: `Buscar “${raw.trim()}” en Pinterest`, sub: 'Se abre en otra pestaña', run: () => webOpen(webLink('pinterest', raw)) },
+        { icon: '🌐', title: 'Más buscadores y sugerencias…', run: () => openWebSearch({ query: raw }) }
+    ] : [];
     const pages = Object.entries(PAGE_NAMES).filter(([, name]) => match(name)).map(([page, name]) => ({ icon: name.split(' ')[0], title: name.slice(name.indexOf(' ') + 1), sub: 'Ir a la sección', run: () => navigateTo(page) }));
     if (pages.length) groups.push(['Ir a', pages]);
+    if (web.length) groups.push(['Buscar en internet', web]);
     paletteItems = groups.flatMap(g => g[1]);
     paletteIndex = 0;
     let i = 0;
@@ -1285,6 +1298,7 @@ function renderDetail(fresh = false) {
           <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
           <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
           <button class="btn btn-secondary btn-sm" data-act="share-work" data-id="${w.id}" title="Compartir">📤</button>
+          <button class="btn btn-secondary btn-sm" data-act="web-work" data-id="${w.id}" title="Buscar en Google, Pinterest…">🌐 Buscar</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
         ${suggestionsHtml(w)}
@@ -1539,9 +1553,10 @@ function renderPersonDetail() {
           ${p.bio ? `<div class="person-bio">${esc(p.bio)}</div>` : ''}
           ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(coupleTitle(c))}</button>`).join('')}</div>` : ''}
           ${social ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${social}</div>` : ''}
-          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" data-act="person-edit" data-id="${p.id}">✏️ Editar</button>
             <button class="btn btn-secondary btn-sm" data-act="person-duplicate" data-id="${p.id}">⧉ Duplicar</button>
+            <button class="btn btn-secondary btn-sm" data-act="web-person" data-id="${p.id}" title="Buscar en Google, Pinterest…">🌐 Buscar</button>
           </div>
           <div class="detail-section-title">📚 Obras asociadas (${totalLinked})</div>
           ${totalLinked ? `
