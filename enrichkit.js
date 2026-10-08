@@ -19,6 +19,7 @@ function enrichGaps(w, needsTranslationFn = () => false) {
     else if (needsTranslationFn(w.synopsis)) gaps.push('translate');
     if (w.type !== 'book' && !w.country) gaps.push('country');
     if (!w.year) gaps.push('year');
+    if (w.type !== 'book' && !w.airStatus && !w.runtime) gaps.push('details'); // estado de emisión, duración…
     if (!w.genre) gaps.push('genre');
     return gaps;
 }

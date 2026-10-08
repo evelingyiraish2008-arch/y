@@ -149,11 +149,12 @@ function getSubtitle(w) {
 }
 function estimateMinutes(w) {
     const p = Number(w.progress) || 0;
+    const run = Number(w.runtime) > 0 ? Number(w.runtime) : 0; // duración real si la conocemos
     if (w.type === 'book') return p * 1.2;
     if (w.type === 'manhwa') return p * 4;
-    if (w.type === 'anime') return p * 23;
-    if (w.seriesType === 'Película') return (w.status === 'terminado' || p > 0) ? 120 : 0;
-    return p * 50;
+    if (w.type === 'anime') return p * (run || 23);
+    if (w.seriesType === 'Película') return (w.status === 'terminado' || p > 0) ? (run || 120) : 0;
+    return p * (run || 50);
 }
 function getAirDay(w) {
     if (w.airDay !== undefined && w.airDay !== null && w.airDay !== '') return Number(w.airDay);

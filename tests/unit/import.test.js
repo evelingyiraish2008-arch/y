@@ -242,3 +242,37 @@ describe('Wikidata (dirección y reparto cuando la fuente no los trae)', () => {
         assert.equal(d2.directors, undefined);
     });
 });
+
+describe('más detalles de cada fuente', () => {
+    it('traduce estado, idioma, origen y nota', () => {
+        assert.deepEqual([md.airStatusEs('Running'), md.airStatusEs('RELEASING'), md.airStatusEs('Finished Airing'), md.airStatusEs('NOT_YET_RELEASED'), md.airStatusEs('???')], ['En emisión', 'En emisión', 'Finalizada', 'Próximamente', '']);
+        assert.deepEqual([md.languageEs('ko'), md.languageEs('Japanese'), md.languageEs('xx')], ['Coreano', 'Japonés', '']);
+        assert.deepEqual([md.basedOnEs('LIGHT_NOVEL'), md.basedOnEs('Manga'), md.basedOnEs('ORIGINAL')], ['Novela ligera', 'Manga', 'Original']);
+        assert.deepEqual([md.minutesFrom('24 min per ep'), md.minutesFrom('1 hr 30 min'), md.minutesFrom('Unknown')], [24, 90, 0]);
+        assert.deepEqual([md.scoreOf(8.234), md.scoreOf(82, 100), md.scoreOf(4.5, 5), md.scoreOf(0)], [8.2, 8.2, 9, '']);
+    });
+    it('TVmaze, AniList, Jikan y TMDB traen duración, estado, título original y web oficial', () => {
+        const tv = md.parseTvmaze([{ show: { id: 1, name: 'Only Friends', status: 'Ended', averageRuntime: 50, language: 'Thai', rating: { average: 7.64 }, officialSite: 'https://oficial.test/of', genres: [] } }])[0];
+        assert.deepEqual([tv.airStatus, tv.runtime, tv.language, tv.score, tv.officialUrl], ['Finalizada', 50, 'Tailandés', 7.6, 'https://oficial.test/of']);
+        const al = md.parseAniList({ data: { Page: { media: [{ id: 1, title: { romaji: 'Given', english: 'Given EN', native: 'ギヴン' }, status: 'FINISHED', duration: 24, source: 'MANGA', averageScore: 84, siteUrl: 'https://anilist.co/anime/1', genres: [], tags: [] }] } } }, 'anime')[0];
+        assert.deepEqual([al.altTitle, al.airStatus, al.runtime, al.basedOn, al.score], ['Given · ギヴン', 'Finalizada', 24, 'Manga', 8.4]);
+        const jk = md.parseJikan({ data: [{ mal_id: 1, title: 'Given', title_japanese: 'ギヴン', status: 'Currently Airing', duration: '23 min per ep', source: 'Manga', score: 8.1, url: 'https://myanimelist.net/anime/1' }] })[0];
+        assert.deepEqual([jk.altTitle, jk.airStatus, jk.runtime, jk.score], ['ギヴン', 'En emisión', 23, 8.1]);
+        const tm = md.parseTmdb({ results: [{ media_type: 'tv', id: 3, name: 'Hermanos', original_name: 'Brothers', original_language: 'ko', vote_average: 7.8 }] })[0];
+        assert.deepEqual([tm.altTitle, tm.language, tm.score], ['Brothers', 'Coreano', 7.8]);
+        assert.deepEqual(md.parseTmdbInfo({ status: 'Returning Series', episode_run_time: [0, 45], homepage: 'https://x.test', networks: [{ name: 'Viki' }], original_language: 'th' }),
+            { airStatus: 'En emisión', runtime: 45, officialUrl: 'https://x.test', platform: 'Viki', language: 'Tailandés' });
+        assert.equal(md.parseTvmaze([{ show: { id: 2, name: 'X', officialSite: 'javascript:alert(1)' } }])[0].officialUrl, ''); // solo http(s)
+        const ol = md.parseOpenLibrary({ docs: [{ key: '/works/1', title: 'Dune', publisher: ['Ace', 'Otra'], language: ['spa'] }] })[0];
+        assert.deepEqual([ol.publisher, ol.language], ['Ace', 'Español']);
+    });
+    it('al rellenar solo se completan los vacíos y la duración real mejora las horas estimadas', () => {
+        const patch = md.mergeMetadata({ title: 'X', runtime: 0, language: 'Coreano' }, { runtime: 45, language: 'Thai', airStatus: 'Finalizada', score: 7.6, officialUrl: 'https://x.test' });
+        assert.deepEqual(patch, { runtime: 45, airStatus: 'Finalizada', score: 7.6, officialUrl: 'https://x.test' });
+        const { estimateMinutes } = require('../../utils.js');
+        assert.equal(estimateMinutes({ type: 'series', progress: 10 }), 500);
+        assert.equal(estimateMinutes({ type: 'series', progress: 10, runtime: 45 }), 450);
+        assert.equal(estimateMinutes({ type: 'anime', progress: 10, runtime: 12 }), 120);
+        assert.equal(estimateMinutes({ type: 'series', seriesType: 'Película', status: 'terminado', runtime: 95 }), 95);
+    });
+});

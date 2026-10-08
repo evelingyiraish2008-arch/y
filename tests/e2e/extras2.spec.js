@@ -160,3 +160,37 @@ test('buscador de imágenes: Openverse y Commons recientes aportan fotos más ac
     await expect(page.locator('#imgSearchResults')).toContainText('Retrato reciente');
     expect(errors).toEqual([]);
 });
+
+test('rellenar por el título trae más detalles (se ven en el formulario y en la ficha) y la ficha ofrece Volver a ver', async ({ page }) => {
+    const errors = await openApp(page);
+    await page.route('https://api.tvmaze.com/search/**', route => route.fulfill({ json: [{ show: { id: 8, name: 'Detalles Test', premiered: '2023-01-01', status: 'Ended', averageRuntime: 50, language: 'Thai', rating: { average: 7.64 }, officialSite: 'https://oficial.test/serie', genres: ['Drama'], summary: '<p>Una historia con muchos detalles para todos los que la ven en casa.</p>' } }] }));
+    await page.route('https://api.tvmaze.com/shows/**', route => route.fulfill({ json: { _embedded: { episodes: [], cast: [] } } }));
+    await page.route(/wikidata\.org/, route => route.fulfill({ json: {} }));
+    await page.evaluate(() => openWorkModal('series'));
+    await expect(page.locator('#moreDetails')).not.toHaveAttribute('open', '');
+    await page.fill('#f_title', 'Detalles Test');
+    await page.click('[data-act="meta-search"]');
+    await page.locator('#sheetBody .meta-result').first().click();
+    await expect(page.locator('#moreDetails')).toHaveAttribute('open', '');
+    await expect(page.locator('[data-field="airStatus"]')).toHaveValue('Finalizada');
+    await expect(page.locator('[data-field="runtime"]')).toHaveValue('50');
+    await expect(page.locator('[data-field="language"]')).toHaveValue('Tailandés');
+    await expect(page.locator('[data-field="score"]')).toHaveValue('7.6');
+    await expect(page.locator('[data-field="officialUrl"]')).toHaveValue('https://oficial.test/serie');
+    await page.fill('[data-field="altTitle"]', 'เรื่องทดสอบ');
+    await page.locator('#f_status').selectOption('terminado');
+    await page.click('#workSaveBtn');
+    const w = (await stored(page)).works.find(x => x.title === 'Detalles Test');
+    expect([w.airStatus, w.runtime, w.language, w.score, w.altTitle]).toEqual(['Finalizada', 50, 'Tailandés', 7.6, 'เรื่องทดสอบ']);
+    await page.evaluate(id => openDetail(id), w.id);
+    const facts = page.locator('#detailPanel .kv');
+    await expect(facts).toContainText('Estado de emisión');
+    await expect(facts).toContainText('50 min por episodio');
+    await expect(facts).toContainText('★ 7.6/10');
+    await expect(facts.locator('a[href="https://oficial.test/serie"]')).toHaveAttribute('rel', /noopener/);
+    // Terminada: botón visible para volver a verla
+    await page.locator('#detailPanel [data-act="reread-start"]').first().click();
+    await expect(page.locator('#toastStack')).toContainText('2ª vez');
+    await expect(page.locator('#detailPanel .detail-actions [data-act="reread-finish"]')).toBeVisible();
+    expect(errors).toEqual([]);
+});

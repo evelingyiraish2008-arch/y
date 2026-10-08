@@ -57,6 +57,7 @@ function setFormField(field, value) {
     const el = workForm.querySelector(`[data-field="${field}"]`);
     if (!el) return false;
     if (el.type === 'checkbox') el.checked = !!value; else el.value = value;
+    if (el.closest('#moreDetails')) updateMoreDetails();
     el.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
 }

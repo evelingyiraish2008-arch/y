@@ -15,7 +15,7 @@ test('poner al día las obras ya agregadas: completa lo que falta, traduce y no 
         appData.works = [
             { id: 't1', type: 'series', title: 'Love Class', bl: true, tags: 'BL, mi etiqueta', year: 2022, status: 'viendo', rating: 4, progress: 3, createdAt: Date.now() },
             { id: 't2', type: 'series', title: 'Obra Sin Resultado', createdAt: Date.now() - 1000 },
-            { id: 't3', type: 'series', title: 'Completa', tags: 'a, b, c, d, e', synopsis: 'Una historia muy larga que ya está en español para todos.', country: 'Japón', year: 2020, genre: 'Drama', createdAt: Date.now() - 2000 }
+            { id: 't3', type: 'series', title: 'Completa', tags: 'a, b, c, d, e', synopsis: 'Una historia muy larga que ya está en español para todos.', country: 'Japón', year: 2020, genre: 'Drama', runtime: 45, createdAt: Date.now() - 2000 }
         ];
         saveData(); refreshView();
     });

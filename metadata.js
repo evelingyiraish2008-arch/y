@@ -36,12 +36,32 @@ function genreFields(genres) {
     return { tags: list.slice(0, 12).join(', '), genre: list.filter(g => g !== 'BL').slice(0, 2).map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', '), bl: list.includes('BL') };
 }
 
+// ---------- Detalles extra: estado de emisión, duración, idioma, origen, nota, web oficial ----------
+const AIR_STATUS = { running: 'En emisión', releasing: 'En emisión', 'currently airing': 'En emisión', 'returning series': 'En emisión', 'in production': 'En emisión', ended: 'Finalizada', finished: 'Finalizada', 'finished airing': 'Finalizada',
+    canceled: 'Cancelada', cancelled: 'Cancelada', 'to be determined': 'Sin determinar', 'in development': 'Próximamente', planned: 'Próximamente', 'not_yet_released': 'Próximamente', 'not yet released': 'Próximamente', 'not yet aired': 'Próximamente', hiatus: 'En pausa' };
+const airStatusEs = s => AIR_STATUS[String(s || '').trim().toLowerCase().replace(/_/g, ' ')] || AIR_STATUS[String(s || '').trim().toLowerCase()] || '';
+const LANG_ES = { en: 'Inglés', es: 'Español', ja: 'Japonés', ko: 'Coreano', zh: 'Chino', cn: 'Chino (cantonés)', th: 'Tailandés', tl: 'Filipino', fr: 'Francés', de: 'Alemán', it: 'Italiano', pt: 'Portugués', hi: 'Hindi', vi: 'Vietnamita', id: 'Indonesio', ru: 'Ruso',
+    english: 'Inglés', spanish: 'Español', japanese: 'Japonés', korean: 'Coreano', chinese: 'Chino', thai: 'Tailandés', french: 'Francés', german: 'Alemán', italian: 'Italiano', portuguese: 'Portugués', mandarin: 'Chino' };
+const languageEs = l => LANG_ES[String(l || '').trim().toLowerCase()] || '';
+const SOURCE_ES = { manga: 'Manga', 'light novel': 'Novela ligera', light_novel: 'Novela ligera', novel: 'Novela', 'web novel': 'Novela web', web_novel: 'Novela web', 'visual novel': 'Novela visual', visual_novel: 'Novela visual', original: 'Original', 'video game': 'Videojuego', video_game: 'Videojuego',
+    game: 'Videojuego', 'web manga': 'Manga web', '4-koma manga': 'Manga', 'live action': 'Imagen real', anime: 'Anime', comic: 'Cómic', 'picture book': 'Libro ilustrado' };
+const basedOnEs = x => SOURCE_ES[String(x || '').trim().toLowerCase()] || '';
+/** "24 min per ep" / "1 hr 30 min" → minutos. */
+function minutesFrom(text) {
+    const t = String(text || '').toLowerCase();
+    const h = (t.match(/(\d+)\s*hr/) || [])[1], m = (t.match(/(\d+)\s*min/) || [])[1];
+    return (Number(h) || 0) * 60 + (Number(m) || 0);
+}
+const scoreOf = (n, scale = 10) => { const v = Number(n); return v > 0 ? Math.round((v * 10 / scale) * 10) / 10 : ''; };
+const cleanUrl = u => (/^https?:\/\//i.test(String(u || '')) ? String(u).trim() : '');
+
 // ---------- Lectores de cada servicio (puros) ----------
 function parseOpenLibrary(json) {
     return (json.docs || []).map(d => ({
         source: 'openlibrary', sourceLabel: 'Open Library', externalId: d.key, title: d.title,
         year: d.first_publish_year || '', author: (d.author_name || []).slice(0, 2).join(', '),
         pages: d.number_of_pages_median || 0,
+        publisher: (d.publisher || [])[0] || '', language: languageEs((d.language || [])[0] === 'spa' ? 'es' : (d.language || [])[0] === 'eng' ? 'en' : ''),
         cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '',
         coverLarge: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : '',
         // Foto del autor (default=false: si no tiene, da error en vez de una imagen vacía)
@@ -62,6 +82,7 @@ function parseGoogleBooks(json) {
             title: v.subtitle ? `${v.title}: ${v.subtitle}` : v.title, year: yearOf(v.publishedDate),
             author: (v.authors || []).slice(0, 2).join(', '), pages: v.pageCount || 0,
             synopsis: stripHtml(v.description).slice(0, 1500),
+            publisher: v.publisher || '', language: languageEs(v.language), score: scoreOf(v.averageRating, 5), officialUrl: cleanUrl(v.infoLink),
             cover: thumb, coverLarge: thumb ? thumb.replace('zoom=1', 'zoom=2') : '',
             ...genreFields(v.categories)
         };
@@ -71,6 +92,7 @@ function parseTvmaze(json) {
     return (json || []).map(({ show: s }) => s && ({
         source: 'tvmaze', sourceLabel: 'TVmaze', externalId: s.id, tvmazeId: s.id, title: s.name, year: yearOf(s.premiered),
         synopsis: stripHtml(s.summary).slice(0, 1500),
+        airStatus: airStatusEs(s.status), runtime: Number(s.averageRuntime || s.runtime) || '', language: languageEs(s.language), score: scoreOf((s.rating || {}).average), officialUrl: cleanUrl(s.officialSite),
         platform: (s.webChannel && s.webChannel.name) || (s.network && s.network.name) || '',
         country: COUNTRY_ES[((s.network || s.webChannel || {}).country || {}).name] || ((s.network || s.webChannel || {}).country || {}).name || '',
         cover: httpsUrl((s.image || {}).medium), coverLarge: httpsUrl((s.image || {}).original || (s.image || {}).medium),
@@ -113,6 +135,17 @@ function parseTvmazeDetails(json) {
         actors: cast.map(c => c.person.name).join(', '),
         people: cast.map(c => metaPerson(c.person.name, 'actor', (c.person.image || {}).original || (c.person.image || {}).medium,
             c.character && c.character.name ? { character: c.character.name, characterRole: 'protagonista', characterImage: httpsUrl((c.character.image || {}).original || (c.character.image || {}).medium) } : {}))
+    };
+}
+/** /tv/{id} o /movie/{id} de TMDB: estado, duración, web oficial y plataforma. */
+function parseTmdbInfo(json) {
+    const j = json || {};
+    const run = Array.isArray(j.episode_run_time) ? j.episode_run_time.filter(Boolean)[0] : 0;
+    const net = (j.networks || [])[0];
+    return {
+        airStatus: airStatusEs(j.status), runtime: Number(run || j.runtime) || '', officialUrl: cleanUrl(j.homepage),
+        ...(net && net.name ? { platform: net.name } : {}),
+        ...(j.original_language ? { language: languageEs(j.original_language) } : {})
     };
 }
 /** /tv/{id} de TMDB: temporadas con sus episodios (la temporada 0 son extras y no cuenta). */
@@ -160,6 +193,8 @@ function parseTmdb(json) {
         synopsis: stripHtml(r.overview).slice(0, 1500),
         country: (r.origin_country || []).map(c => COUNTRY_ES[c] || c)[0] || '',
         seriesType: r.media_type === 'movie' ? 'Película' : 'Serie',
+        altTitle: (r.original_name || r.original_title) && (r.original_name || r.original_title) !== (r.name || r.title) ? (r.original_name || r.original_title) : '',
+        language: languageEs(r.original_language), score: scoreOf(r.vote_average),
         cover: r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : '',
         coverLarge: r.poster_path ? `https://image.tmdb.org/t/p/w780${r.poster_path}` : ''
     }));
@@ -168,7 +203,7 @@ function parseItunes(json) {
     return (json.results || []).map(r => ({
         source: 'itunes', sourceLabel: 'iTunes', externalId: r.trackId, title: r.trackName, year: yearOf(r.releaseDate),
         synopsis: stripHtml(r.longDescription || r.shortDescription).slice(0, 1500), seriesType: 'Película',
-        directors: r.artistName || '',
+        directors: r.artistName || '', runtime: r.trackTimeMillis ? Math.round(r.trackTimeMillis / 60000) : '',
         cover: httpsUrl(r.artworkUrl100), coverLarge: httpsUrl(r.artworkUrl100).replace('100x100', '600x600'),
         ...genreFields(r.primaryGenreName ? [r.primaryGenreName] : [])
     }));
@@ -176,8 +211,8 @@ function parseItunes(json) {
 const ANILIST_QUERY = `query ($q: String, $type: MediaType) {
   Page(perPage: 8) {
     media(search: $q, type: $type, sort: SEARCH_MATCH) {
-      id format countryOfOrigin episodes chapters
-      title { romaji english }
+      id format countryOfOrigin episodes chapters status duration source averageScore siteUrl
+      title { romaji english native }
       startDate { year }
       description(asHtml: false)
       genres
@@ -206,7 +241,8 @@ function parseAniList(json, type) {
             : (story && story.node ? [metaPerson(story.node.name.full, 'author', (story.node.image || {}).large)] : []);
         return {
             source: 'anilist', sourceLabel: 'AniList', externalId: m.id, anilistId: m.id,
-            title: m.title.english || m.title.romaji, altTitle: m.title.english ? m.title.romaji : '',
+            title: m.title.english || m.title.romaji, altTitle: [m.title.english ? m.title.romaji : '', m.title.native].filter(Boolean).join(' · '),
+            airStatus: airStatusEs(m.status), runtime: type === 'anime' ? (Number(m.duration) || '') : '', basedOn: basedOnEs(m.source), score: scoreOf(m.averageScore, 100), officialUrl: cleanUrl(m.siteUrl),
             year: (m.startDate || {}).year || '',
             synopsis: stripHtml(m.description).slice(0, 1500),
             cover: (m.coverImage || {}).large || '', coverLarge: (m.coverImage || {}).extraLarge || (m.coverImage || {}).large || '',
@@ -223,7 +259,8 @@ function parseAniList(json, type) {
 function parseJikan(json) {
     return ((json || {}).data || []).map(a => ({
         source: 'jikan', sourceLabel: 'MyAnimeList', externalId: a.mal_id,
-        title: a.title_english || a.title, altTitle: a.title_english ? a.title : '',
+        title: a.title_english || a.title, altTitle: [a.title_english ? a.title : '', a.title_japanese].filter(Boolean).join(' · '),
+        airStatus: airStatusEs(a.status), runtime: minutesFrom(a.duration) || '', basedOn: basedOnEs(a.source), score: scoreOf(a.score), officialUrl: cleanUrl(a.url),
         year: a.year || ((((a.aired || {}).prop || {}).from || {}).year) || '',
         totalEpisodes: a.episodes || 0, synopsis: stripHtml(a.synopsis).replace(/\[Written by MAL Rewrite\]/i, '').trim().slice(0, 1500),
         studio: ((a.studios || [])[0] || {}).name || '', country: 'Japón',
@@ -264,7 +301,7 @@ function metadataSources(type, { tmdbKey = '', seriesType = 'Serie', fetchFn = f
     }).then(j => parseAniList(j, type));
     const tmdb = q => getJson(`https://api.themoviedb.org/3/search/multi?api_key=${enc(tmdbKey)}&language=es-ES&include_adult=false&query=${enc(q)}`, opts).then(parseTmdb);
     if (type === 'book') return [
-        { id: 'openlibrary', label: 'Open Library', run: q => getJson(`https://openlibrary.org/search.json?limit=8&fields=key,title,author_name,author_key,first_publish_year,cover_i,number_of_pages_median,subject&q=${enc(q)}`, opts).then(parseOpenLibrary) },
+        { id: 'openlibrary', label: 'Open Library', run: q => getJson(`https://openlibrary.org/search.json?limit=8&fields=key,title,author_name,author_key,first_publish_year,cover_i,number_of_pages_median,subject,publisher,language&q=${enc(q)}`, opts).then(parseOpenLibrary) },
         { id: 'googlebooks', label: 'Google Books', run: q => getJson(`https://www.googleapis.com/books/v1/volumes?maxResults=8&q=${enc(q)}`, opts).then(parseGoogleBooks) }
     ];
     if (type === 'anime') return [
@@ -358,11 +395,12 @@ async function fetchSourceDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}) 
         if (meta.source === 'tmdb' && tmdbKey) {
             const credits = parseTmdbCredits(await getJson(`https://api.themoviedb.org/3/${meta.externalId}/${/^tv\//.test(String(meta.externalId)) ? 'aggregate_credits' : 'credits'}?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }));
             // Las series también traen sus temporadas con los episodios de cada una (si falla, se sigue sin ellas)
-            const seasons = /^tv\//.test(String(meta.externalId))
-                ? await getJson(`https://api.themoviedb.org/3/${meta.externalId}?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }).then(parseTmdbSeasons).catch(() => ({})) : {};
+            const info = await getJson(`https://api.themoviedb.org/3/${meta.externalId}?api_key=${enc(tmdbKey)}&language=es-ES`, { fetchFn }).catch(() => null);
+            const seasons = info && /^tv\//.test(String(meta.externalId)) ? parseTmdbSeasons(info) : {};
+            const extra = info ? parseTmdbInfo(info) : {};
             // Palabras clave de TMDB: etiquetas más específicas que los géneros
             const kw = await getJson(`https://api.themoviedb.org/3/${meta.externalId}/keywords?api_key=${enc(tmdbKey)}`, { fetchFn }).then(parseTmdbKeywords).catch(() => []);
-            return { ...credits, ...seasons, ...(kw.length ? { tags: joinTags(meta.tags, kw) } : {}) };
+            return { ...credits, ...seasons, ...extra, ...(kw.length ? { tags: joinTags(meta.tags, kw) } : {}) };
         }
         if (meta.source === 'jikan') {
             const cast = parseJikanCharacters(await getJson(`https://api.jikan.moe/v4/anime/${enc(meta.externalId)}/characters`, { fetchFn }));
@@ -377,7 +415,8 @@ async function fetchSourceDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}) 
 }
 
 /** Campos que se rellenarían: solo los que están vacíos en el formulario (lo que escribiste no se toca). */
-const META_FIELDS = ['anilistId', 'tvmazeId', 'title', 'author', 'studio', 'platform', 'country', 'genre', 'year', 'actors', 'directors', 'pages', 'totalEpisodes', 'totalChapters', 'seasons', 'tags', 'synopsis', 'seriesType'];
+const META_FIELDS = ['anilistId', 'tvmazeId', 'title', 'author', 'studio', 'platform', 'country', 'genre', 'year', 'actors', 'directors', 'pages', 'totalEpisodes', 'totalChapters', 'seasons', 'tags', 'synopsis', 'seriesType',
+    'altTitle', 'airStatus', 'runtime', 'language', 'basedOn', 'score', 'officialUrl', 'publisher'];
 function mergeMetadata(current, meta, { overwrite = false } = {}) {
     const patch = {};
     const empty = v => v === undefined || v === null || v === '' || v === 0 || (typeof v === 'number' && isNaN(v));
@@ -428,6 +467,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseAniListAiring, parseTvmazeNext, fetchNextEpisodes,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
-        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseJikanStaff, pickWikidataItem, wikidataClaimIds, wikidataLabels, fetchWikidataCredits, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
+        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseJikanStaff, parseTmdbInfo, airStatusEs, languageEs, basedOnEs, minutesFrom, scoreOf, pickWikidataItem, wikidataClaimIds, wikidataLabels, fetchWikidataCredits, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };
 }

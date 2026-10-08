@@ -11,14 +11,14 @@ const day = 86400000, now = 1_800_000_000_000;
 const full = { tags: 'a, b, c, d, e', synopsis: 'Una historia muy larga que ya está en español para todos.', country: 'Japón', year: 2020, genre: 'Drama' };
 
 test('qué le falta a una obra', () => {
-    assert.deepEqual(ek.enrichGaps({ type: 'series', title: 'X' }), ['tags', 'synopsis', 'country', 'year', 'genre']);
-    assert.deepEqual(ek.enrichGaps({ ...full, type: 'anime' }, needsTranslation), []);
-    assert.deepEqual(ek.enrichGaps({ ...full, type: 'anime', synopsis: 'Two young men fall in love while they study at the university for the world.' }, needsTranslation), ['translate']);
+    assert.deepEqual(ek.enrichGaps({ type: 'series', title: 'X' }), ['tags', 'synopsis', 'country', 'year', 'details', 'genre']);
+    assert.deepEqual(ek.enrichGaps({ ...full, type: 'anime', runtime: 24 }, needsTranslation), []);
+    assert.deepEqual(ek.enrichGaps({ ...full, type: 'anime', runtime: 24, synopsis: 'Two young men fall in love while they study at the university for the world.' }, needsTranslation), ['translate']);
     assert.ok(!ek.enrichGaps({ type: 'book', title: 'L' }).includes('country')); // los libros no piden país
 });
 test('candidatas: con huecos, sin revisar hace poco, las más recientes primero y por tandas', () => {
     const works = [
-        { id: 'ok', title: 'Completa', type: 'anime', ...full },
+        { id: 'ok', title: 'Completa', type: 'anime', runtime: 24, ...full },
         { id: 'a', title: 'A', type: 'series', createdAt: 1 },
         { id: 'b', title: 'B', type: 'series', createdAt: 5 },
         { id: 'rev', title: 'Revisada', type: 'series', enrichedAt: now - 2 * day },
