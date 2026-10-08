@@ -659,7 +659,7 @@ function searchAll(raw, limit = 12) {
             results.push({ kind: 'work', id: w.id, title: w.title, sub: `${TYPE_META[w.type].icon} ${getTypeLabel(w.type)} · ${getStatusLabel(w.status)}`, image: w.image, ph: w.type });
     });
     appData.persons.forEach(p => { if (norm(p.name).includes(q)) results.push({ kind: 'person', id: p.id, title: p.name, sub: '👤 ' + (PERSON_TYPE_LABEL[p.type] || p.type), image: p.image, ph: 'person' }); });
-    appData.couples.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'couple', id: c.id, title: c.name, sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
+    appData.couples.forEach(c => { if (coupleMatches(c, raw, appData.persons)) results.push({ kind: 'couple', id: c.id, title: coupleTitle(c), sub: '💕 Pareja BL', image: c.image, ph: 'couple' }); });
     appData.collections.forEach(c => { if (norm(c.name).includes(q)) results.push({ kind: 'collection', id: c.id, title: c.name, sub: `${isSmart(c) ? '✨ Colección inteligente' : '🗂️ Colección'} · ${collectionWorks(c).length} obras`, icon: isSmart(c) ? '✨' : '🗂️' }); });
     appData.notes.forEach(n => { if (norm(n.content + ' ' + n.workTitle).includes(q)) results.push({ kind: 'note', id: n.workId, title: n.workTitle || 'Nota', sub: '📝 ' + n.content.slice(0, 50), icon: '📝' }); });
     appData.works.forEach(w => (w.quotes || []).forEach(qq => { if (norm(qq.text + ' ' + (qq.context || '')).includes(q)) results.push({ kind: 'work', id: w.id, title: w.title, sub: '❝ ' + qq.text.slice(0, 60), icon: '❝' }); }));
@@ -1535,9 +1535,9 @@ function renderPersonDetail() {
             ${p.rating ? `<span class="chip chip-orange">★ ${ratingText(p.rating)}</span>` : ''}
             ${p.bl ? '<span class="chip chip-pink">💖 BL</span>' : ''}
           </div>
-          ${p.aliases ? `<p class="person-aka">También conocida como <b>${esc(splitList(p.aliases).join(', '))}</b></p>` : ''}
+          ${p.nativeName || p.birthName || p.aliases ? `<p class="person-aka">${[p.nativeName ? `<b>${esc(p.nativeName)}</b>` : '', p.birthName ? `Nombre de nacimiento: <b>${esc(p.birthName)}</b>` : '', p.aliases ? `También: <b>${esc(splitList(p.aliases).join(', '))}</b>` : ''].filter(Boolean).join(' · ')}</p>` : ''}
           ${p.bio ? `<div class="person-bio">${esc(p.bio)}</div>` : ''}
-          ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(c.name)}</button>`).join('')}</div>` : ''}
+          ${couplesForPerson(p.id, appData.couples).length ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${couplesForPerson(p.id, appData.couples).map(c => `<button class="chip chip-pink" data-couple="${c.id}">💕 ${esc(coupleTitle(c))}</button>`).join('')}</div>` : ''}
           ${social ? `<div class="tag-list" style="justify-content:center;margin-bottom:16px">${social}</div>` : ''}
           <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
             <button class="btn btn-secondary btn-sm" data-act="person-edit" data-id="${p.id}">✏️ Editar</button>
@@ -1574,6 +1574,8 @@ function openPersonModal(p = null) {
     $('personModalTitle').textContent = p ? '✏️ Editar persona' : '＋ Agregar persona';
     updateRangeOutputs($('personModal'));
     $('personAliases').value = p ? (p.aliases || '') : '';
+    $('personNativeName').value = p ? (p.nativeName || '') : '';
+    $('personBirthName').value = p ? (p.birthName || '') : '';
     document.querySelectorAll('#personRoles input').forEach(c => { c.checked = !!p && (p.roles || []).includes(c.value); });
     updatePersonNameHint();
     refreshImgField('personImage'); refreshImgField('personBanner');
@@ -1593,7 +1595,7 @@ function savePerson() {
         name, type: $('personType').value, works: Number($('personWorks').value) || 0, rating: Number($('personRating').value) || 0,
         nationality: $('personNationality').value.trim(), birthDate: $('personBirthDate').value, bio: $('personBio').value.trim(),
         socialLinks: $('personSocialLinks').value.trim(), image: $('personImage').value.trim(), banner: $('personBanner').value.trim(),
-        bl: $('personBl').checked, aliases: $('personAliases').value.trim(), roles
+        bl: $('personBl').checked, aliases: $('personAliases').value.trim(), nativeName: $('personNativeName').value.trim(), birthName: $('personBirthName').value.trim(), roles
     };
     data.type = type;
     if (!roles.length) delete data.roles;
@@ -1602,7 +1604,7 @@ function savePerson() {
     const ok = mutate(() => {
         // Si cambias el nombre, también cambia en las obras donde aparece
         if (renamed) renamePersonInWorks(appData.works.filter(w => workHasPerson(w, old)), old, renamed, name);
-        if (id) { Object.assign(old, data, { updatedAt: Date.now() }); if (!roles.length) delete old.roles; if (!data.aliases) delete old.aliases; }
+        if (id) { Object.assign(old, data, { updatedAt: Date.now() }); if (!roles.length) delete old.roles; ['aliases', 'nativeName', 'birthName'].forEach(k => { if (!data[k]) delete old[k]; }); }
         else appData.persons.push({ id: generateId(), ...data, createdAt: Date.now() });
     }, id ? '✅ Persona actualizada' : '✅ Persona agregada');
     if (ok) closeModal('personModal', { force: true });
@@ -1624,23 +1626,44 @@ function deletePerson(id) {
 // 16. PAREJAS BL
 // ============================================================
 let coupleFilter = 'all';
+/** Las dos fotos redondas de la pareja, una sobre otra, con un corazón entre las dos. */
+function coupleDuoHtml(c) {
+    const a = getPersonById(c.personA), b = getPersonById(c.personB);
+    if (!a && !b) return '';
+    const av = p => (p ? `<span class="duo-av" title="${esc(p.name)}">${img(p.image, 'person', p.name)}</span>` : '');
+    return `<div class="couple-duo">${av(a)}<span class="duo-heart" aria-hidden="true">💕</span>${av(b)}</div>`;
+}
+/** Etiqueta suave de cómo van (la explica al pasar el ratón). */
+function coupleStatusChip(st) {
+    return st ? `<span class="chip couple-st st-${st.key}" title="${esc(st.hint)}${st.auto ? '' : ' (elegido por ti)'}">${st.icon} ${esc(st.label)}</span>` : '';
+}
 function renderCouples() {
-    const q = norm(val('couplesSearch'));
-    let list = appData.couples.filter(c => norm(c.name).includes(q));
+    const q = val('couplesSearch');
+    const statusOf = c => coupleStatus(c, appData.works, appData.persons);
+    let list = appData.couples.filter(c => coupleMatches(c, q, appData.persons));
     if (coupleFilter === 'favorite') list = list.filter(c => c.favorite);
+    if (coupleFilter === 'consolidada') list = list.filter(c => (statusOf(c) || {}).key === 'consolidada');
     if (coupleFilter === 'rating') { const order = rankCouples(list, appData.works, appData.persons).map(r => r.couple); list = order; }
     document.querySelectorAll('#coupleTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === coupleFilter));
     $('coupleCount').textContent = `${list.length} ${list.length === 1 ? 'pareja' : 'parejas'}`;
-    $('couplesGrid').innerHTML = list.length ? list.map(c => { const info = coupleInfo(c); return `
+    $('couplesGrid').innerHTML = list.length ? list.map(c => {
+        const info = coupleInfo(c), st = statusOf(c), duo = coupleDuoHtml(c), names = coupleNames(c, appData.persons);
+        const title = coupleTitle(c);
+        const sub = names && norm(names) !== norm(title) ? names : '';
+        return `
         <article class="couple-card" data-couple="${c.id}" data-id="${c.id}" tabindex="0">
-          <div class="couple-image">${img(c.image, 'couple', c.name)}</div>
+          <div class="couple-image ${duo ? 'has-duo' : ''}">
+            ${duo ? `${bannerBgHtml(c.banner, c.image)}${duo}` : img(c.image, 'couple', c.name)}
+          </div>
           <div class="couple-actions">
             <button class="card-act ${c.favorite ? 'is-fav' : ''}" data-act="couple-fav" title="Favorita" aria-label="Favorita">${c.favorite ? '♥' : '♡'}</button>
             <button class="card-act danger" data-act="couple-delete" title="Eliminar" aria-label="Eliminar">✕</button>
           </div>
           <div class="couple-info">
-            <div class="couple-name">${esc(c.name)}</div>
-            <div class="couple-works">${info.count} ${info.count === 1 ? 'obra' : 'obras'} juntos${info.linked ? ' · 🔗' : ''}</div>
+            <div class="couple-name">${esc(title)}</div>
+            ${sub ? `<div class="couple-sub">${esc(sub)}</div>` : ''}
+            <div class="couple-chips">${coupleStatusChip(st)}</div>
+            <div class="couple-works">${info.count} ${info.count === 1 ? 'obra' : 'obras'} juntos${st && st.span ? ` · ${esc(st.span)}` : ''}${info.linked ? ' · 🔗' : ''}</div>
             <div class="couple-rating"><span class="stars">${getStars(info.avgRating || c.rating)}</span><span class="value">${ratingText(Math.round((info.avgRating || c.rating || 0) * 10) / 10)}</span></div>
           </div>
         </article>`; }).join('')
@@ -1650,7 +1673,7 @@ function renderCouples() {
         <button class="ranking-item" data-couple="${c.id}">
           <div class="ranking-number ${['gold', 'silver', 'bronze'][i] || ''}">${i + 1}</div>
           <div class="ranking-avatar">${img(c.image, 'couple', c.name)}</div>
-          <div class="ranking-info"><div class="ranking-name">${esc(c.name)}</div><div class="ranking-detail">${count} obras${c.favorite ? ' · ❤️' : ''}</div></div>
+          <div class="ranking-info"><div class="ranking-name">${esc(coupleTitle(c))}</div><div class="ranking-detail">${count} obras${c.favorite ? ' · ❤️' : ''}</div></div>
           <div class="ranking-rating">★ ${ratingText(Math.round(score * 10) / 10)}</div>
         </button>`).join('') : '<p class="panel-desc" style="margin:0">Sin datos todavía.</p>';
 }
@@ -1658,6 +1681,9 @@ const updateCouplePreview = bindPreview('coupleImage', 'coupleImagePreview', 'co
 function openCoupleModal(c = null) {
     $('editCoupleId').value = c ? c.id : '';
     $('coupleName').value = c ? c.name : '';
+    $('coupleShip').value = c ? (c.ship || '') : '';
+    $('coupleStatus').value = c && c.status ? c.status : '';
+    $('coupleSince').value = c && c.since ? c.since : '';
     $('coupleWorks').value = c ? (c.works || '') : '';
     $('coupleRating').value = c ? (c.rating || 0) : 0;
     $('coupleImage').value = c ? (c.image || '') : '';
@@ -1668,6 +1694,7 @@ function openCoupleModal(c = null) {
     fillCoupleLinks(c);
     updateRangeOutputs($('coupleModal'));
     updateCouplePreview();
+    updateShipHint();
     openModal('coupleModal');
 }
 function saveCouple() {
@@ -1678,17 +1705,20 @@ function saveCouple() {
     // Si no escribes nombre, se usa "A & B"
     const name = $('coupleName').value.trim() || (a && b ? `${a.name} & ${b.name}` : '');
     if (!name) { showToast('⚠️ Escribe un nombre o elige a los dos actores', 'error'); $('coupleName').focus(); return; }
-    const data = { name, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), banner: $('coupleBanner').value.trim(), favorite: $('coupleFavorite').checked, ...links };
+    const ship = $('coupleShip').value.trim(), status = $('coupleStatus').value, since = Number($('coupleSince').value) || 0;
+    const data = { name, ship, status, since, works: Number($('coupleWorks').value) || 0, rating: Number($('coupleRating').value) || 0, image: $('coupleImage').value.trim(), banner: $('coupleBanner').value.trim(), favorite: $('coupleFavorite').checked, ...links };
     const ok = mutate(() => {
-        if (id) Object.assign(getCoupleById(id), data);
-        else appData.couples.push({ id: generateId(), ...data, createdAt: Date.now() });
+        // Lo que se deja vacío no se guarda (así el estado vuelve a calcularse solo)
+        const clean = Object.fromEntries(Object.entries(data).filter(([k, v]) => !['ship', 'status', 'since'].includes(k) || v));
+        if (id) { const cur = getCoupleById(id); ['ship', 'status', 'since'].forEach(k => delete cur[k]); Object.assign(cur, clean); }
+        else appData.couples.push({ id: generateId(), ...clean, createdAt: Date.now() });
     }, id ? '✅ Pareja actualizada' : '✅ Pareja añadida');
     if (ok) closeModal('coupleModal', { force: true });
 }
 function deleteCouple(id) {
     const c = getCoupleById(id);
     if (!c) return;
-    mutate(() => { trashRecord(appData, 'couples', id, Date.now(), { from: 'Parejas BL' }); }, `🗑️ “${c.name}” enviada a la papelera`, { label: `Eliminar pareja “${c.name}”` });
+    mutate(() => { trashRecord(appData, 'couples', id, Date.now(), { from: 'Parejas BL' }); }, `🗑️ “${coupleTitle(c)}” enviada a la papelera`, { label: `Eliminar pareja “${coupleTitle(c)}”` });
 }
 
 // ============================================================
@@ -1973,7 +2003,7 @@ function renderSettings() {
 const TRASH_KIND = {
     works: ['Obras', w => w.title, w => img(w.image, w.type, w.title)],
     persons: ['Personas', p => p.name, p => img(p.image, 'person', p.name)],
-    couples: ['Parejas BL', c => c.name, c => img(c.image, 'couple', c.name)],
+    couples: ['Parejas BL', c => coupleTitle(c), c => img(c.image, 'couple', c.name)],
     collections: ['Colecciones', c => c.name, () => '🗂️'],
     notes: ['Notas', n => `Nota de “${n.workTitle || 'obra'}”`, () => '📝']
 };
@@ -2322,6 +2352,7 @@ document.addEventListener('input', e => {
         $('tagSearch').setSelectionRange(caret, caret);
     }
     if (t.id === 'coupleWorksSearch') renderCoupleWorksPicker();
+    if (t.id === 'coupleShip') updateShipHint();
     if (t.dataset.render && RENDERERS[t.dataset.render]) RENDERERS[t.dataset.render]();
     if (t.type === 'range' && t.dataset.out) updateRangeOutputs(t.closest('.modal, .panel-card') || document);
     if (t.id === 'pdSearch') renderPersonDetail();
@@ -2347,7 +2378,7 @@ document.addEventListener('change', e => {
     if (t.dataset.field === 'airDay' || t.id === 'f_status') updateAirDayHint();
     if (t.closest && t.closest('#workForm')) saveDraft();
     if (t.dataset.tagColor) onTagColorChange(t);
-    if (t.id === 'coupleA' || t.id === 'coupleB') renderCoupleWorksPicker();
+    if (t.id === 'coupleA' || t.id === 'coupleB') { renderCoupleWorksPicker(); updateShipHint(); }
     if (t.dataset.coupleWork) {
         if (t.checked) coupleWorkPick.add(t.dataset.coupleWork); else coupleWorkPick.delete(t.dataset.coupleWork);
         renderCoupleWorksPicker();

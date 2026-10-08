@@ -345,13 +345,14 @@
                 <div class="page-header">
                     <div><h1 class="page-title">💕 Parejas BL</h1><p class="page-subtitle">Todas las parejas BL que forman parte de tu colección.</p></div>
                     <div class="header-actions">
-                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="couplesSearch" placeholder="Buscar parejas…" data-render="couples"></div>
+                        <div class="search-box"><span aria-hidden="true">🔍</span><input type="search" id="couplesSearch" placeholder="Buscar pareja, ship o actor…" data-render="couples"></div>
                         <button class="btn btn-primary" id="addCoupleBtn">＋ Añadir pareja</button>
                     </div>
                 </div>
                 <div class="tabs" id="coupleTabs">
                     <button class="tab active" data-filter="all">Todas</button>
                     <button class="tab" data-filter="favorite">❤️ Favoritas</button>
+                    <button class="tab" data-filter="consolidada">🤝 Consolidadas</button>
                     <button class="tab" data-filter="rating">⭐ Mejor valoradas</button>
                 </div>
                 <div class="two-column-layout">
@@ -803,13 +804,15 @@
                     <div class="field span-2 person-photo-field">
                         <div data-img-mount="personImage" data-kind="avatar" data-query-from="personName" data-ctx="persons"></div>
                     </div>
-                    <label class="field span-2"><span>Nombre *</span><input type="text" id="personName" placeholder="Nombre completo"></label>
+                    <label class="field span-2"><span>Nombre artístico * <small class="muted">(el principal: como se le conoce)</small></span><input type="text" id="personName" placeholder="Pooh Krittin, Perth Tanapon…"></label>
+                    <label class="field"><span>Nombre nativo <small class="muted">(en su idioma)</small></span><input type="text" class="text-input" id="personNativeName" placeholder="ปูห์ กฤตินทร์"></label>
+                    <label class="field"><span>Nombre de nacimiento</span><input type="text" class="text-input" id="personBirthName" placeholder="Nombre en su documento"></label>
                     <label class="field"><span>Rol principal</span><select id="personType"><option value="actor">Actor / Actriz</option><option value="author">Autor / Autora</option><option value="director">Director / Directora</option><option value="studio">Estudio</option></select></label>
                     <div class="field"><span>También es…</span><div class="check-grid compact" id="personRoles">
                         <label class="checkbox-wrapper"><input type="checkbox" value="actor"> Actor/Actriz</label>
                         <label class="checkbox-wrapper"><input type="checkbox" value="author"> Autor/a</label>
                         <label class="checkbox-wrapper"><input type="checkbox" value="director"> Director/a</label></div></div>
-                    <label class="field span-2"><span>También conocida como <small class="muted">(seudónimo, nombre real… separados por comas)</small></span><input type="text" id="personAliases" placeholder="Ej.: Mo Xiang Tong Xiu, MXTX"></label>
+                    <label class="field span-2"><span>Otros nombres <small class="muted">(apodos, seudónimos… separados por comas)</small></span><input type="text" id="personAliases" placeholder="Ej.: Mo Xiang Tong Xiu, MXTX"></label>
                     <div class="title-hint span-2" id="personNameHint" hidden></div>
                     <label class="field"><span>Nacionalidad</span><input type="text" id="personNationality" placeholder="Corea del Sur"></label>
                     <label class="field"><span>Fecha de nacimiento</span><input type="date" id="personBirthDate"></label>
@@ -851,7 +854,11 @@
                     </div>
                     <label class="field"><span>Actor / actriz 1</span><select class="text-input" id="coupleA"></select></label>
                     <label class="field"><span>Actor / actriz 2</span><select class="text-input" id="coupleB"></select></label>
-                    <label class="field span-2"><span>Nombre</span><input type="text" id="coupleName" placeholder="Si lo dejas vacío: “Actor 1 & Actor 2”"></label>
+                    <label class="field span-2"><span>Nombre de ship <small class="muted">(como los fans la llaman: PoohPavel, PerthSanta…)</small></span><input type="text" id="coupleShip" placeholder="Es el nombre que se ve en todas partes" autocomplete="off">
+                        <small class="hint" id="coupleShipHint" hidden></small></label>
+                    <label class="field span-2"><span>Nombre completo</span><input type="text" id="coupleName" placeholder="Si lo dejas vacío: “Actor 1 & Actor 2”"></label>
+                    <label class="field"><span>Cómo van <small class="muted">(se calcula solo)</small></span><select class="text-input" id="coupleStatus"><option value="">Automático (según sus obras)</option><option value="nueva">🌱 Recién juntos</option><option value="consolidada">🤝 Pareja consolidada</option><option value="pasada">🕰️ Trabajaron juntos</option></select></label>
+                    <label class="field"><span>Primer año juntos <small class="muted">(opcional)</small></span><input type="number" class="text-input" id="coupleSince" min="1950" max="2100" placeholder="2024"></label>
                     <div class="field span-2">
                         <span class="field-label-row"><span>Sus obras juntos</span><small class="muted" id="coupleWorksCount"></small></span>
                         <input type="search" class="text-input" id="coupleWorksSearch" placeholder="Buscar obra…">
@@ -1026,6 +1033,7 @@
     <script src="moodboard.js"></script>
     <script src="watchkit.js"></script>
     <script src="watch.js"></script>
+    <script src="couplekit.js"></script>
     <script src="play.js"></script>
     <script src="app.js"></script>
 </body>

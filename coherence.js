@@ -100,11 +100,9 @@ function coupleWorks(couple, works, persons) {
     const ids = new Set(couple.workIds || []);
     const a = persons.find(p => p.id === couple.personA), b = persons.find(p => p.id === couple.personB);
     if (a && b) {
-        const na = norm(a.name), nb = norm(b.name);
-        works.forEach(w => {
-            const actors = splitList(w.actors).map(norm);
-            if (actors.includes(na) && actors.includes(nb)) ids.add(w.id);
-        });
+        // Salen los dos en el reparto: por su id vinculado o por cualquiera de sus nombres (artístico, nativo, seudónimo…)
+        const inCast = (w, p) => splitList(w.actors).some(n => personHasName(p, n));
+        works.forEach(w => { if (inCast(w, a) && inCast(w, b)) ids.add(w.id); });
     }
     return works.filter(w => ids.has(w.id));
 }

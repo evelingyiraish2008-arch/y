@@ -177,25 +177,42 @@ function openCoupleDetail(id) {
     openSheet('💕 Pareja', () => {
         const c = getCoupleById(id);
         if (!c) return '<p>Pareja no encontrada.</p>';
-        $('sheetTitle').textContent = '💕 ' + c.name;
+        $('sheetTitle').textContent = '💕 ' + coupleTitle(c);
         const s = coupleInfo(c);
+        const st = coupleStatus(c, appData.works, appData.persons);
         const a = getPersonById(c.personA), b = getPersonById(c.personB);
         const related = relatedCouples(c, appData.couples);
+        const timeline = coupleTimeline(c, appData.works, appData.persons);
+        const names = coupleNames(c, appData.persons);
+        const facts = [
+            ['Obras juntos', s.count],
+            st && st.first ? ['Primera obra', st.first] : null,
+            st && st.last && st.last !== st.first ? ['Última obra', st.last] : null,
+            s.avgRating ? ['Media', '★ ' + ratingText(Math.round(s.avgRating * 10) / 10)] : (c.rating ? ['Nota', '★ ' + ratingText(c.rating)] : null)
+        ].filter(Boolean);
         return `
         <div class="couple-banner ${c.banner ? 'has-banner' : ''}">${bannerBgHtml(c.banner, c.image)}
             <button class="icon-btn sm detail-banner-btn" data-act="banner-quick" data-kind="couples" data-id="${c.id}" title="${c.banner ? 'Cambiar banner' : 'Poner un banner'}" aria-label="${c.banner ? 'Cambiar banner' : 'Poner un banner'}">🖼️</button></div>
-        <div class="couple-detail-hero">${img(c.image, 'couple', c.name)}</div>
-        <div class="couple-detail-people">
-            ${[a, b].map(p => (p ? `<button class="couple-person" data-person="${p.id}"><span class="avatar">${img(p.image, 'person', p.name)}</span><b>${esc(p.name)}</b></button>` : '')).join('<span class="couple-heart">💕</span>')}
+        ${c.image ? `<div class="couple-detail-hero">${img(c.image, 'couple', c.name)}</div>` : ''}
+        <div class="couple-detail-people ${c.image ? '' : 'no-hero'}">
+            ${[a, b].map(p => (p ? `<button class="couple-person" data-person="${p.id}"><span class="avatar">${img(p.image, 'person', p.name)}</span><b>${esc(p.name)}</b>${personOtherNames(p)[0] ? `<small>${esc(personOtherNames(p)[0])}</small>` : ''}</button>` : '')).join('<span class="couple-heart">💕</span>')}
         </div>
-        <div class="detail-chips" style="justify-content:center;margin:10px 0 16px">
-            <span class="chip chip-muted">🎬 ${s.count} ${s.count === 1 ? 'obra' : 'obras'} juntos</span>
-            ${s.avgRating ? `<span class="chip chip-orange">★ ${ratingText(Math.round(s.avgRating * 10) / 10)} de media en sus obras</span>` : c.rating ? `<span class="chip chip-orange">★ ${ratingText(c.rating)}</span>` : ''}
-            ${c.favorite ? '<span class="chip chip-pink">❤️ Favorita</span>' : ''}
+        <div class="couple-title-block">
+            <h3 class="couple-title">${esc(coupleTitle(c))}</h3>
+            ${names && norm(names) !== norm(coupleTitle(c)) ? `<p class="couple-fullnames">${esc(names)}</p>` : ''}
+            <div class="detail-chips" style="justify-content:center">
+                ${coupleStatusChip(st)}
+                ${st && st.span ? `<span class="chip chip-muted">📅 ${esc(st.span)}</span>` : ''}
+                ${c.favorite ? '<span class="chip chip-pink">❤️ Favorita</span>' : ''}
+            </div>
+            ${st ? `<p class="hint" style="text-align:center">${esc(st.hint)}${st.auto ? ' · se calcula con tus obras' : ' · lo elegiste tú'}</p>` : ''}
         </div>
+        ${facts.length ? `<div class="couple-facts">${facts.map(([k, v]) => `<div><b>${esc(v)}</b><small>${esc(k)}</small></div>`).join('')}</div>` : ''}
         ${!s.linked ? '<p class="hint" style="text-align:center">Edita la pareja y elige a los dos actores para ver sus obras juntos automáticamente.</p>' : ''}
-        ${s.works.length ? `<div class="detail-section-title">Sus obras juntos</div><div class="mini-grid">${s.works.map(miniCard).join('')}</div>` : ''}
-        ${related.length ? `<div class="detail-section-title" style="margin-top:16px">Parejas relacionadas</div><div class="tag-list">${related.map(r => `<button class="chip" data-couple="${r.id}">💕 ${esc(r.name)}</button>`).join('')}</div>` : ''}
+        ${timeline.length ? `<div class="detail-section-title">Sus obras juntos</div>
+            <ol class="couple-timeline">${timeline.map(({ work: w, year }) => `<li><span class="tl-year">${year || '—'}</span>
+                <button type="button" class="tl-work" data-open="${w.id}">${img(w.image, w.type, w.title)}<span class="info"><b>${esc(w.title)}</b><small>${TYPE_META[w.type].icon} ${esc(getTypeLabel(w.type))}${w.rating ? ' · ★ ' + ratingText(w.rating) : ''}</small></span></button></li>`).join('')}</ol>` : ''}
+        ${related.length ? `<div class="detail-section-title" style="margin-top:16px">Parejas relacionadas</div><div class="tag-list">${related.map(r => `<button class="chip" data-couple="${r.id}">💕 ${esc(coupleTitle(r))}</button>`).join('')}</div>` : ''}
         <div class="detail-section-title" style="margin-top:16px">🎨 Moodboard${(c.gallery || []).length ? ' · ' + c.gallery.length : ''}</div>
         ${moodboardHtml('couples', c)}
         <div class="seg-inline" style="justify-content:center;margin-top:18px">
@@ -204,6 +221,16 @@ function openCoupleDetail(id) {
         </div>`;
     });
 }
+/** Debajo del nombre de ship: sugiere el que sale de los nombres artísticos (Pooh + Pavel → PoohPavel). */
+function updateShipHint() {
+    const el = $('coupleShipHint');
+    if (!el) return;
+    const sug = suggestShip(getPersonById($('coupleA').value), getPersonById($('coupleB').value));
+    const cur = $('coupleShip').value.trim();
+    el.hidden = !sug || shipKey(sug) === shipKey(cur);
+    el.innerHTML = sug ? `💡 Sugerido: <button type="button" class="link-btn" data-act="ship-suggest" data-id="${esc(sug)}">${esc(sug)}</button>` : '';
+}
+FEATURE_ACTIONS['ship-suggest'] = sug => { $('coupleShip').value = sug; updateShipHint(); };
 FEATURE_ACTIONS['couple-edit'] = id => { closeModal('sheetModal'); openCoupleModal(getCoupleById(id)); };
 
 // ============================================================

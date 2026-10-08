@@ -40,6 +40,7 @@ const APP_SHELL = [
     './moodboard.js',
     './watchkit.js',
     './watch.js',
+    './couplekit.js',
     './extras.js',
     './i18n.js',
     './play.js',

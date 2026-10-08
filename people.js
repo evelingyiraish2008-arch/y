@@ -121,7 +121,7 @@ function showChipSuggest(field) {
         if (it.kind === 'create') return `<button type="button" class="chip-opt create" role="option" data-act="chip-pick" data-id="${field}" data-item="${i}">＋ Crear “${esc(it.name)}” como ${esc((PERSON_ROLES[it.role] || '').split(' /')[0].toLowerCase())}</button>`;
         const p = it.p, n = worksOfPerson(p, appData.works).length;
         return `<button type="button" class="chip-opt" role="option" data-act="chip-pick" data-id="${field}" data-item="${i}" ${it.added ? 'disabled' : ''}>
-            ${personAvatar(p, 30)}<span class="info"><b>${esc(p.name)}</b><small>${esc(personRoles(p).map(r => (PERSON_ROLES[r] || r).split(' /')[0]).join(', '))} · ${n} ${n === 1 ? 'obra' : 'obras'}${p.aliases ? ' · ' + esc(p.aliases) : ''}</small></span>
+            ${personAvatar(p, 30)}<span class="info"><b>${esc(p.name)}</b><small>${esc(personRoles(p).map(r => (PERSON_ROLES[r] || r).split(' /')[0]).join(', '))} · ${n} ${n === 1 ? 'obra' : 'obras'}${personOtherNames(p).length ? ' · ' + esc(personOtherNames(p).slice(0, 2).join(', ')) : ''}</small></span>
             ${it.added ? '<span class="chip chip-muted">Ya añadido</span>' : ''}</button>`;
     };
     const known = items.map((it, i) => [it, i]).filter(([it]) => it.kind === 'person');

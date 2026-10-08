@@ -10,9 +10,16 @@
 const PERSON_FIELDS = { author: 'author', actors: 'actor', directors: 'director', studio: 'studio' };
 const PERSON_ROLES = { actor: 'Actor / Actriz', author: 'Autor / Autora', director: 'Director / Directora', studio: 'Estudio' };
 
-/** Nombres por los que se conoce a una persona: el principal y sus otros nombres (seudónimo, nombre real…). */
+/**
+ * Nombres por los que se conoce a una persona. `name` es el principal: el nombre artístico (en Tailandia,
+ * por ejemplo, casi todos usan uno distinto al de nacimiento). Además: nombre nativo, de nacimiento y otros.
+ */
 function personNames(p) {
-    return [p.name, ...splitList(p.aliases)].filter(Boolean);
+    return [p.name, p.nativeName, p.birthName, ...splitList(p.aliases)].filter(Boolean);
+}
+/** Los otros nombres (sin el principal), para mostrarlos en pequeño. */
+function personOtherNames(p) {
+    return [p.nativeName, p.birthName, ...splitList(p.aliases)].filter(x => x && nameKey(x) !== nameKey(p.name));
 }
 /** Clave para comparar nombres: sin tildes, mayúsculas, puntos ni espacios de más. */
 const nameKey = s => norm(s).replace(/[.·'’\-_]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -180,7 +187,7 @@ function newCharacters(existing, metaPeople, persons, makeId) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         PERSON_FIELDS, PERSON_ROLES, personNames, nameKey, personHasName, personRoles, namesSimilar, matchPersons, similarPersons, splitNames,
-        workHasPerson, worksOfPerson, linkPersonIds, castOf, renamePersonInWorks, removePersonFromWorks, orphanPersons, allCharacters, initials,
+        personOtherNames, workHasPerson, worksOfPerson, linkPersonIds, castOf, renamePersonInWorks, removePersonFromWorks, orphanPersons, allCharacters, initials,
         titleMatchesName, missingPersons, newCharacters
     };
 }

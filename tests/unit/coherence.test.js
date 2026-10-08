@@ -3,6 +3,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 Object.assign(global, require('../../utils.js'));
 Object.assign(global, require('../../history.js'));
+Object.assign(global, require('../../peoplekit.js'));
 const c = require('../../coherence.js');
 
 describe('etiquetas', () => {
