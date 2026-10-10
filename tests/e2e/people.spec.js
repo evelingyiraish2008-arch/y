@@ -15,6 +15,7 @@ async function mockImageSources(page, { slow = false } = {}) {
     await page.route(/wikipedia\.org\/w\/api\.php/, route => route.fulfill({ json: { query: { pages: { 1: { index: 1, title: 'Foto Wiki', original: { source: 'https://img.test/wiki.jpg', width: 600, height: 800 }, thumbnail: { source: 'https://img.test/wiki.jpg' } } } } } }));
     await page.route(/commons\.wikimedia\.org/, route => route.fulfill({ json: { query: { pages: { 1: { index: 1, title: 'File:Commons.jpg', imageinfo: [{ url: 'https://img.test/commons.jpg', thumburl: 'https://img.test/commons.jpg', width: 1500, height: 500, mime: 'image/jpeg', descriptionurl: 'https://commons.wikimedia.org/wiki/File:Commons.jpg' }] } } } } }));
     await page.route(/api\.jikan\.moe/, route => route.fulfill({ json: { data: [] } }));
+    await page.route(/api\.openverse\.org/, route => route.fulfill({ json: { results: [] } })); // sin internet de verdad en las pruebas
     await page.route('https://img.test/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: PNG, headers: { 'Access-Control-Allow-Origin': '*' } }));
 }
 const sug = page => page.locator('#chipsug_actors');

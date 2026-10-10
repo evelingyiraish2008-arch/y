@@ -88,7 +88,7 @@ test('fichas: buscar la obra, la persona o la pareja con sugerencias que sirven'
 
 test('panel de imágenes: solo Recomendadas y Google y Pinterest; el resto está en "Más fuentes"', async ({ page }) => {
     await openApp(page);
-    await page.route(/graphql\.anilist\.co|wikipedia\.org|commons\.wikimedia\.org|api\.jikan\.moe/, route => route.fulfill({ json: {} }));
+    await page.route(/graphql\.anilist\.co|wikipedia\.org|commons\.wikimedia\.org|api\.jikan\.moe|api\.openverse\.org/, route => route.fulfill({ json: {} }));
     await page.evaluate(() => openImageSearch({ use: 'banner', query: 'Given', onPick: () => {} }));
     const tabs = page.locator('#imgSearchTabs [data-act="img-search-tab"]');
     await expect(tabs).toHaveText(['✨ Recomendadas', '🌐 Google y Pinterest']);
