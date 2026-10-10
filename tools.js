@@ -658,3 +658,36 @@ FEATURE_ACTIONS['auto-enrich-toggle'] = () => {
     renderSettings();
     showToast(appData.settings.autoEnrich === false ? '🔄 Puesta al día automática desactivada' : '🔄 Puesta al día automática activada');
 };
+
+// ============================================================
+// 8. ESTADO DE EMISIÓN AL DÍA ("En emisión" → "Finalizada"…)
+// ============================================================
+const AIRSTATUS_REFRESH_MS = 24 * 3600000;
+let airStatusRunning = false;
+/** Consulta el estado actual de las series y animes que tienen id de AniList o TVmaze y actualiza los que cambiaron. */
+async function refreshAirStatus({ silent = false } = {}) {
+    if (airStatusRunning) return;
+    const list = appData.works.filter(w => !w.trashedAt && (Number(w.anilistId) || Number(w.tvmazeId)));
+    if (!list.length) { if (!silent) showToast('📺 Usa “Rellenar datos por el título” en tus series y animes para poder consultar su estado de emisión.', 'info', 6000); return; }
+    if (!navigator.onLine) { if (!silent) showToast('📶 Sin conexión', 'error'); return; }
+    airStatusRunning = true;
+    try {
+        const status = await fetchAirStatuses(list);
+        appData.settings.airStatusCheckedAt = Date.now();
+        const changed = list.filter(w => status[w.id] && w.airStatus !== status[w.id]);
+        if (changed.length) {
+            const now = Date.now();
+            mutate(() => changed.forEach(w => { w.airStatus = status[w.id]; w.updatedAt = now; }),
+                `🔄 Estado de emisión al día en ${changed.length} ${changed.length === 1 ? 'obra' : 'obras'}`, { label: `Estado de emisión de ${changed.length} obras` });
+        } else { saveData(); if (!silent) showToast('👌 El estado de emisión de tus obras ya estaba al día'); }
+    } finally { airStatusRunning = false; }
+}
+/** Una vez al día, si está activada la puesta al día automática. */
+function maybeRefreshAirStatus() {
+    const s = appData.settings;
+    if (s.autoEnrich === false || s.readOnly || !navigator.onLine || navigator.webdriver) return;
+    if (Date.now() - (Number(s.airStatusCheckedAt) || 0) < AIRSTATUS_REFRESH_MS) return;
+    if (!appData.works.some(w => Number(w.anilistId) || Number(w.tvmazeId))) return;
+    setTimeout(() => refreshAirStatus({ silent: true }).catch(() => { airStatusRunning = false; }), 4000);
+}
+FEATURE_ACTIONS['airstatus-refresh'] = () => refreshAirStatus().catch(() => { airStatusRunning = false; showToast('No se pudo consultar ahora. Inténtalo de nuevo.', 'error'); });

@@ -2687,6 +2687,7 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     setTimeout(() => { const sp = $('splash'); if (sp) sp.remove(); }, 450);
     cloud.init();
     maybeAutoEnrich();
+    maybeRefreshAirStatus();
     checkNotifications().catch(() => {});
     if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-work' && getWorkById(e.data.id)) openDetail(e.data.id); });

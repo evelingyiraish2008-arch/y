@@ -276,3 +276,17 @@ describe('más detalles de cada fuente', () => {
         assert.equal(estimateMinutes({ type: 'series', seriesType: 'Película', status: 'terminado', runtime: 95 }), 95);
     });
 });
+
+describe('estado de emisión al día', () => {
+    it('lee el estado actual de AniList y TVmaze por su id', async () => {
+        assert.deepEqual(md.parseAniListStatus({ data: { Page: { media: [{ id: 1, status: 'FINISHED' }, { id: 2, status: 'RELEASING' }, { id: 3, status: 'RARO' }] } } }), { 1: 'Finalizada', 2: 'En emisión' });
+        const calls = [];
+        const fetchFn = async (url, init) => { calls.push(url); return { ok: true, json: async () => (url.includes('graphql') ? { data: { Page: { media: [{ id: 7, status: 'FINISHED' }] } } } : url.endsWith('/shows/9') ? { status: 'Running' } : {}) }; };
+        const works = [{ id: 'a', anilistId: 7 }, { id: 'b', tvmazeId: 9 }, { id: 'c' }];
+        assert.deepEqual(await md.fetchAirStatuses(works, { fetchFn }), { a: 'Finalizada', b: 'En emisión' });
+        assert.equal(calls.length, 2); // las obras sin id no consultan nada
+        // Si una fuente falla, las demás siguen y no se inventa nada
+        const half = async url => (url.includes('graphql') ? { ok: false, status: 500 } : fetchFn(url));
+        assert.deepEqual(await md.fetchAirStatuses(works, { fetchFn: half }), { b: 'En emisión' });
+    });
+});
