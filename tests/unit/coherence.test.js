@@ -155,3 +155,21 @@ describe('temporadas: dos porcentajes, qué falta y tiempo', () => {
         assert.deepEqual(c.distributeProgress(list, 0).map(s => s.progress), [0, 0, 0]);
     });
 });
+
+describe('filtro por país', () => {
+    const works = [
+        { id: '1', title: 'A', country: 'Corea del Sur' }, { id: '2', title: 'B', country: 'Korea' }, { id: '3', title: 'C', country: 'Tailandia, Corea del Sur' },
+        { id: '4', title: 'D', country: 'Japón' }, { id: '5', title: 'E' }
+    ];
+    it('agrupa escrituras distintas del mismo país y cuenta', () => {
+        const o = countryOptions(works);
+        assert.deepEqual(o.map(x => [x.key, x.label, x.count]), [['corea del sur', 'Corea del Sur', 3], ['japon', 'Japón', 1], ['tailandia', 'Tailandia', 1]]);
+        assert.equal(countryFlag('Korea'), '🇰🇷');
+        assert.equal(countryFlag('Atlántida'), '');
+    });
+    it('filtra por país (también si la obra tiene varios)', () => {
+        assert.deepEqual(filterWorks(works, { country: 'corea del sur' }).map(w => w.id), ['1', '2', '3']);
+        assert.deepEqual(filterWorks(works, { country: 'tailandia' }).map(w => w.id), ['3']);
+        assert.equal(filterWorks(works, { country: 'all' }).length, 5);
+    });
+});

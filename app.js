@@ -311,9 +311,10 @@ function renderGrid(gridId, list, empty, countId, page = currentPage, cardOpts =
 // 6. PÁGINAS DE OBRAS
 // ============================================================
 function renderBooks() {
+    populateCountryFilter('booksCountryFilter', getWorksByType('book'));
     let list = filterWorks(getWorksByType('book'), {
         search: val('booksSearch'), status: val('booksStatusFilter'), bl: checked('booksBlFilter'), fav: checked('booksFavFilter'),
-        spicy: val('booksSpicyFilter'), sadness: val('booksSadnessFilter')
+        spicy: val('booksSpicyFilter'), sadness: val('booksSadnessFilter'), country: val('booksCountryFilter')
     });
     list = filterByDate(list, val('booksDateFilter'));
     renderSavedViews('books');
@@ -324,9 +325,10 @@ let seriesTab = 'all';
 function renderSeries() {
     const all = getWorksByType('series');
     populateYearFilter('seriesYearFilter', all);
+    populateCountryFilter('seriesCountryFilter', all);
     let list = filterWorks(all, {
         search: val('seriesSearch'), fav: checked('seriesFavFilter'),
-        spicy: val('seriesSpicyFilter'), sadness: val('seriesSadnessFilter')
+        spicy: val('seriesSpicyFilter'), sadness: val('seriesSadnessFilter'), country: val('seriesCountryFilter')
     });
     if (seriesTab === 'bl') list = list.filter(w => w.bl);
     else if (seriesTab !== 'all') list = list.filter(w => w.status === seriesTab);
@@ -346,6 +348,15 @@ function renderSeries() {
     renderSavedViews('series');
     renderGrid('seriesGrid', sortWorks(list, val('seriesSort')), ['🎬', 'No hay series aquí', 'Prueba con otra pestaña o agrega una serie.', 'series'], null, 'series');
 }
+/** Rellena el filtro de país con los países que ya tienen tus obras (con bandera y cuántas hay). */
+function populateCountryFilter(selectId, items) {
+    const select = $(selectId);
+    if (!select) return;
+    const current = select.value;
+    const opts = countryOptions(items);
+    select.innerHTML = '<option value="all">🌍 País: todos</option>' + opts.map(o => `<option value="${esc(o.key)}">${countryFlag(o.label) ? countryFlag(o.label) + ' ' : ''}${esc(o.label)} (${o.count})</option>`).join('');
+    select.value = opts.some(o => o.key === current) ? current : 'all';
+}
 function populateYearFilter(selectId, items) {
     const select = $(selectId);
     const current = select.value;
@@ -354,26 +365,29 @@ function populateYearFilter(selectId, items) {
     select.value = years.map(String).includes(current) ? current : 'all';
 }
 function renderAnime() {
+    populateCountryFilter('animeCountryFilter', getWorksByType('anime'));
     let list = filterWorks(getWorksByType('anime'), {
         search: val('animeSearch'), status: val('animeStatusFilter'), bl: checked('animeBlFilter'), fav: checked('animeFavFilter'),
-        spicy: val('animeSpicyFilter'), sadness: val('animeSadnessFilter')
+        spicy: val('animeSpicyFilter'), sadness: val('animeSadnessFilter'), country: val('animeCountryFilter')
     });
     list = filterByDate(list, val('animeDateFilter'));
     renderSavedViews('anime');
     renderGrid('animeGrid', sortWorks(list, val('animeSort')), ['🎌', 'No hay animes aquí', 'Prueba con otros filtros o agrega un anime.', 'anime'], 'animeCount', 'anime');
 }
 function renderManhwa() {
+    populateCountryFilter('manhwaCountryFilter', getWorksByType('manhwa'));
     let list = filterWorks(getWorksByType('manhwa'), {
         search: val('manhwaSearch'), status: val('manhwaStatusFilter'), bl: checked('manhwaBlFilter'), fav: checked('manhwaFavFilter'),
-        spicy: val('manhwaSpicyFilter'), sadness: val('manhwaSadnessFilter')
+        spicy: val('manhwaSpicyFilter'), sadness: val('manhwaSadnessFilter'), country: val('manhwaCountryFilter')
     });
     list = filterByDate(list, val('manhwaDateFilter'));
     renderSavedViews('manhwa');
     renderGrid('manhwaGrid', sortWorks(list, val('manhwaSort')), ['📕', 'No hay manhwas aquí', 'Prueba con otros filtros o agrega un manhwa.', 'manhwa'], 'manhwaCount', 'manhwa');
 }
 function renderBL() {
+    populateCountryFilter('blCountryFilter', appData.works.filter(w => w.bl));
     let list = filterWorks(appData.works.filter(w => w.bl), {
-        search: val('blSearch'), type: val('blTypeFilter'), status: val('blStatusFilter'), minRating: checked('blMinRating') ? 4 : 0
+        search: val('blSearch'), type: val('blTypeFilter'), status: val('blStatusFilter'), country: val('blCountryFilter'), minRating: checked('blMinRating') ? 4 : 0
     });
     list = sortWorks(filterByDate(list, val('blDateFilter')), val('blSort'));
     renderSavedViews('bl');
@@ -1003,6 +1017,12 @@ function fillWorkForm(src) {
     renderSeasonsEditor(src.seasonsList);
     updateTitleHint();
     updateTagsHint();
+    updateMoreDetails();
+}
+/** "Más detalles" se abre solo si ya tiene algo escrito (o lo trajo "Rellenar datos"). */
+function updateMoreDetails() {
+    const box = $('moreDetails');
+    if (box && [...box.querySelectorAll('[data-field]')].some(el => String(el.value || '').trim())) box.open = true;
 }
 
 // ---------- Borrador del formulario (se guarda solo mientras escribes) ----------
@@ -1055,10 +1075,20 @@ function collectWorkForm() {
     if ($('f_multi')) data.seasonsList = readSeasonsEditor();
     return data;
 }
+/** Campos opcionales de "Más detalles" (se guardan solo si tienen algo). */
+const WORK_DETAIL_FIELDS = ['altTitle', 'airStatus', 'runtime', 'language', 'basedOn', 'score', 'officialUrl', 'publisher'];
 function saveWork() {
     const data = collectWorkForm();
     if (!data.title) { showToast('⚠️ El título es obligatorio', 'error'); $('f_title').focus(); return; }
     const total = formType === 'book' ? data.pages : formType === 'manhwa' ? data.totalChapters : data.totalEpisodes;
+    // "Más detalles": lo que se deja vacío no se guarda (así una obra editada sin cambios no apunta cambios raros) y se quita si lo vaciaste
+    const clearedDetails = WORK_DETAIL_FIELDS.filter(f => !data[f]);
+    clearedDetails.forEach(f => delete data[f]);
+    if (data.officialUrl) {
+        const url = normalizeWatchUrl(data.officialUrl);
+        if (!url) { showToast('⚠️ La web oficial debe ser una dirección web (https://…)', 'error'); return; }
+        data.officialUrl = url;
+    }
     if (data.progress < 0) data.progress = 0;
     if (total && data.progress > total) data.progress = total;
     if (data.endDate && data.startDate && data.endDate < data.startDate) { showToast('⚠️ La fecha de fin es anterior a la de inicio', 'error'); return; }
@@ -1083,6 +1113,7 @@ function saveWork() {
             const w = getWorkById(editing);
             const before = { progress: Number(w.progress) || 0, status: w.status };
             if (!data.personIds) delete w.personIds;
+            clearedDetails.forEach(f => { delete w[f]; });
             Object.assign(w, data, { updatedAt: Date.now() });
             if (!hasSeasons(w)) delete w.seasonsList;
             syncSeasonAggregates(w);
@@ -1170,7 +1201,7 @@ const FIELD_LABELS = {
     studio: 'Estudio', platform: 'Plataforma', country: 'País', genre: 'Género', year: 'Año', actors: 'Actores', directors: 'Directores',
     pages: 'Páginas', totalEpisodes: 'Episodios', totalChapters: 'Capítulos', seasons: 'Temporadas', season: 'Temporada',
     airDay: 'Día de emisión', startDate: 'Inicio', endDate: 'Fin', tags: 'Etiquetas', synopsis: 'Sinopsis', spicy: 'Spicy',
-    sadness: 'Tristeza', image: 'Portada', banner: 'Banner', watchLinks: 'Dónde verla', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
+    sadness: 'Tristeza', image: 'Portada', banner: 'Banner', watchLinks: 'Dónde verla', altTitle: 'Título original', airStatus: 'Estado de emisión', runtime: 'Duración', language: 'Idioma original', basedOn: 'Basada en', score: 'Nota en las fuentes', officialUrl: 'Web oficial', publisher: 'Editorial', seriesType: 'Tipo', locked: 'Bloqueo', type: 'Tipo de obra'
 };
 function fieldValueText(field, v) {
     if (v === null || v === undefined || v === '') return '—';
@@ -1247,6 +1278,11 @@ function peopleChips(str) {
         return p ? `<button class="chip" data-person="${p.id}">${esc(n)}</button>` : `<span class="chip chip-muted">${esc(n)}</span>`;
     }).join('');
 }
+/** Enlace a la web oficial: solo http(s) y se abre en otra pestaña. */
+function officialLinkHtml(url) {
+    const clean = typeof normalizeWatchUrl === 'function' ? normalizeWatchUrl(url) : '';
+    return clean ? `<a href="${esc(clean)}" target="_blank" rel="noopener noreferrer">${esc(clean.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))} ↗</a>` : esc(url);
+}
 let detailRenderedId = null;
 /** Pinta la ficha. Mantiene las secciones abiertas y lo que estuvieras escribiendo (salvo fresh = true). */
 function renderDetail(fresh = false) {
@@ -1264,7 +1300,10 @@ function renderDetail(fresh = false) {
         ['Autor', w.author, 'author'], ['Estudio', w.studio], ['Plataforma', w.platform], ['Género', w.genre], ['País', w.country],
         ['Actores', w.actors, 'actors'], ['Directores', w.directors, 'directors'],
         ['Temporadas', w.type === 'anime' && w.seasons ? w.seasons : ''], ['Temporada', w.type === 'manhwa' && w.season ? w.season : ''],
-        ['Emisión', (WEEK.find(d => d.day === getAirDay(w)) || {}).short || '']
+        ['Emisión', (WEEK.find(d => d.day === getAirDay(w)) || {}).short || ''],
+        ['Título original', w.altTitle], ['Estado de emisión', w.airStatus], ['Duración', Number(w.runtime) ? `${w.runtime} min${w.type === 'series' && w.seriesType === 'Película' ? '' : ' por episodio'}` : ''],
+        ['Idioma original', w.language], ['Basada en', w.basedOn], ['Editorial', w.publisher], ['Nota en las fuentes', Number(w.score) ? `★ ${w.score}/10` : ''],
+        ['Web oficial', w.officialUrl, null, 'link']
     ].filter(r => r[1]);
     const tags = splitList(w.tags);
     const similar = similarWorks(w, appData.works, 6).map(x => x.work);
@@ -1294,6 +1333,8 @@ function renderDetail(fresh = false) {
           <button class="btn btn-secondary btn-sm ${myList() && myList().items.includes(w.id) ? 'is-on' : ''}" data-act="mylist" data-id="${w.id}">${myList() && myList().items.includes(w.id) ? '✓ Mi lista' : '＋ Mi lista'}</button>
           <button class="btn btn-secondary btn-sm" data-act="collect" data-id="${w.id}">📂 Colecciones${inColls.length ? ' · ' + inColls.length : ''}</button>
           <button class="btn btn-secondary btn-sm" data-act="focus" data-id="${w.id}" title="Modo foco (F)">🎯 Foco</button>
+          ${w.rereading ? `<button class="btn btn-primary btn-sm" data-act="reread-finish" data-id="${w.id}">✅ Terminar esta vez</button>`
+            : w.status === 'terminado' ? `<button class="btn btn-secondary btn-sm" data-act="reread-start" data-id="${w.id}" title="Empieza otra vez desde el principio y apunta las veces">🔁 Volver a ${verbAgain(w)}la</button>` : ''}
           <button class="btn btn-secondary btn-sm ${w.reminder ? 'is-on' : ''}" data-act="reminder" data-id="${w.id}" title="${w.reminder ? 'Te lo recuerdo ' + esc(reminderText(w.reminder)) : 'Recordarme'}">${w.reminder ? '🔔 Recordatorio' : '🔔 Recordarme'}</button>
           <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
           <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
@@ -1324,14 +1365,14 @@ function renderDetail(fresh = false) {
         </div>
         <div class="detail-section">
           <div class="detail-section-title">Sinopsis</div>
-          <p class="detail-text">${esc(w.synopsis || 'Sin sinopsis todavía.')}</p>
+          <p class="detail-text">${esc(w.synopsis || 'Sin sinopsis todavía.')}</p>${w.synopsis && needsTranslation(w.synopsis) ? `<button type="button" class="link-btn" data-act="work-translate" data-id="${w.id}">🌐 Traducir al español</button>` : ''}
         </div>
         ${tags.length ? `<div class="detail-section"><div class="detail-section-title">Etiquetas</div><div class="tag-list">${tags.map(tagChip).join('')}</div></div>` : ''}
         ${seasonsSectionHtml(w, open.seasons)}
         <details class="expandable" data-key="ficha" ${open.ficha ?? rel.length ? 'open' : ''}>
           <summary>🔗 Ficha</summary>
           <div class="expandable-content">
-            ${rel.length ? `<dl class="kv">${rel.map(([k, v, people]) => `<dt>${k}</dt><dd>${people ? castChipsHtml(w, people) : esc(v)}</dd>`).join('')}</dl>` : '<p>Sin información adicional. Edita la obra para añadirla.</p>'}
+            ${rel.length ? `<dl class="kv">${rel.map(([k, v, people, link]) => `<dt>${k}</dt><dd>${people ? castChipsHtml(w, people) : link ? officialLinkHtml(v) : esc(v)}</dd>`).join('')}</dl>` : '<p>Sin información adicional. Edita la obra para añadirla.</p>'}
             ${castLinesHtml(w) ? `<div class="detail-section-title" style="margin-top:12px">🎭 Reparto</div>${castLinesHtml(w)}` : ''}
           </div>
         </details>
@@ -1998,6 +2039,7 @@ function renderSettings() {
     if (document.activeElement !== $('settingTmdbKey')) $('settingTmdbKey').value = s.tmdbKey || '';
     $('settingLang').value = s.lang || 'es';
     $('readOnlyToggle').setAttribute('aria-checked', String(!!s.readOnly));
+    $('autoEnrichToggle').setAttribute('aria-checked', String(s.autoEnrich !== false));
     $('clipperLink').href = clipperBookmarklet();
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
     $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
@@ -2644,6 +2686,7 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     document.documentElement.dataset.ready = 'true';
     setTimeout(() => { const sp = $('splash'); if (sp) sp.remove(); }, 450);
     cloud.init();
+    maybeAutoEnrich();
     checkNotifications().catch(() => {});
     if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-work' && getWorkById(e.data.id)) openDetail(e.data.id); });

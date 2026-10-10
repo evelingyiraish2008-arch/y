@@ -103,11 +103,13 @@ const IMAGE_SOURCES = {
     tmdb: { label: 'TMDB', icon: '🎬', uses: ['banner', 'poster', 'photo', 'moodboard'], key: 'tmdbKey' },
     wikipedia: { label: 'Wikipedia', icon: '📖', uses: ['banner', 'poster', 'photo', 'moodboard'] },
     commons: { label: 'Wikimedia Commons', icon: '🖼️', uses: ['banner', 'poster', 'photo', 'moodboard'] },
+    commonsnew: { label: 'Commons recientes', icon: '🆕', uses: ['banner', 'poster', 'photo', 'moodboard'] },
+    openverse: { label: 'Openverse', icon: '📷', uses: ['banner', 'poster', 'photo', 'moodboard'] },
     jikan: { label: 'MyAnimeList', icon: '📺', uses: ['poster', 'photo', 'moodboard'] },
     openlibrary: { label: 'Open Library', icon: '📚', uses: ['poster', 'moodboard'] },
     google: { label: 'Google (con tu clave)', icon: '🔎', uses: ['banner', 'poster', 'photo', 'moodboard'], key: 'googleKey' }
 };
-const DEFAULT_SOURCE_ORDER = ['anilist', 'tmdb', 'wikipedia', 'commons', 'jikan', 'openlibrary', 'google'];
+const DEFAULT_SOURCE_ORDER = ['anilist', 'tmdb', 'wikipedia', 'commons', 'commonsnew', 'openverse', 'jikan', 'openlibrary', 'google'];
 /** Fuentes activas en el orden elegido (las que necesitan clave solo si la tienes). */
 function activeSources(settings = {}, use = 'banner') {
     const order = [...new Set([...(settings.imageSourceOrder || []), ...DEFAULT_SOURCE_ORDER])].filter(k => IMAGE_SOURCES[k]);
@@ -164,6 +166,19 @@ function imgParseTmdb(json, use) {
         return out;
     });
 }
+/**
+ * Muchas webs no dejan que otra página lea sus imágenes (por eso no se podrían recortar). images.weserv.nl es un servicio
+ * gratuito que las devuelve con permiso y reducidas. Solo se usa si la web no la deja leer directamente.
+ */
+function corsProxyUrl(url, maxW = 2400) {
+    const u = String(url || '').trim();
+    if (!/^https?:\/\//i.test(u) || /^https?:\/\/images\.weserv\.nl\//i.test(u)) return '';
+    return `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//i, ''))}&w=${maxW}&we&output=jpg&q=90`;
+}
+/** Openverse: fotos con licencia abierta de Flickr, Wikimedia y más (api.openverse.org/v1/images/). */
+function imgParseOpenverse(json) {
+    return ((json && json.results) || []).filter(r => r.url).map(r => imgResult(r.url, r.thumbnail, r.width, r.height, r.title || '', r.foreign_landing_url, 'openverse'));
+}
 function imgParseJikan(json) {
     return ((json && json.data) || []).map(d => {
         const im = d.images && (d.images.webp || d.images.jpg) || {};
@@ -179,10 +194,10 @@ function imgParseGoogle(json) {
     return ((json && json.items) || []).map(i => imgResult(i.link, i.image && i.image.thumbnailLink, i.image && i.image.width, i.image && i.image.height, i.title, i.image && i.image.contextLink, 'google'));
 }
 /** Búsquedas sugeridas según lo que buscas (una obra, una persona…). */
-function suggestQueries({ name = '', kind = 'works', type = '', people = [] } = {}) {
+function suggestQueries({ name = '', kind = 'works', type = '', people = [], year = new Date().getFullYear() } = {}) {
     const n = String(name || '').trim();
     if (!n) return [];
-    if (kind === 'persons') return [n, `${n} photoshoot`, `${n} aesthetic`, `${n} portrait`, `${n} outfit`];
+    if (kind === 'persons') return [n, `${n} ${year}`, `${n} photoshoot`, `${n} aesthetic`, `${n} portrait`, `${n} outfit`];
     if (kind === 'couples') return [n, `${n} aesthetic`, `${n} moments`, `${n} behind the scenes`, `${n} fanart`];
     if (kind === 'collections') return [n, `${n} aesthetic`, `${n} wallpaper`];
     const base = type === 'book' ? [n, `${n} cover`, `${n} fanart`, `${n} aesthetic`] : [n, `${n} poster`, `${n} wallpaper`, `${n} aesthetic`, `${n} scenes`, `${n} banner`];
@@ -215,12 +230,12 @@ function webSuggestions({ name = '', kind = 'works', type = '', bl = false } = {
     const n = String(name || '').trim();
     if (!n) return [];
     const s = (label, extra) => ({ label, query: extra ? `${n} ${extra}` : n });
-    if (kind === 'persons') return [s('Todo sobre él/ella'), s('Filmografía', 'filmografía'), s('Nombre real', 'nombre real'), s('Dramas y series', 'dramas series'), s('Redes sociales', 'instagram')];
+    if (kind === 'persons') return [s('Todo sobre él/ella'), s('Filmografía', 'filmografía'), s('Nombre real', 'nombre real'), s('Dramas y series', 'dramas series'), s('Como director/a', 'director'), s('Redes sociales', 'instagram')];
     if (kind === 'couples') return [s('La pareja'), s('Sus dramas juntos', 'dramas juntos'), s('Momentos', 'moments'), s('Fanart', 'fanart'), s('Behind the scenes', 'behind the scenes')];
     if (kind === 'collections') return [s('Ideas parecidas', 'recomendaciones'), s('Estética', 'aesthetic')];
     if (type === 'book') return [s('La obra'), s('Autor/a', 'autor'), s('Sinopsis', 'sinopsis'), s('Reseñas', 'reseña'), s('Saga o continuación', 'saga')];
-    if (type === 'manhwa') return [s('La obra', 'manhwa'), s('Dónde leerla', 'dónde leer'), s('Capítulos', 'capítulos'), s('Autor/a', 'autor'), s('Etiquetas y géneros', 'tags géneros')];
-    return [s('La obra', bl ? 'BL' : ''), s('Reparto', 'reparto'), s('Sinopsis', 'sinopsis'), s('Etiquetas y géneros', 'tags géneros'), s('Dónde verla', 'dónde ver'), s('Wiki o ficha', 'wiki')];
+    if (type === 'manhwa') return [s('La obra', 'manhwa'), s('Dónde leerla', 'dónde leer'), s('Capítulos', 'capítulos'), s('Autor/a', 'autor'), s('Personajes', 'personajes'), s('Etiquetas y géneros', 'tags géneros')];
+    return [s('La obra', bl ? 'BL' : ''), s('Reparto', 'reparto'), s('Director/a', 'director'), s('Personajes y actores', 'personajes actores'), s('Sinopsis', 'sinopsis'), s('Etiquetas y géneros', 'tags géneros'), s('Dónde verla', 'dónde ver'), s('Wiki o ficha', 'wiki')];
 }
 /** Búsquedas en webs sin API abierta (se abren en otra pestaña). */
 function webSearchUrls(q) {
@@ -237,6 +252,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         centerCrop, imagePlan, rotatedSize, coverScale, clampPan, cropOutputSize, looksLikeImageUrl, imageUrlProblem, bannerMode, bannerEntries, CROP_KINDS, BANNER_RATIOS,
         WEB_ENGINES, webSearchLinks, webSuggestions, IMAGE_SOURCES, DEFAULT_SOURCE_ORDER, activeSources, orientationOf, filterOrientation, interleave,
-        imgParseCommons, imgParseWikiPages, imgParseAnilist, imgParseTmdb, imgParseJikan, imgParseOpenLibrary, imgParseGoogle, suggestQueries, webSearchUrls
+        imgParseCommons, imgParseWikiPages, imgParseAnilist, imgParseTmdb, imgParseJikan, imgParseOpenverse, corsProxyUrl, imgParseOpenLibrary, imgParseGoogle, suggestQueries, webSearchUrls
     };
 }

@@ -131,15 +131,33 @@ describe('búsqueda de datos', () => {
         assert.deepEqual([jk[0].title, jk[0].synopsis, jk[0].studio, jk[0].tags], ['Attack on Titan', 'Titanes.', 'WIT', 'acción']);
     });
     it('reparto con fotos y personajes: AniList (seiyuus), TMDB, Jikan y Open Library', () => {
-        const an = md.parseAniList({ data: { Page: { media: [{ id: 9, title: { romaji: 'Given' }, characters: { edges: [
+        const an = md.parseAniList({ data: { Page: { media: [{ id: 9, title: { romaji: 'Given' }, staff: { edges: [
+            { role: 'Director', node: { name: { full: 'Hikaru Yamaguchi' }, image: { large: 'https://s4/d.png' } } },
+            { role: 'Assistant Director', node: { name: { full: 'Ayudante' } } },
+            { role: 'Chief Director', node: { name: { full: 'Jefe Dir' } } }
+        ] }, characters: { edges: [
             { role: 'MAIN', node: { name: { full: 'Mafuyu Satou' } }, voiceActors: [{ name: { full: 'Shougo Yano' }, image: { large: 'https://s4/yano.png' } }] },
             { role: 'SUPPORTING', node: { name: { full: 'Otro' } }, voiceActors: [{ name: { full: 'X' }, image: {} }] },
             { role: 'MAIN', node: { name: { full: 'Sin voz' } }, voiceActors: [] }
         ] } }] } } }, 'anime');
-        assert.deepEqual(an[0].people, [{ name: 'Shougo Yano', role: 'actor', image: 'https://s4/yano.png', character: 'Mafuyu Satou', characterRole: 'protagonista' }]);
+        assert.deepEqual(an[0].people, [
+            { name: 'Shougo Yano', role: 'actor', image: 'https://s4/yano.png', character: 'Mafuyu Satou', characterRole: 'protagonista' },
+            { name: 'X', role: 'actor', image: '', character: 'Otro', characterRole: 'secundario' },
+            { name: 'Hikaru Yamaguchi', role: 'director', image: 'https://s4/d.png' },
+            { name: 'Jefe Dir', role: 'director', image: '' }
+        ]);
+        assert.deepEqual([an[0].actors, an[0].directors], ['Shougo Yano, X', 'Hikaru Yamaguchi, Jefe Dir']); // los ayudantes no cuentan
         const tm = md.parseTmdbCredits({ cast: [{ name: 'Gong Jun', profile_path: '/g.jpg', character: 'Wen Kexing / Zhou' }], crew: [{ name: 'Ma Hua Gan', job: 'Director', profile_path: null }, { name: 'Otro', job: 'Writer' }] });
         assert.deepEqual([tm.actors, tm.directors], ['Gong Jun', 'Ma Hua Gan']);
         assert.deepEqual(tm.people.map(p => [p.name, p.role, p.image, p.character || '']), [['Gong Jun', 'actor', 'https://image.tmdb.org/t/p/h632/g.jpg', 'Wen Kexing'], ['Ma Hua Gan', 'director', '', '']]);
+        // Series de TMDB (aggregate_credits): hasta 10 de reparto y los directores que más episodios dirigieron
+        const agg = md.parseTmdbCredits({ cast: Array.from({ length: 12 }, (_, i) => ({ name: 'Actor ' + i, roles: [{ character: 'Pers ' + i }] })), crew: [
+            { name: 'Pocos', jobs: [{ job: 'Director', episode_count: 2 }] }, { name: 'Muchos', jobs: [{ job: 'Director', episode_count: 9 }, { job: 'Writer', episode_count: 1 }] }, { name: 'Guionista', jobs: [{ job: 'Writer', episode_count: 5 }] }] });
+        assert.equal(agg.actors.split(', ').length, 10);
+        assert.equal(agg.directors, 'Muchos, Pocos');
+        assert.deepEqual(agg.people.slice(0, 5).map(p => p.characterRole || ''), ['protagonista', 'protagonista', 'protagonista', 'protagonista', 'secundario']);
+        const staff = md.parseJikanStaff({ data: [{ person: { name: 'Yamaguchi, Hikaru' }, positions: ['Director', 'Storyboard'] }, { person: { name: 'Otro, A' }, positions: ['Sound Director'] }] });
+        assert.deepEqual(staff.map(p => [p.name, p.role]), [['Hikaru Yamaguchi', 'director']]);
         const jc = md.parseJikanCharacters({ data: [{ role: 'Main', character: { name: 'Satou, Mafuyu' }, voice_actors: [{ language: 'English', person: { name: 'Smith, John' } }, { language: 'Japanese', person: { name: 'Yano, Shougo', images: { jpg: { image_url: 'https://cdn/y.jpg' } } } }] }, { role: 'Supporting', character: { name: 'B' }, voice_actors: [] }] });
         assert.deepEqual(jc, [{ name: 'Shougo Yano', role: 'actor', image: 'https://cdn/y.jpg', character: 'Mafuyu Satou', characterRole: 'protagonista' }]);
         const ol = md.parseOpenLibrary({ docs: [{ key: '/works/1', title: 'Dune', author_name: ['Frank Herbert'], author_key: ['OL79034A'] }] });
@@ -187,4 +205,74 @@ it('temporadas desde las fuentes: TVmaze (episodios) y TMDB (temporadas)', () =>
     const tm = md.parseTmdbSeasons({ seasons: [{ season_number: 0, episode_count: 5 }, { season_number: 1, episode_count: 12, air_date: '2019-06-27' }, { season_number: 2, episode_count: 10, air_date: '2023-01-01' }] });
     assert.deepEqual(tm.seasonsList.map(s => [s.number, s.episodes, s.year]), [[1, 12, 2019], [2, 10, 2023]]);
     assert.deepEqual(md.parseTmdbSeasons({ seasons: [{ season_number: 1, episode_count: 12 }] }), {}); // con una sola no hace falta
+});
+
+describe('Wikidata (dirección y reparto cuando la fuente no los trae)', () => {
+    it('elige la obra por tipo, título y año, y lee dirección y reparto', async () => {
+        const search = { search: [
+            { id: 'Q1', label: 'Only Friends', description: 'banda de música', match: { text: 'Only Friends' } },
+            { id: 'Q2', label: 'Only Friends', description: 'serie de televisión tailandesa de 2023', match: { text: 'Only Friends' } }] };
+        assert.equal(md.pickWikidataItem(search, 'only friends', 2023), 'Q2');
+        assert.equal(md.pickWikidataItem(search, 'Only Friends', 1990), ''); // otro año: otra obra
+        assert.equal(md.pickWikidataItem(search, 'Otra', 2023), '');
+        const claims = { entities: { Q2: { claims: { P57: [{ mainsnak: { datavalue: { value: { id: 'Q10' } } } }], P161: [{ mainsnak: { datavalue: { value: { id: 'Q11' } } } }, { mainsnak: { datavalue: { value: { id: 'Q12' } } } }] } } } };
+        assert.deepEqual(md.wikidataClaimIds(claims, 'Q2', 'P161'), ['Q11', 'Q12']);
+        assert.deepEqual(md.wikidataLabels({ entities: { Q10: { labels: { en: { value: 'Jojo Tichakorn' } } }, Q11: { labels: { es: { value: 'First' } } } } }), { Q10: 'Jojo Tichakorn', Q11: 'First' });
+        const fetchFn = async url => ({ ok: true, json: async () => (url.includes('wbsearchentities') ? search : url.includes('props=claims') ? claims
+            : { entities: { Q10: { labels: { en: { value: 'Jojo Tichakorn' } } }, Q11: { labels: { en: { value: 'First Kanaphan' } } }, Q12: { labels: { en: { value: 'Khaotung Thanawat' } } } } }) });
+        const r = await md.fetchWikidataCredits('Only Friends', 2023, { fetchFn });
+        assert.deepEqual([r.directors, r.actors], ['Jojo Tichakorn', 'First Kanaphan, Khaotung Thanawat']);
+        assert.deepEqual(r.people.map(p => [p.name, p.role]), [['First Kanaphan', 'actor'], ['Khaotung Thanawat', 'actor'], ['Jojo Tichakorn', 'director']]);
+    });
+    it('al elegir un resultado de TVmaze sin dirección, se completa con Wikidata', async () => {
+        const fetchFn = async url => ({ ok: true, json: async () => {
+            if (url.includes('tvmaze.com')) return { _embedded: { episodes: [], cast: [{ person: { name: 'First Kanaphan' }, character: { name: 'Boston' } }] } };
+            if (url.includes('wbsearchentities')) return { search: [{ id: 'Q2', label: 'Only Friends', description: 'serie de televisión de 2023', match: { text: 'Only Friends' } }] };
+            if (url.includes('props=claims')) return { entities: { Q2: { claims: { P57: [{ mainsnak: { datavalue: { value: { id: 'Q10' } } } }] } } } };
+            return { entities: { Q10: { labels: { en: { value: 'Jojo Tichakorn' } } } } };
+        } });
+        const d = await md.fetchMetadataDetails({ source: 'tvmaze', externalId: 9, title: 'Only Friends', year: 2023 }, { fetchFn });
+        assert.equal(d.directors, 'Jojo Tichakorn');
+        assert.equal(d.actors, 'First Kanaphan'); // el reparto de TVmaze se respeta
+        assert.deepEqual(d.people.map(p => p.name), ['First Kanaphan', 'Jojo Tichakorn']);
+        // Si Wikidata falla, quedan los datos de la fuente
+        const bad = async url => (url.includes('wikidata') ? { ok: false, status: 500 } : fetchFn(url));
+        const d2 = await md.fetchMetadataDetails({ source: 'tvmaze', externalId: 9, title: 'Only Friends', year: 2023 }, { fetchFn: bad });
+        assert.equal(d2.actors, 'First Kanaphan');
+        assert.equal(d2.directors, undefined);
+    });
+});
+
+describe('más detalles de cada fuente', () => {
+    it('traduce estado, idioma, origen y nota', () => {
+        assert.deepEqual([md.airStatusEs('Running'), md.airStatusEs('RELEASING'), md.airStatusEs('Finished Airing'), md.airStatusEs('NOT_YET_RELEASED'), md.airStatusEs('???')], ['En emisión', 'En emisión', 'Finalizada', 'Próximamente', '']);
+        assert.deepEqual([md.languageEs('ko'), md.languageEs('Japanese'), md.languageEs('xx')], ['Coreano', 'Japonés', '']);
+        assert.deepEqual([md.basedOnEs('LIGHT_NOVEL'), md.basedOnEs('Manga'), md.basedOnEs('ORIGINAL')], ['Novela ligera', 'Manga', 'Original']);
+        assert.deepEqual([md.minutesFrom('24 min per ep'), md.minutesFrom('1 hr 30 min'), md.minutesFrom('Unknown')], [24, 90, 0]);
+        assert.deepEqual([md.scoreOf(8.234), md.scoreOf(82, 100), md.scoreOf(4.5, 5), md.scoreOf(0)], [8.2, 8.2, 9, '']);
+    });
+    it('TVmaze, AniList, Jikan y TMDB traen duración, estado, título original y web oficial', () => {
+        const tv = md.parseTvmaze([{ show: { id: 1, name: 'Only Friends', status: 'Ended', averageRuntime: 50, language: 'Thai', rating: { average: 7.64 }, officialSite: 'https://oficial.test/of', genres: [] } }])[0];
+        assert.deepEqual([tv.airStatus, tv.runtime, tv.language, tv.score, tv.officialUrl], ['Finalizada', 50, 'Tailandés', 7.6, 'https://oficial.test/of']);
+        const al = md.parseAniList({ data: { Page: { media: [{ id: 1, title: { romaji: 'Given', english: 'Given EN', native: 'ギヴン' }, status: 'FINISHED', duration: 24, source: 'MANGA', averageScore: 84, siteUrl: 'https://anilist.co/anime/1', genres: [], tags: [] }] } } }, 'anime')[0];
+        assert.deepEqual([al.altTitle, al.airStatus, al.runtime, al.basedOn, al.score], ['Given · ギヴン', 'Finalizada', 24, 'Manga', 8.4]);
+        const jk = md.parseJikan({ data: [{ mal_id: 1, title: 'Given', title_japanese: 'ギヴン', status: 'Currently Airing', duration: '23 min per ep', source: 'Manga', score: 8.1, url: 'https://myanimelist.net/anime/1' }] })[0];
+        assert.deepEqual([jk.altTitle, jk.airStatus, jk.runtime, jk.score], ['ギヴン', 'En emisión', 23, 8.1]);
+        const tm = md.parseTmdb({ results: [{ media_type: 'tv', id: 3, name: 'Hermanos', original_name: 'Brothers', original_language: 'ko', vote_average: 7.8 }] })[0];
+        assert.deepEqual([tm.altTitle, tm.language, tm.score], ['Brothers', 'Coreano', 7.8]);
+        assert.deepEqual(md.parseTmdbInfo({ status: 'Returning Series', episode_run_time: [0, 45], homepage: 'https://x.test', networks: [{ name: 'Viki' }], original_language: 'th' }),
+            { airStatus: 'En emisión', runtime: 45, officialUrl: 'https://x.test', platform: 'Viki', language: 'Tailandés' });
+        assert.equal(md.parseTvmaze([{ show: { id: 2, name: 'X', officialSite: 'javascript:alert(1)' } }])[0].officialUrl, ''); // solo http(s)
+        const ol = md.parseOpenLibrary({ docs: [{ key: '/works/1', title: 'Dune', publisher: ['Ace', 'Otra'], language: ['spa'] }] })[0];
+        assert.deepEqual([ol.publisher, ol.language], ['Ace', 'Español']);
+    });
+    it('al rellenar solo se completan los vacíos y la duración real mejora las horas estimadas', () => {
+        const patch = md.mergeMetadata({ title: 'X', runtime: 0, language: 'Coreano' }, { runtime: 45, language: 'Thai', airStatus: 'Finalizada', score: 7.6, officialUrl: 'https://x.test' });
+        assert.deepEqual(patch, { runtime: 45, airStatus: 'Finalizada', score: 7.6, officialUrl: 'https://x.test' });
+        const { estimateMinutes } = require('../../utils.js');
+        assert.equal(estimateMinutes({ type: 'series', progress: 10 }), 500);
+        assert.equal(estimateMinutes({ type: 'series', progress: 10, runtime: 45 }), 450);
+        assert.equal(estimateMinutes({ type: 'anime', progress: 10, runtime: 12 }), 120);
+        assert.equal(estimateMinutes({ type: 'series', seriesType: 'Película', status: 'terminado', runtime: 95 }), 95);
+    });
 });

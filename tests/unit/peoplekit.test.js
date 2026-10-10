@@ -78,9 +78,9 @@ test('huérfanas: solo las creadas desde una obra que ya no aparecen en nada', (
 });
 
 test('fuentes de imágenes: activas según ajustes y claves', () => {
-    assert.deepEqual(m.activeSources({}, 'banner'), ['anilist', 'wikipedia', 'commons']);
-    assert.deepEqual(m.activeSources({ tmdbKey: 'x' }, 'photo'), ['anilist', 'tmdb', 'wikipedia', 'commons', 'jikan']);
-    assert.deepEqual(m.activeSources({ imageSourceOrder: ['commons'], imageSourcesOff: ['anilist'], googleKey: 'k' }, 'banner'), ['commons', 'wikipedia']); // Google también necesita el cx
+    assert.deepEqual(m.activeSources({}, 'banner'), ['anilist', 'wikipedia', 'commons', 'commonsnew', 'openverse']);
+    assert.deepEqual(m.activeSources({ tmdbKey: 'x' }, 'photo'), ['anilist', 'tmdb', 'wikipedia', 'commons', 'commonsnew', 'openverse', 'jikan']);
+    assert.deepEqual(m.activeSources({ imageSourceOrder: ['commons'], imageSourcesOff: ['anilist'], googleKey: 'k' }, 'banner'), ['commons', 'wikipedia', 'commonsnew', 'openverse']); // Google también necesita el cx
     assert.deepEqual(m.activeSources({ googleKey: 'k', googleCx: 'c' }, 'poster').slice(-1), ['google']);
 });
 
@@ -103,7 +103,8 @@ test('fuentes de imágenes: lee las respuestas de cada web', () => {
 test('búsquedas sugeridas, enlaces de búsqueda y mezcla de fuentes', () => {
     assert.deepEqual(m.suggestQueries({ name: 'Given', people: ['Yano Shogo'] }), ['Given', 'Given poster', 'Given wallpaper', 'Given aesthetic', 'Given scenes', 'Given banner', 'Yano Shogo']);
     assert.deepEqual(m.suggestQueries({ name: 'Dune', type: 'book' }), ['Dune', 'Dune cover', 'Dune fanart', 'Dune aesthetic']);
-    assert.equal(m.suggestQueries({ name: 'Xiao Zhan', kind: 'persons' })[1], 'Xiao Zhan photoshoot');
+    assert.equal(m.suggestQueries({ name: 'Xiao Zhan', kind: 'persons', year: 2026 })[1], 'Xiao Zhan 2026');
+    assert.equal(m.suggestQueries({ name: 'Xiao Zhan', kind: 'persons' })[2], 'Xiao Zhan photoshoot');
     assert.equal(m.webSearchUrls('the untamed').pinterest, 'https://www.pinterest.com/search/pins/?q=the%20untamed');
     const mix = m.interleave([[{ src: 'a1' }, { src: 'a2' }], [{ src: 'b1' }, { src: 'a1' }]]);
     assert.deepEqual(mix.map(r => r.src), ['a1', 'b1', 'a2']);

@@ -184,3 +184,39 @@ test('las imágenes demasiado grandes o que no son imágenes se rechazan', async
     await expect(page.locator('[data-img-field="f_banner"] .img-error')).toContainText('máximo son 20 MB');
     await expect(page.locator('#f_banner')).toHaveValue('');
 });
+
+test('imágenes por enlace: si la web no deja leerlas, se pueden recortar y mover igualmente (servicio gratuito)', async ({ page }) => {
+    const errors = await openApp(page);
+    const png = await makePng(page, 900, 600);
+    const proxied = [];
+    // Sin permiso CORS: la web deja ver la imagen (como <img> normal) pero no leerla (descargar ni recortar piden CORS)
+    await page.route('https://img.test/**', route => (route.request().headers().origin || route.request().resourceType() === 'fetch'
+        ? route.abort() : route.fulfill({ status: 200, contentType: 'image/png', body: png })));
+    await page.route('https://images.weserv.nl/**', route => { proxied.push(route.request().url()); route.fulfill({ status: 200, contentType: 'image/png', body: png, headers: { 'Access-Control-Allow-Origin': '*' } }); });
+    await page.evaluate(() => { appData.settings.bannerDownload = false; saveData(); openPersonModal(getPersonById('p2')); });
+    const field = page.locator('[data-img-field="personImage"]');
+    await field.locator('[data-act="img-url"]').click();
+    await page.fill('#personImage__url', 'https://img.test/foto-sin-cors.png');
+    await page.press('#personImage__url', 'Enter');
+    const value = page.locator('#personImage');
+    await expect(value).toHaveValue('https://img.test/foto-sin-cors.png'); // sin descargar: queda el enlace
+    // Recortar: abre el editor aunque la web no dé permiso (se pide por el servicio gratuito)
+    await field.locator('[data-act="img-crop"]').click();
+    await expect(page.locator('#cropModal')).toHaveClass(/active/);
+    expect(proxied.length).toBeGreaterThan(0);
+    expect(decodeURIComponent(proxied[0])).toContain('img.test/foto-sin-cors.png');
+    await page.click('[data-act="crop-save"]');
+    await expect(value).toHaveValue(/^idb:img_/); // ya recortada y guardada en el dispositivo
+    // Con el servicio desactivado no se usa
+    const before = proxied.length;
+    await page.evaluate(() => { appData.settings.imageProxy = false; saveData(); });
+    await field.locator('[data-act="img-clear"]').click();
+    await field.locator('[data-act="img-url"]').click();
+    await page.fill('#personImage__url', 'https://img.test/otra-sin-cors.png');
+    await page.press('#personImage__url', 'Enter');
+    await expect(value).toHaveValue('https://img.test/otra-sin-cors.png');
+    await field.locator('[data-act="img-crop"]').click();
+    await expect(page.locator('#toastStack')).toContainText('No se pudo abrir la imagen para recortarla');
+    expect(proxied.length).toBe(before);
+    expect(errors).toEqual([]);
+});

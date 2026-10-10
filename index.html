@@ -157,6 +157,7 @@
                     <select class="filter-select" id="booksSort" data-render="books"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="pages">Páginas</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="booksSpicyFilter" data-render="books"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="booksSadnessFilter" data-render="books"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="booksCountryFilter" data-render="books" aria-label="País"><option value="all">🌍 País: todos</option></select>
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="booksBlFilter" data-render="books"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="booksFavFilter" data-render="books"> ❤️ Favoritos</label>
@@ -195,6 +196,7 @@
                     <select class="filter-select" id="seriesYearFilter" data-render="series"><option value="all">Año: todos</option></select>
                     <select class="filter-select" id="seriesSpicyFilter" data-render="series"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="seriesSadnessFilter" data-render="series"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="seriesCountryFilter" data-render="series" aria-label="País"><option value="all">🌍 País: todos</option></select>
                     <label class="checkbox-wrapper"><input type="checkbox" id="seriesFavFilter" data-render="series"> ❤️ Favoritos</label>
                     <select class="filter-select" id="seriesDateFilter" data-render="series" aria-label="Fechas"><option value="any">📅 Fechas: cualquiera</option><option value="m">Este mes</option><option value="3m">Últimos 3 meses</option><option value="y">Este año</option><option value="py">Año pasado</option></select>
                 </div>
@@ -223,6 +225,7 @@
                     <select class="filter-select" id="animeSort" data-render="anime"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="episodes">Episodios</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="animeSpicyFilter" data-render="anime"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="animeSadnessFilter" data-render="anime"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="animeCountryFilter" data-render="anime" aria-label="País"><option value="all">🌍 País: todos</option></select>
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="animeBlFilter" data-render="anime"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="animeFavFilter" data-render="anime"> ❤️ Favoritos</label>
@@ -253,6 +256,7 @@
                     <select class="filter-select" id="manhwaSort" data-render="manhwa"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="chapters">Capítulos</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="manhwaSpicyFilter" data-render="manhwa"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="manhwaSadnessFilter" data-render="manhwa"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                    <select class="filter-select" id="manhwaCountryFilter" data-render="manhwa" aria-label="País"><option value="all">🌍 País: todos</option></select>
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="manhwaBlFilter" data-render="manhwa"> 💖 Solo BL</label>
                     <label class="checkbox-wrapper"><input type="checkbox" id="manhwaFavFilter" data-render="manhwa"> ❤️ Favoritos</label>
@@ -281,6 +285,7 @@
                     <span class="filter-sep"></span>
                     <select class="filter-select" id="blTypeFilter" data-render="bl"><option value="all">Todos los tipos</option><option value="book">Libros</option><option value="series">Series</option><option value="anime">Anime</option><option value="manhwa">Manhwa</option></select>
                     <select class="filter-select" id="blStatusFilter" data-render="bl"><option value="all">Todos los estados</option><option value="active">En curso</option><option value="terminado">Terminado</option><option value="plan">Pendiente</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="blCountryFilter" data-render="bl" aria-label="País"><option value="all">🌍 País: todos</option></select>
                     <select class="filter-select" id="blSort" data-render="bl"><option value="recent">Recientes</option><option value="rating">Valoración</option><option value="spicy">Más spicy</option><option value="title">Título A-Z</option></select>
                     <span class="filter-sep"></span>
                     <label class="checkbox-wrapper"><input type="checkbox" id="blMinRating" data-render="bl"> ⭐ Solo 4+ estrellas</label>
@@ -632,6 +637,9 @@
                             <div class="panel-title">🔎 Búsqueda de datos</div>
                             <p class="panel-desc" style="margin:-6px 0 12px">Para series y películas puedes añadir una clave gratuita de TMDB (themoviedb.org → Ajustes → API). Sin ella se usa TVmaze.</p>
                             <label class="field"><span>Clave de TMDB (opcional)</span><input type="password" class="text-input" id="settingTmdbKey" autocomplete="off" placeholder="Pega aquí tu clave"></label>
+                            <div class="setting-row" style="margin-top:12px"><span>🔄 Poner al día mis obras solas (etiquetas, país, sinopsis en español…)</span><button class="toggle-switch" data-act="auto-enrich-toggle" id="autoEnrichToggle" role="switch" aria-checked="true" aria-label="Poner al día mis obras solas"></button></div>
+                            <p class="panel-desc" style="margin:6px 0 10px">Al abrir la app, busca por el título las obras a las que les falta información y la completa. Solo añade lo que falta: nunca cambia lo que escribiste. Se puede deshacer.</p>
+                            <button type="button" class="btn btn-secondary" data-act="enrich-now">🔄 Poner al día mis obras ahora</button> <small class="hint" id="enrichStatus" role="status"></small>
                         </div>
                         <div class="panel-card" id="notifyPanel">
                             <div class="panel-title">🔔 Avisos</div>
@@ -745,7 +753,7 @@
                         <div class="field" data-types="book manhwa"><span>Autor</span><div data-chip-mount="author" data-placeholder="Escribe el nombre del autor…"></div></div>
                         <label class="field" data-types="anime"><span>Estudio</span><input type="text" data-field="studio" placeholder="MAPPA, Kyoto…" list="dlStudios"></label>
                         <label class="field" data-types="series manhwa"><span>Plataforma</span><input type="text" data-field="platform" placeholder="Netflix, Viki, Webtoon…" list="dlPlatforms"></label>
-                        <label class="field" data-types="series anime"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…" list="dlCountries"></label>
+                        <label class="field" data-types="book series anime manhwa"><span>País</span><input type="text" data-field="country" placeholder="Corea del Sur, Japón…" list="dlCountries"></label>
                         <label class="field" data-types="book manhwa"><span>Género</span><input type="text" data-field="genre" placeholder="Fantasía, Romance…" list="dlGenres"></label>
                         <label class="field"><span>Año</span><input type="number" data-field="year" data-num placeholder="2026" min="1800" max="2100"></label>
                         <div class="field span-2" data-types="series"><span>Actores</span><div data-chip-mount="actors" data-placeholder="Escribe un nombre (o pega varios separados por comas)…"></div></div>
@@ -768,7 +776,19 @@
                         <label class="field"><span>Fecha de fin</span><input type="date" data-field="endDate"></label>
                         <label class="field span-2"><span>Etiquetas (separadas por comas)</span><input type="text" id="f_tags" data-field="tags" placeholder="BL, drama, fantasía…"></label>
                         <div class="title-hint span-2" id="tagsHint" hidden></div>
-                        <label class="field span-2"><span>Sinopsis</span><textarea data-field="synopsis" placeholder="¿De qué trata?"></textarea></label>
+                        <details class="expandable span-2" id="moreDetails"><summary>📋 Más detalles (título original, estado de emisión, duración, idioma…)</summary>
+                            <div class="expandable-content form-grid">
+                                <label class="field span-2"><span>Título original / otros nombres</span><input type="text" data-field="altTitle" placeholder="Nombre en su idioma original"></label>
+                                <label class="field" data-types="series anime manhwa"><span>Estado de emisión</span><select data-field="airStatus"><option value="">Sin indicar</option><option>En emisión</option><option>Finalizada</option><option>En pausa</option><option>Próximamente</option><option>Cancelada</option><option>Sin determinar</option></select></label>
+                                <label class="field" data-types="series anime"><span>Duración por episodio (min)</span><input type="number" data-field="runtime" data-num min="1" max="600" placeholder="45"></label>
+                                <label class="field"><span>Idioma original</span><input type="text" data-field="language" placeholder="Coreano, Japonés…"></label>
+                                <label class="field" data-types="series anime manhwa book"><span>Basada en</span><input type="text" data-field="basedOn" placeholder="Manga, novela, original…"></label>
+                                <label class="field"><span>Nota en las fuentes (0-10)</span><input type="number" data-field="score" data-num min="0" max="10" step="0.1" placeholder="8.2"></label>
+                                <label class="field" data-types="book"><span>Editorial</span><input type="text" data-field="publisher"></label>
+                                <label class="field span-2"><span>Web oficial</span><input type="url" data-field="officialUrl" placeholder="https://…"></label>
+                            </div>
+                        </details>
+                        <label class="field span-2"><span>Sinopsis <button type="button" class="link-btn" data-act="synopsis-translate" title="Traduce al español lo que hay escrito">🌐 Traducir al español</button></span><textarea data-field="synopsis" placeholder="¿De qué trata?"></textarea></label>
                         <div class="field span-2">
                             <div class="sliders">
                                 <div class="slider-group"><span class="slider-label">⭐ Valoración</span><input type="range" class="rating" min="0" max="5" step="0.5" data-field="rating" data-num data-default="0" data-out="out_rating"><output class="slider-value" id="out_rating">–</output></div>
@@ -1010,6 +1030,9 @@
     <script src="extras.js"></script>
     <script src="i18n.js"></script>
     <script src="coherence.js"></script>
+    <script src="tagkit.js"></script>
+    <script src="translatekit.js"></script>
+    <script src="enrichkit.js"></script>
     <script src="metadata.js"></script>
     <script src="importers.js"></script>
     <script src="analytics.js"></script>

@@ -25,7 +25,7 @@ jobs:
       - name: Preparar solo los archivos de la app
         run: |
           mkdir _site
-          cp index.html styles.css utils.js insights.js history.js coherence.js metadata.js importers.js features.js tools.js ux.js analytics.js statsplus.js notify.js alerts.js query.js manage.js content.js mediakit.js peoplekit.js media.js imagefind.js people.js moodboard.js watchkit.js watch.js couplekit.js web.js extras.js i18n.js play.js charts.js storage.js sync.js cloud.js app.js sw.js manifest.webmanifest _site/
+          cp index.html styles.css utils.js insights.js history.js coherence.js tagkit.js translatekit.js enrichkit.js metadata.js importers.js features.js tools.js ux.js analytics.js statsplus.js notify.js alerts.js query.js manage.js content.js mediakit.js peoplekit.js media.js imagefind.js people.js moodboard.js watchkit.js watch.js couplekit.js web.js extras.js i18n.js play.js charts.js storage.js sync.js cloud.js app.js sw.js manifest.webmanifest _site/
           cp -r vendor _site/
           cp -r icons _site/
           # Cambia la versión del service worker en cada publicación para limpiar cachés antiguas

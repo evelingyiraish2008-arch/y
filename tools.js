@@ -41,6 +41,7 @@ function renderMetaSheet() {
     }
     return `${failed}
         <label class="checkbox-wrapper" style="margin-bottom:12px"><input type="checkbox" id="metaOverwrite" ${s.overwrite ? 'checked' : ''}> Reemplazar también lo que ya escribí</label>
+        <label class="checkbox-wrapper" style="margin-bottom:12px"><input type="checkbox" id="metaTranslate" ${appData.settings.autoTranslate !== false ? 'checked' : ''}> 🌐 Traducir la sinopsis al español si viene en otro idioma</label>
         <div class="pick-list">${s.results.map((r, i) => `
         <button class="pick-item meta-result" data-act="meta-apply" data-id="${i}">
             <div class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" data-ph="${s.type}">` : TYPE_META[s.type].icon}</div>
@@ -56,6 +57,7 @@ function setFormField(field, value) {
     const el = workForm.querySelector(`[data-field="${field}"]`);
     if (!el) return false;
     if (el.type === 'checkbox') el.checked = !!value; else el.value = value;
+    if (el.closest('#moreDetails')) updateMoreDetails();
     el.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
 }
@@ -72,6 +74,13 @@ async function applyMeta(i) {
     const current = collectWorkForm();
     const patch = mergeMetadata(current, meta, { overwrite });
     delete patch.title; // el título lo dejas como lo escribiste
+    // Sinopsis en español: si la fuente la trae en otro idioma se traduce (si falla, se deja la original)
+    const wantTranslate = $('metaTranslate') ? $('metaTranslate').checked : appData.settings.autoTranslate !== false;
+    if ($('metaTranslate') && wantTranslate !== (appData.settings.autoTranslate !== false)) { appData.settings.autoTranslate = wantTranslate; saveData(); }
+    let translated = false, translateFailed = false;
+    if (patch.synopsis && wantTranslate && needsTranslation(patch.synopsis)) {
+        try { patch.synopsis = await translateToSpanish(patch.synopsis); translated = true; } catch (e) { translateFailed = true; }
+    }
     if (patch.seriesType) setFormField('seriesType', patch.seriesType);
     let n = 0;
     Object.entries(patch).forEach(([f, v]) => { if (f !== 'seriesType' && setFormField(f, v)) n++; });
@@ -86,8 +95,9 @@ async function applyMeta(i) {
     updateRangeOutputs(workForm);
     const coverUrl = meta.coverLarge || meta.cover;
     if (coverUrl && (overwrite || !$('f_image').value)) { await useCover(coverUrl); n++; }
-    const extra = seasonsFilled ? ` · ${seasonsFilled} temporadas con sus episodios` : '';
+    const extra = (seasonsFilled ? ` · ${seasonsFilled} temporadas con sus episodios` : '') + (translated ? ' · sinopsis traducida 🌐' : '');
     showToast(n ? `✨ ${n} ${n === 1 ? 'dato rellenado' : 'datos rellenados'} desde ${r.sourceLabel}${extra}` : 'Ya tenías todo rellenado 👌');
+    if (translateFailed) showToast('🌐 No pude traducir la sinopsis ahora (sin conexión o cupo diario). Pulsa “Traducir al español” más tarde.', 'error');
 }
 /** Descarga la portada y la guarda reducida. Si el servidor no lo permite, se guarda el enlace. */
 async function useCover(url) {
@@ -536,3 +546,115 @@ function maybeRefreshAiring() {
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = {};
+
+// ---------- Sinopsis en español ----------
+/** Traduce el texto de la sinopsis del formulario. */
+FEATURE_ACTIONS['synopsis-translate'] = async (id, el) => {
+    const field = workForm.querySelector('[data-field="synopsis"]');
+    const text = field.value.trim();
+    if (!text) { showToast('✍️ Escribe o rellena primero la sinopsis', 'error'); return; }
+    if (!needsTranslation(text)) { showToast('Ya parece estar en español 👌'); return; }
+    if (el) el.disabled = true;
+    try { field.value = await translateToSpanish(text); field.dispatchEvent(new Event('input', { bubbles: true })); showToast('🌐 Sinopsis traducida'); }
+    catch (e) { showToast('🌐 No pude traducirla ahora (sin conexión o cupo diario agotado)', 'error'); }
+    finally { if (el) el.disabled = false; }
+};
+/** Traduce la sinopsis de una obra ya guardada (con deshacer; guarda la original por si la quieres de vuelta). */
+FEATURE_ACTIONS['work-translate'] = async id => {
+    const w = getWorkById(id);
+    if (!w || !w.synopsis) return;
+    showToast('🌐 Traduciendo…');
+    try {
+        const es = await translateToSpanish(w.synopsis);
+        mutate(() => { w.synopsisOriginal = w.synopsis; w.synopsis = es; w.updatedAt = Date.now(); }, '🌐 Sinopsis traducida', { label: `Traducir sinopsis de “${w.title}”` });
+    } catch (e) { showToast('🌐 No pude traducirla ahora (sin conexión o cupo diario agotado)', 'error'); }
+};
+
+// ============================================================
+// 7. PONER AL DÍA LAS OBRAS YA AGREGADAS (etiquetas, país, sinopsis en español…)
+// ============================================================
+const ENRICH_AUTO_EVERY_MS = 6 * 3600000;   // la tanda automática no se repite antes de 6 horas
+const ENRICH_AUTO_BATCHES = 3;               // en segundo plano: hasta 24 obras por apertura
+let enrichRunning = false;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function setEnrichStatus(text) { const el = $('enrichStatus'); if (el) el.textContent = text || ''; }
+/**
+ * Busca los datos de las obras a las que les falta información y se los añade (nunca pisa lo escrito).
+ * auto: segundo plano, pocas tandas y sin avisos si no hay nada. manual: todas las que falten, con avance.
+ */
+async function enrichWorks({ auto = false } = {}) {
+    if (enrichRunning) return;
+    if (!navigator.onLine) { if (!auto) showToast('📶 Sin conexión', 'error'); return; }
+    enrichRunning = true;
+    const seen = new Set();
+    const results = [];
+    let quota = false, done = 0;
+    const total = enrichPending(appData.works, { needsTranslationFn: needsTranslation });
+    try {
+        for (let b = 0; b < (auto ? ENRICH_AUTO_BATCHES : 50); b++) {
+            const batch = enrichCandidates(appData.works.filter(w => !seen.has(w.id)), { needsTranslationFn: needsTranslation });
+            if (!batch.length) break;
+            for (const w of batch) {
+                seen.add(w.id);
+                let patch = {};
+                try {
+                    const { results: found } = await searchMetadata(w.type, w.title, { tmdbKey: appData.settings.tmdbKey || '', seriesType: w.seriesType || 'Serie' });
+                    const best = pickBestMatch(w, found);
+                    if (best) {
+                        const details = await fetchMetadataDetails(best, { tmdbKey: appData.settings.tmdbKey || '' }); // reparto, dirección, palabras clave…
+                        patch = enrichPatch(w, { ...best, ...details });
+                    }
+                } catch (e) { /* sin esa fuente: se sigue con la siguiente obra */ }
+                // Sinopsis en otro idioma → español (guarda la original); si se acabó el cupo diario, se reintenta otro día
+                const synopsis = patch.synopsis || w.synopsis;
+                let retry = false;
+                if (synopsis && needsTranslation(synopsis)) {
+                    if (quota) retry = true;
+                    else {
+                        try { patch.synopsis = await translateToSpanish(synopsis); if (!patch.synopsisOriginal) patch.synopsisOriginal = synopsis; }
+                        catch (e) { quota = true; retry = true; delete patch.synopsis; }
+                    }
+                }
+                results.push({ w, patch, retry });
+                done++;
+                if (!auto) setEnrichStatus(`Revisando ${done} de ${total}…`);
+                await wait(auto ? 800 : 400);
+            }
+        }
+        const changed = results.filter(r => Object.keys(r.patch).length);
+        const now = Date.now();
+        if (results.length) {
+            mutate(() => results.forEach(({ w, patch, retry }) => {
+                Object.assign(w, patch);
+                if (!retry) w.enrichedAt = now;
+                if (Object.keys(patch).length) w.updatedAt = now;
+            }), changed.length ? `✨ Puse al día ${changed.length} ${changed.length === 1 ? 'obra' : 'obras'} con datos nuevos` : null,
+            { label: `Poner al día ${changed.length} obras`, undo: changed.length > 0 });
+        }
+        appData.settings.enrichRunAt = now;
+        saveData();
+        if (!auto) {
+            setEnrichStatus(changed.length ? `Listo: ${changed.length} de ${results.length} obras con datos nuevos.` : results.length ? 'Todo estaba al día 👌' : 'No hay obras por revisar 👌');
+            if (quota) showToast('🌐 Se acabó el cupo diario de traducción: las sinopsis que faltan se traducirán mañana.', 'info', 6000);
+            if (!results.length) showToast('👌 Todas tus obras ya están al día');
+        }
+    } finally { enrichRunning = false; }
+}
+/** Al abrir la app: si está activado, hay conexión y pasaron 6 horas, pone al día unas cuantas obras en segundo plano. */
+function maybeAutoEnrich() {
+    const s = appData.settings;
+    if (s.autoEnrich === false || s.readOnly || !navigator.onLine || navigator.webdriver) return; // (los navegadores automatizados de las pruebas no consultan internet solos)
+    if (Date.now() - (Number(s.enrichRunAt) || 0) < ENRICH_AUTO_EVERY_MS) return;
+    if (!enrichCandidates(appData.works, { needsTranslationFn: needsTranslation, limit: 1 }).length) return;
+    setTimeout(() => enrichWorks({ auto: true }).catch(() => { enrichRunning = false; }), 6000);
+}
+FEATURE_ACTIONS['enrich-now'] = () => {
+    if (appData.settings.readOnly) { showToast('👀 Estás en modo solo lectura', 'error'); return; }
+    enrichWorks().catch(() => { enrichRunning = false; setEnrichStatus('No se pudo completar. Inténtalo de nuevo.'); });
+};
+FEATURE_ACTIONS['auto-enrich-toggle'] = () => {
+    appData.settings.autoEnrich = appData.settings.autoEnrich === false;
+    saveData();
+    renderSettings();
+    showToast(appData.settings.autoEnrich === false ? '🔄 Puesta al día automática desactivada' : '🔄 Puesta al día automática activada');
+};
