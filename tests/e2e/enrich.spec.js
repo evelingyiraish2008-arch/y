@@ -72,3 +72,37 @@ test('sin cupo de traducción: se guardan los datos y la sinopsis queda para otr
     expect(q1.synopsis || '').toBe(''); // no se guarda el texto en inglés sin traducir
     expect(q1.enrichedAt).toBeUndefined();     // se reintentará
 });
+
+test('actualizar el estado de emisión: cambia solo lo que cambió en la fuente y se puede deshacer', async ({ page }) => {
+    const errors = await openApp(page);
+    await page.route('https://api.tvmaze.com/shows/9', route => route.fulfill({ json: { id: 9, status: 'Ended' } }));
+    await page.route('https://graphql.anilist.co/**', route => route.fulfill({ json: { data: { Page: { media: [{ id: 7, status: 'RELEASING' }] } } } }));
+    await page.evaluate(() => {
+        appData.works = [
+            { id: 's1', type: 'series', title: 'Terminó ya', tvmazeId: 9, airStatus: 'En emisión', createdAt: 3 },
+            { id: 's2', type: 'anime', title: 'Sigue', anilistId: 7, airStatus: 'En emisión', createdAt: 2 },
+            { id: 's3', type: 'series', title: 'Sin id', airStatus: 'En emisión', createdAt: 1 }
+        ];
+        saveData(); refreshView();
+    });
+    await goTo(page, 'settings');
+    await page.click('[data-act="airstatus-refresh"]');
+    await expect(page.locator('#toastStack')).toContainText('Estado de emisión al día en 1 obra');
+    const st = async id => (await stored(page)).works.find(x => x.id === id).airStatus;
+    expect([await st('s1'), await st('s2'), await st('s3')]).toEqual(['Finalizada', 'En emisión', 'En emisión']);
+    await page.locator('#toastStack').getByText('Deshacer').click();
+    expect(await st('s1')).toBe('En emisión');
+    // Con todo al día no cambia nada
+    await page.evaluate(() => { getWorkById('s1').airStatus = 'Finalizada'; saveData(); });
+    await page.click('[data-act="airstatus-refresh"]');
+    await expect(page.locator('#toastStack')).toContainText('ya estaba al día');
+    expect(errors).toEqual([]);
+});
+
+test('actualizar el estado de emisión sin obras con id explica qué hacer', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => { appData.works = [{ id: 'x', type: 'series', title: 'Nada', createdAt: 1 }]; saveData(); refreshView(); });
+    await goTo(page, 'settings');
+    await page.click('[data-act="airstatus-refresh"]');
+    await expect(page.locator('#toastStack')).toContainText('Rellenar datos por el título');
+});

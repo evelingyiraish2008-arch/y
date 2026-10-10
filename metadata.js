@@ -445,6 +445,32 @@ function parseTvmazeNext(json) {
     const n = ((json || {})._embedded || {}).nextepisode;
     return n && n.airstamp ? { at: Date.parse(n.airstamp), episode: n.number || 0, season: n.season || 0 } : null;
 }
+// ---------- Estado de emisión al día (AniList y TVmaze, por el id que se guardó al rellenar datos) ----------
+const ANILIST_STATUS_QUERY = `query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids) { id status } } }`;
+/** { anilistId: 'En emisión' | 'Finalizada' … } (solo los estados que conocemos). */
+function parseAniListStatus(json) {
+    const out = {};
+    ((((json || {}).data || {}).Page || {}).media || []).forEach(m => { const s = airStatusEs(m.status); if (s) out[m.id] = s; });
+    return out;
+}
+/** Estado de emisión actual de las obras con id de AniList o TVmaze. Devuelve { workId: 'En emisión' | … } solo con lo que la fuente confirma. */
+async function fetchAirStatuses(works, { fetchFn = fetch } = {}) {
+    const out = {};
+    const ani = works.filter(w => Number(w.anilistId));
+    for (let i = 0; i < ani.length; i += 50) {
+        const chunk = ani.slice(i, i + 50);
+        try {
+            const map = parseAniListStatus(await getJson('https://graphql.anilist.co', { fetchFn, method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ query: ANILIST_STATUS_QUERY, variables: { ids: chunk.map(w => Number(w.anilistId)) } }) }));
+            chunk.forEach(w => { if (map[w.anilistId]) out[w.id] = map[w.anilistId]; });
+        } catch (e) { /* sin conexión: se deja como estaba */ }
+    }
+    for (const w of works.filter(x => Number(x.tvmazeId))) {
+        try { const s = airStatusEs((await getJson(`https://api.tvmaze.com/shows/${Number(w.tvmazeId)}`, { fetchFn })).status); if (s) out[w.id] = s; } catch (e) { /* sigue */ }
+    }
+    return out;
+}
+
 /** Pide la fecha del próximo episodio de las obras con id de AniList o TVmaze. Devuelve { workId: info|null }. */
 async function fetchNextEpisodes(works, { fetchFn = fetch } = {}) {
     const out = {};
@@ -465,7 +491,7 @@ async function fetchNextEpisodes(works, { fetchFn = fetch } = {}) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        parseAniListAiring, parseTvmazeNext, fetchNextEpisodes,
+        parseAniListAiring, parseTvmazeNext, fetchNextEpisodes, parseAniListStatus, fetchAirStatuses,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
         parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseJikanStaff, parseTmdbInfo, airStatusEs, languageEs, basedOnEs, minutesFrom, scoreOf, pickWikidataItem, wikidataClaimIds, wikidataLabels, fetchWikidataCredits, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };
