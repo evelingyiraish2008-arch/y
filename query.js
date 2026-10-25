@@ -38,7 +38,8 @@ const STATUS_WORDS_Q = {
     pendiente: ['quiero leer', 'quiero ver'], pendientes: ['quiero leer', 'quiero ver'], plan: ['quiero leer', 'quiero ver'],
     activo: ['leyendo', 'viendo'], encurso: ['leyendo', 'viendo'], leyendo: ['leyendo'], viendo: ['viendo'],
     terminado: ['terminado'], terminada: ['terminado'], terminadas: ['terminado'], visto: ['terminado'], leido: ['terminado'],
-    abandonado: ['abandonado'], abandonada: ['abandonado']
+    abandonado: ['abandonado'], abandonada: ['abandonado'],
+    rever: ['para rever'], repetir: ['para rever', 'para releer'], releer: ['para releer'], pararever: ['para rever'], pararepetir: ['para rever', 'para releer']
 };
 const YES = ['si', 'sí', 'yes', 'true', '1'];
 

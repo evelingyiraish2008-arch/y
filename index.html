@@ -153,7 +153,7 @@
                 <div class="filter-bar" id="booksFilterBar">
                     <span class="view-switch" data-view-switch="books" role="group" aria-label="Vista"></span>
                     <span class="filter-sep"></span>
-                    <select class="filter-select" id="booksStatusFilter" data-render="books"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="booksStatusFilter" data-render="books"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="para releer">Para releer</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="booksSort" data-render="books"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="pages">Páginas</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="booksSpicyFilter" data-render="books"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="booksSadnessFilter" data-render="books"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -186,6 +186,7 @@
                     <button class="tab" data-filter="bl">💕 BL <span class="count" id="seriesCountBl">0</span></button>
                     <button class="tab" data-filter="viendo">▶️ Viendo <span class="count" id="seriesCountViendo">0</span></button>
                     <button class="tab" data-filter="terminado">✅ Terminadas <span class="count" id="seriesCountTerminado">0</span></button>
+                    <button class="tab" data-filter="para rever">🔁 Para rever <span class="count" id="seriesCountRewatch">0</span></button>
                     <button class="tab" data-filter="quiero ver">⏳ Pendientes <span class="count" id="seriesCountPlan">0</span></button>
                 </div>
                 <div class="filter-bar" id="seriesFilterBar">
@@ -221,7 +222,7 @@
                 <div class="filter-bar" id="animeFilterBar">
                     <span class="view-switch" data-view-switch="anime" role="group" aria-label="Vista"></span>
                     <span class="filter-sep"></span>
-                    <select class="filter-select" id="animeStatusFilter" data-render="anime"><option value="all">Estado: todos</option><option value="viendo">Viendo</option><option value="terminado">Terminado</option><option value="quiero ver">Quiero ver</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="animeStatusFilter" data-render="anime"><option value="all">Estado: todos</option><option value="viendo">Viendo</option><option value="terminado">Terminado</option><option value="para rever">Para rever</option><option value="quiero ver">Quiero ver</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="animeSort" data-render="anime"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="episodes">Episodios</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="animeSpicyFilter" data-render="anime"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="animeSadnessFilter" data-render="anime"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -252,7 +253,7 @@
                 <div class="filter-bar" id="manhwaFilterBar">
                     <span class="view-switch" data-view-switch="manhwa" role="group" aria-label="Vista"></span>
                     <span class="filter-sep"></span>
-                    <select class="filter-select" id="manhwaStatusFilter" data-render="manhwa"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
+                    <select class="filter-select" id="manhwaStatusFilter" data-render="manhwa"><option value="all">Estado: todos</option><option value="leyendo">Leyendo</option><option value="terminado">Terminado</option><option value="para releer">Para releer</option><option value="quiero leer">Quiero leer</option><option value="abandonado">Abandonado</option></select>
                     <select class="filter-select" id="manhwaSort" data-render="manhwa"><option value="recent">Ordenar: recientes</option><option value="rating">Valoración</option><option value="title">Título A-Z</option><option value="chapters">Capítulos</option><option value="progress">Progreso</option></select>
                     <select class="filter-select" id="manhwaSpicyFilter" data-render="manhwa"><option value="all">🌶️ Spicy: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
                     <select class="filter-select" id="manhwaSadnessFilter" data-render="manhwa"><option value="all">💧 Tristeza: todos</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -786,6 +787,10 @@
                                 <label class="field" data-types="series anime manhwa book"><span>Basada en</span><input type="text" data-field="basedOn" placeholder="Manga, novela, original…"></label>
                                 <label class="field"><span>Nota en las fuentes (0-10)</span><input type="number" data-field="score" data-num min="0" max="10" step="0.1" placeholder="8.2"></label>
                                 <label class="field" data-types="book"><span>Editorial</span><input type="text" data-field="publisher"></label>
+                                <label class="field" data-types="series anime manhwa"><span>Primer episodio (estreno)</span><input type="date" data-field="firstAired"></label>
+                                <label class="field" data-types="series anime manhwa"><span>Último episodio</span><input type="date" data-field="lastAired"></label>
+                                <label class="field" data-types="series anime"><span>Especiales (no cuentan en el %)</span><input type="number" data-field="specialsTotal" data-num min="0" max="99" placeholder="0"></label>
+                                <label class="field" data-types="series anime"><span>Especiales que ya vi</span><input type="number" data-field="specialsSeen" data-num min="0" max="99" placeholder="0"></label>
                                 <label class="field span-2"><span>Web oficial</span><input type="url" data-field="officialUrl" placeholder="https://…"></label>
                             </div>
                         </details>

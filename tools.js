@@ -337,10 +337,10 @@ function toggleSelected(id) {
 function visibleWorkIds() {
     return [...new Set([...document.querySelectorAll(`#page-${currentPage} .work-item[data-id]`)].map(c => c.dataset.id))];
 }
-const BULK_STATUS = [['active', '▶️ En curso'], ['done', '✅ Terminada'], ['plan', '⏳ Pendiente'], ['dropped', '⏸️ Abandonada']];
+const BULK_STATUS = [['active', '▶️ En curso'], ['done', '✅ Terminada'], ['plan', '⏳ Pendiente'], ['rewatch', '🔁 Para rever / releer'], ['dropped', '⏸️ Abandonada']];
 function statusFor(kind, type) {
     const s = STATUS_BY_TYPE[type];
-    return { active: s[0], done: 'terminado', plan: s[2], dropped: 'abandonado' }[kind];
+    return { active: s[0], done: 'terminado', plan: plannedStatusOf(type), dropped: 'abandonado', rewatch: rewatchStatusOf({ type }) }[kind];
 }
 function renderBulkBar() {
     const bar = $('bulkBar');
@@ -419,9 +419,10 @@ function onBulkStatus(select) {
     if (!kind) return;
     bulkMutate(w => {
         w.status = statusFor(kind, w.type);
+        if (kind === 'rewatch' && getTotal(w)) w.progress = getTotal(w);
         if (kind === 'done') { if (!w.endDate) w.endDate = todayISO(); if (getTotal(w)) w.progress = getTotal(w); }
         if ((kind === 'active' || kind === 'done') && !w.startDate) w.startDate = todayISO();
-        if (kind !== 'plan') bumpActivity(w);
+        if (kind !== 'plan' && kind !== 'rewatch') bumpActivity(w);
     }, n => `✅ Estado cambiado en ${n} ${n === 1 ? 'obra' : 'obras'}`, 'Cambiar estado de varias');
 }
 

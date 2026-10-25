@@ -13,7 +13,7 @@ function timelineEvents(data) {
     data.works.forEach(w => {
         if (w.createdAt && !w.sample) ev.push({ date: dayKey(w.createdAt), kind: 'add', icon: '➕', text: `Agregaste “${w.title}”`, workId: w.id });
         if (w.startDate) ev.push({ date: w.startDate, kind: 'start', icon: '▶️', text: `Empezaste “${w.title}”`, workId: w.id });
-        if (w.endDate && w.status === 'terminado') ev.push({ date: w.endDate, kind: 'end', icon: '✅', text: `Terminaste “${w.title}”${w.rating ? ` · ★ ${ratingText(w.rating)}` : ''}`, workId: w.id });
+        if (w.endDate && isDone(w)) ev.push({ date: w.endDate, kind: 'end', icon: '✅', text: `Terminaste “${w.title}”${w.rating ? ` · ★ ${ratingText(w.rating)}` : ''}`, workId: w.id });
         (w.rereads || []).forEach((r, i) => { if (r.date) ev.push({ date: r.date, kind: 'reread', icon: '🔁', text: `${i + 2}ª vez con “${w.title}”`, workId: w.id }); });
     });
     data.notes.forEach(n => { if (n.createdAt && !n.sample) ev.push({ date: dayKey(n.createdAt), kind: 'note', icon: '📝', text: `Escribiste sobre “${n.workTitle || 'una obra'}”`, workId: n.workId }); });
@@ -34,8 +34,8 @@ function groupByMonth(events) {
 // ---------- Diario de consumo ----------
 /** Lo de un día: sesiones registradas (automático) + entradas escritas a mano. */
 function diaryDay(data, key) {
-    const auto = data.works.filter(w => Number((w.activity || {})[key]) > 0 || w.startDate === key || (w.endDate === key && w.status === 'terminado'))
-        .map(w => ({ work: w, sessions: Number((w.activity || {})[key]) || 0, started: w.startDate === key, finished: w.endDate === key && w.status === 'terminado' }));
+    const auto = data.works.filter(w => Number((w.activity || {})[key]) > 0 || w.startDate === key || (w.endDate === key && isDone(w)))
+        .map(w => ({ work: w, sessions: Number((w.activity || {})[key]) || 0, started: w.startDate === key, finished: w.endDate === key && isDone(w) }));
     const manual = (data.settings.diary || []).filter(d => d.date === key);
     return { auto, manual };
 }
@@ -47,7 +47,7 @@ function cleanupSuggestions(data, now = Date.now()) {
     const works = data.works;
     const add = (id, icon, text, items, action) => { if (items.length) out.push({ id, icon, text, items, action }); };
     add('nocover', '🖼️', 'Obras sin portada', works.filter(w => !w.image), 'edit');
-    add('norating', '⭐', 'Terminadas sin valorar', works.filter(w => w.status === 'terminado' && !Number(w.rating)), 'rate');
+    add('norating', '⭐', 'Terminadas sin valorar', works.filter(w => isDone(w) && !Number(w.rating)), 'rate');
     add('notags', '🏷️', 'Obras sin etiquetas', works.filter(w => !splitList(w.tags).length), 'edit');
     add('nototal', '📏', 'En curso sin total (no se puede seguir el progreso)', works.filter(w => isActive(w) && !getTotal(w)), 'edit');
     add('stalled', '⏸️', 'En curso sin avanzar desde hace más de 2 meses', works.filter(w => {
@@ -71,7 +71,7 @@ const QA_QUESTIONS = [
 ];
 function answerQuestion(id, data) {
     const works = data.works;
-    const done = works.filter(w => w.status === 'terminado');
+    const done = works.filter(w => isDone(w));
     const pick = (list, fn) => list.slice().sort(fn)[0];
     switch (id) {
         case 'bestYear': {
@@ -140,7 +140,7 @@ const MOODS = {
 function moodSuggestions(works, mood, limit = 5) {
     const m = MOODS[mood];
     if (!m) return [];
-    const rank = w => (isActive(w) ? 0 : isPlanned(w) ? 1 : w.status === 'terminado' && Number(w.rating) >= 4.5 ? 2 : 9);
+    const rank = w => (isActive(w) ? 0 : isPlanned(w) ? 1 : isDone(w) && Number(w.rating) >= 4.5 ? 2 : 9);
     return works.filter(w => m.want(w) && rank(w) < 9).sort((a, b) => rank(a) - rank(b) || (Number(b.rating) || 0) - (Number(a.rating) || 0)).slice(0, limit)
         .map(w => ({ work: w, why: isActive(w) ? 'la tienes a medias' : isPlanned(w) ? 'la tienes pendiente' : `te encantó (★ ${ratingText(w.rating)})` }));
 }
@@ -173,7 +173,7 @@ function challengeProgress(ch, data, now = Date.now()) {
     const since = ch.since || '0000';
     const works = data.works;
     let value = 0;
-    if (ch.kind === 'finish') value = works.filter(w => w.status === 'terminado' && w.endDate >= since && (!ch.type || w.type === ch.type) && (!ch.bl || w.bl)).length;
+    if (ch.kind === 'finish') value = works.filter(w => isDone(w) && w.endDate >= since && (!ch.type || w.type === ch.type) && (!ch.bl || w.bl)).length;
     else if (ch.kind === 'start') value = works.filter(w => w.startDate && w.startDate >= since).length;
     else if (ch.kind === 'notes') value = data.notes.filter(n => n.createdAt && dayKey(n.createdAt) >= since).length;
     else if (ch.kind === 'streak') value = streaks(activityByDay(works), now).current;
@@ -192,7 +192,7 @@ function workSuggestions(w, data) {
     const total = getTotal(w), p = Number(w.progress) || 0;
     if (isActive(w) && total && p >= total) out.push({ id: 'finish', icon: '🏁', text: 'Ya llegaste al final. ¿La marco como terminada?', act: 'sugg-finish' });
     if (isPlanned(w) && p > 0) out.push({ id: 'start', icon: '▶️', text: `Ya llevas ${p}. ¿La pongo como “${w.type === 'book' || w.type === 'manhwa' ? 'Leyendo' : 'Viendo'}”?`, act: 'sugg-start' });
-    if (w.status === 'terminado' && !Number(w.rating)) out.push({ id: 'rate', icon: '⭐', text: '¡La terminaste! ¿Qué nota le das?', act: 'sugg-rate' });
+    if (isDone(w) && !Number(w.rating)) out.push({ id: 'rate', icon: '⭐', text: '¡La terminaste! ¿Qué nota le das?', act: 'sugg-rate' });
     // Colección que encaja: comparte etiquetas con la mayoría de sus obras
     const tags = new Set(splitList(w.tags).map(norm));
     data.collections.filter(c => !c.smart && !c.items.includes(w.id) && c.items.length >= 2).forEach(c => {
@@ -203,7 +203,7 @@ function workSuggestions(w, data) {
     return out;
 }
 /** Terminadas sin valorar (para recordarte puntuarlas). */
-const unratedFinished = works => works.filter(w => w.status === 'terminado' && !Number(w.rating));
+const unratedFinished = works => works.filter(w => isDone(w) && !Number(w.rating));
 
 // ---------- Calendario (.ics) ----------
 function icsEscape(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n'); }

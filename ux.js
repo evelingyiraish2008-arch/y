@@ -10,7 +10,7 @@
 // 1. NIVEL Y CELEBRACIONES
 // ============================================================
 function levelInfo(data = appData) {
-    const xp = data.works.length * 10 + data.works.filter(w => w.status === 'terminado').length * 15 + data.notes.length * 5;
+    const xp = data.works.length * 10 + data.works.filter(w => isDone(w)).length * 15 + data.notes.length * 5;
     const level = Math.floor(xp / 50) + 1;
     const ranks = [[1, '🌱 Semilla'], [3, '🌿 Brote'], [6, '⭐ Estrella'], [10, '🔥 Leyenda'], [15, '👑 Supremo']];
     return { xp, level, rank: ranks.filter(r => level >= r[0]).pop()[1], pct: (xp % 50) / 50 * 100 };
@@ -19,7 +19,7 @@ function levelInfo(data = appData) {
 function celebrationStats() {
     const year = new Date().getFullYear();
     return {
-        done: new Set(appData.works.filter(w => w.status === 'terminado').map(w => w.id + ':' + (w.rereads || []).length)),
+        done: new Set(appData.works.filter(w => isDone(w)).map(w => w.id + ':' + (w.rereads || []).length)),
         level: levelInfo().level,
         goal: Number(appData.settings.yearGoal) || 0,
         doneYear: finishedInYear(appData.works, year),
@@ -134,7 +134,7 @@ function renderFocus(bump = false) {
                 <div class="focus-actions">
                     ${total && !done ? `<button class="btn btn-primary focus-big" data-act="focus-plus">＋${step} <small>${w.type === 'book' ? 'págs' : w.type === 'manhwa' ? 'cap' : 'ep'}</small></button>
                     <button class="btn btn-secondary focus-mid" data-act="focus-minus" aria-label="Retroceder">−${step}</button>` : ''}
-                    ${w.status !== 'terminado' || w.rereading ? `<button class="btn btn-secondary focus-mid" data-act="focus-finish">✅ Terminar</button>` : ''}
+                    ${!isDone(w) || w.rereading ? `<button class="btn btn-secondary focus-mid" data-act="focus-finish">✅ Terminar</button>` : ''}
                 </div>
                 <div class="focus-rating"><span>Tu valoración</span>${starInput(w.id, w.rating)}</div>
                 <div class="focus-secondary">

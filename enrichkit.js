@@ -20,6 +20,7 @@ function enrichGaps(w, needsTranslationFn = () => false) {
     if (w.type !== 'book' && !w.country) gaps.push('country');
     if (!w.year) gaps.push('year');
     if (w.type !== 'book' && !w.airStatus && !w.runtime) gaps.push('details'); // estado de emisión, duración…
+    if (w.type !== 'book' && !w.firstAired) gaps.push('dates'); // primer y último episodio
     if (!w.genre) gaps.push('genre');
     return gaps;
 }

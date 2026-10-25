@@ -268,7 +268,7 @@ FEATURE_ACTIONS['readonly-toggle'] = () => {
 FEATURE_ACTIONS['share-work'] = async id => {
     const w = getWorkById(id);
     if (!w) return;
-    const text = `${TYPE_META[w.type].icon} ${w.title}${w.rating ? ` · ${getStars(w.rating)}` : ''}${w.status === 'terminado' ? ' · ¡terminada!' : isActive(w) ? ` · ${getProgressText(w)}` : ''}\n${w.synopsis ? w.synopsis.slice(0, 140) + '\n' : ''}— desde Mi Mundo`;
+    const text = `${TYPE_META[w.type].icon} ${w.title}${w.rating ? ` · ${getStars(w.rating)}` : ''}${isDone(w) ? ' · ¡terminada!' : isActive(w) ? ` · ${getProgressText(w)}` : ''}\n${w.synopsis ? w.synopsis.slice(0, 140) + '\n' : ''}— desde Mi Mundo`;
     try {
         if (navigator.share) await navigator.share({ title: w.title, text });
         else { await navigator.clipboard.writeText(text); showToast('📋 Texto copiado para compartir'); }

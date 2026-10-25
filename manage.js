@@ -191,7 +191,7 @@ FEATURE_ACTIONS['shared-add'] = json => {
     const [title, type, image, year] = JSON.parse(json);
     const t = TYPE_META[type] ? type : 'book';
     if (appData.works.some(w => w.type === t && norm(w.title) === norm(title))) { showToast(`Ya tienes “${title}”`); return; }
-    mutate(() => appData.works.push({ id: generateId(), type: t, title, status: STATUS_BY_TYPE[t][2], ...(image ? { image } : {}), ...(year ? { year: Number(year) } : {}), createdAt: Date.now(), updatedAt: Date.now() }), `⏳ “${title}” añadida a tus pendientes`, { label: `Añadir “${title}”` });
+    mutate(() => appData.works.push({ id: generateId(), type: t, title, status: plannedStatusOf(t), ...(image ? { image } : {}), ...(year ? { year: Number(year) } : {}), createdAt: Date.now(), updatedAt: Date.now() }), `⏳ “${title}” añadida a tus pendientes`, { label: `Añadir “${title}”` });
 };
 
 // ============================================================

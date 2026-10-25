@@ -17,10 +17,12 @@ const TYPE_META = {
     anime:  { label: 'Anime',  icon: '🎌', color: '#d97706', progressLabel: 'Episodio actual', unit: 'ep',   step: 1 },
     manhwa: { label: 'Manhwa', icon: '📕', color: '#3b82f6', progressLabel: 'Capítulo actual', unit: 'cap',  step: 1 }
 };
-const READ_STATUSES = ['leyendo', 'terminado', 'quiero leer', 'abandonado'];
-const WATCH_STATUSES = ['viendo', 'terminado', 'quiero ver', 'abandonado'];
+const READ_STATUSES = ['leyendo', 'terminado', 'para releer', 'quiero leer', 'abandonado'];
+const WATCH_STATUSES = ['viendo', 'terminado', 'para rever', 'quiero ver', 'abandonado'];
 const STATUS_BY_TYPE = { book: READ_STATUSES, manhwa: READ_STATUSES, series: WATCH_STATUSES, anime: WATCH_STATUSES };
-const STATUS_LABEL = { 'leyendo': 'Leyendo', 'viendo': 'Viendo', 'terminado': 'Terminado', 'quiero leer': 'Quiero leer', 'quiero ver': 'Quiero ver', 'abandonado': 'Abandonado' };
+/** El estado de "pendiente" de cada tipo (quiero leer / quiero ver). */
+const plannedStatusOf = type => (type === 'book' || type === 'manhwa' ? 'quiero leer' : 'quiero ver');
+const STATUS_LABEL = { 'leyendo': 'Leyendo', 'viendo': 'Viendo', 'terminado': 'Terminado', 'quiero leer': 'Quiero leer', 'quiero ver': 'Quiero ver', 'abandonado': 'Abandonado', 'para rever': 'Para rever', 'para releer': 'Para releer' };
 const PERSON_TYPE_LABEL = { actor: 'Actor / Actriz', author: 'Autor / Autora', director: 'Director / Directora', studio: 'Estudio' };
 const WEEK = [
     { day: 1, short: 'Lun' }, { day: 2, short: 'Mar' }, { day: 3, short: 'Mié' }, { day: 4, short: 'Jue' },
@@ -115,9 +117,15 @@ const getTypeLabel = type => (TYPE_META[type] || {}).label || type;
 const getStatusLabel = s => STATUS_LABEL[s] || s || '–';
 const isActive = w => w.status === 'leyendo' || w.status === 'viendo';
 const isPlanned = w => w.status === 'quiero leer' || w.status === 'quiero ver';
+/** "Para rever / releer": ya la terminaste (quizá no la recuerdas) y quieres repetirla. */
+const isRewatchStatus = s => s === 'para rever' || s === 'para releer';
+const isRewatchWish = w => isRewatchStatus(w.status);
+/** Terminada al menos una vez: "Terminado" o "Para rever/releer". Es lo que cuentan las estadísticas, las rachas y el XP. */
+const isDone = w => w.status === 'terminado' || isRewatchStatus(w.status);
 function statusClass(s) {
     if (s === 'leyendo' || s === 'viendo') return 'st-active';
     if (s === 'terminado') return 'st-done';
+    if (isRewatchStatus(s)) return 'st-rewatch';
     if (s === 'abandonado') return 'st-drop';
     return 'st-plan';
 }
@@ -128,14 +136,14 @@ function getTotal(w) {
 }
 function getProgress(w) {
     const total = getTotal(w);
-    if (!total) return w.status === 'terminado' ? 100 : 0;
+    if (!total) return isDone(w) ? 100 : 0;
     return Math.min(100, Math.round(((Number(w.progress) || 0) / total) * 100));
 }
 function getProgressText(w) {
     const p = Number(w.progress) || 0, t = getTotal(w);
     if (w.type === 'book') return `${p}${t ? ' / ' + t : ''} págs`;
     if (w.type === 'manhwa') return `Cap ${p}${t ? ' / ' + t : ''}`;
-    if (w.seriesType === 'Película') return w.status === 'terminado' ? 'Vista' : 'Película';
+    if (w.seriesType === 'Película') return isDone(w) ? 'Vista' : 'Película';
     return `Ep ${p}${t ? ' / ' + t : ''}`;
 }
 function getSubtitle(w) {
@@ -153,7 +161,7 @@ function estimateMinutes(w) {
     if (w.type === 'book') return p * 1.2;
     if (w.type === 'manhwa') return p * 4;
     if (w.type === 'anime') return p * (run || 23);
-    if (w.seriesType === 'Película') return (w.status === 'terminado' || p > 0) ? (run || 120) : 0;
+    if (w.seriesType === 'Película') return (isDone(w) || p > 0) ? (run || 120) : 0;
     return p * (run || 50);
 }
 function getAirDay(w) {
@@ -258,6 +266,7 @@ if (typeof module !== 'undefined' && module.exports) {
         READ_STATUSES,
         WATCH_STATUSES,
         STATUS_BY_TYPE,
+        plannedStatusOf,
         STATUS_LABEL,
         PERSON_TYPE_LABEL,
         WEEK,
@@ -282,6 +291,9 @@ if (typeof module !== 'undefined' && module.exports) {
         getTypeLabel,
         getStatusLabel,
         isActive,
+        isRewatchStatus,
+        isRewatchWish,
+        isDone,
         isPlanned,
         statusClass,
         getTotal,

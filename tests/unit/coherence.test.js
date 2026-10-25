@@ -173,3 +173,35 @@ describe('filtro por país', () => {
         assert.equal(filterWorks(works, { country: 'all' }).length, 5);
     });
 });
+
+describe('fechas de la ficha', () => {
+    it('días entre fechas, cuándo salió y mi recorrido', () => {
+        assert.equal(c.isoDaysBetween('2026-08-01', '2026-08-20'), 19);
+        assert.equal(c.isoDaysBetween('2026-08-01', '2026-08-01'), 0);
+        assert.equal(c.isoDaysBetween('2026-08-20', '2026-08-01'), null); // al revés
+        assert.equal(c.isoDaysBetween('', '2026-08-01'), null);
+        assert.deepEqual(c.airedSpan({ firstAired: '2023-01-06', lastAired: '2023-03-24' }), { from: '2023-01-06', to: '2023-03-24', days: 77, weeks: 11, ongoing: false });
+        assert.equal(c.airedSpan({ firstAired: '2023-01-06', airStatus: 'En emisión' }).ongoing, true);
+        assert.equal(c.airedSpan({ firstAired: '2023-01-06', airStatus: 'Finalizada' }).ongoing, false);
+        assert.equal(c.airedSpan({}), null);
+        assert.deepEqual(c.myRun({ startDate: '2026-08-01', endDate: '2026-08-20', rereads: [{ date: '2027-01-01' }] }), { start: '2026-08-01', end: '2026-08-20', days: 19, rereads: 1, rereading: false });
+        assert.equal(c.myRun({}), null);
+        assert.equal(c.myRun({ startDate: '2026-08-01' }).days, null);
+    });
+});
+describe('estado Para rever / releer', () => {
+    it('cuenta como terminada para las estadísticas, pero no como pendiente', () => {
+        const u = require('../../utils.js');
+        assert.deepEqual(['terminado', 'para rever', 'para releer', 'viendo', 'quiero ver'].map(s => u.isDone({ status: s })), [true, true, true, false, false]);
+        assert.equal(u.isPlanned({ status: 'para rever' }), false);
+        assert.equal(u.isActive({ status: 'para rever' }), false);
+        assert.equal(u.isRewatchWish({ status: 'para releer' }), true);
+        assert.equal(u.statusClass('para rever'), 'st-rewatch');
+        assert.equal(u.getStatusLabel('para releer'), 'Para releer');
+        assert.deepEqual(u.STATUS_BY_TYPE.series, ['viendo', 'terminado', 'para rever', 'quiero ver', 'abandonado']);
+        assert.deepEqual(u.STATUS_BY_TYPE.book, ['leyendo', 'terminado', 'para releer', 'quiero leer', 'abandonado']);
+        assert.deepEqual([u.plannedStatusOf('book'), u.plannedStatusOf('manhwa'), u.plannedStatusOf('anime'), u.plannedStatusOf('series')], ['quiero leer', 'quiero leer', 'quiero ver', 'quiero ver']);
+        assert.equal(u.getProgress({ type: 'series', status: 'para rever' }), 100); // sin total: terminada = 100 %
+        assert.equal(c.timesCompleted({ status: 'para rever', rereads: [{ date: 'x' }] }), 2);
+    });
+});

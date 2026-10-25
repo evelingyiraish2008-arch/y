@@ -290,3 +290,29 @@ describe('estado de emisión al día', () => {
         assert.deepEqual(await md.fetchAirStatuses(works, { fetchFn: half }), { b: 'En emisión' });
     });
 });
+
+describe('fechas de estreno y especiales', () => {
+    it('TVmaze: los especiales no cuentan como episodios y se dan las fechas del primero y del último', () => {
+        const eps = [
+            { season: 1, number: 1, airdate: '2023-01-06', type: 'regular' }, { season: 1, number: 2, airdate: '2023-01-13', type: 'regular' },
+            { season: 1, number: null, airdate: '2023-02-01', type: 'significant_special' }, { season: 2, number: 1, airdate: '2023-03-24' }
+        ];
+        const d = md.parseTvmazeDetails({ _embedded: { episodes: eps, cast: [] } });
+        assert.deepEqual([d.totalEpisodes, d.specialsTotal, d.firstAired, d.lastAired, d.seasons], [3, 1, '2023-01-06', '2023-03-24', 2]);
+        assert.ok(!('specialsTotal' in md.parseTvmazeDetails({ _embedded: { episodes: [{ season: 1, airdate: '2020-01-01' }, { season: 1, airdate: '2020-01-08' }], cast: [] } })));
+        const s = md.parseTvmaze([{ show: { id: 1, name: 'X', premiered: '2022-05-01', ended: '2022-08-01' } }])[0];
+        assert.deepEqual([s.firstAired, s.lastAired], ['2022-05-01', '2022-08-01']);
+    });
+    it('AniList, Jikan y TMDB traen primer y último episodio solo cuando son completos', () => {
+        assert.equal(md.isoDate({ year: 2019, month: 1, day: 5 }), '2019-01-05');
+        assert.equal(md.isoDate({ year: 2019, month: 1, day: null }), ''); // sin día no se inventa
+        assert.equal(md.isoDate('2019-03-04T00:00:00+00:00'), '2019-03-04');
+        const al = md.parseAniList({ data: { Page: { media: [{ id: 1, title: { romaji: 'G' }, startDate: { year: 2019, month: 7, day: 11 }, endDate: { year: 2019, month: 9, day: 26 }, genres: [], tags: [] }] } } }, 'anime')[0];
+        assert.deepEqual([al.firstAired, al.lastAired, al.year], ['2019-07-11', '2019-09-26', 2019]);
+        const jk = md.parseJikan({ data: [{ mal_id: 1, title: 'G', aired: { from: '2019-07-11T00:00:00+00:00', to: null } }] })[0];
+        assert.deepEqual([jk.firstAired, jk.lastAired], ['2019-07-11', '']);
+        assert.deepEqual(md.parseTmdbInfo({ status: 'Ended', first_air_date: '2020-01-01', last_air_date: '2020-03-01' }).lastAired, '2020-03-01');
+        assert.equal(md.parseTmdbInfo({ status: 'Returning Series', first_air_date: '2020-01-01', last_air_date: '2024-03-01' }).lastAired, undefined);
+        assert.equal(md.parseTmdb({ results: [{ media_type: 'movie', id: 1, title: 'P', release_date: '2021-06-02' }] })[0].firstAired, '2021-06-02');
+    });
+});

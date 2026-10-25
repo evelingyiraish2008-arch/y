@@ -53,6 +53,15 @@ function minutesFrom(text) {
     return (Number(h) || 0) * 60 + (Number(m) || 0);
 }
 const scoreOf = (n, scale = 10) => { const v = Number(n); return v > 0 ? Math.round((v * 10 / scale) * 10) / 10 : ''; };
+/** Fecha ISO (AAAA-MM-DD) o '' a partir de un texto o de {year, month, day} (AniList). Sin mes o día no se inventa nada. */
+function isoDate(v) {
+    if (v && typeof v === 'object') {
+        if (!v.year || !v.month || !v.day) return '';
+        return `${v.year}-${String(v.month).padStart(2, '0')}-${String(v.day).padStart(2, '0')}`;
+    }
+    const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+}
 const cleanUrl = u => (/^https?:\/\//i.test(String(u || '')) ? String(u).trim() : '');
 
 // ---------- Lectores de cada servicio (puros) ----------
@@ -92,7 +101,7 @@ function parseTvmaze(json) {
     return (json || []).map(({ show: s }) => s && ({
         source: 'tvmaze', sourceLabel: 'TVmaze', externalId: s.id, tvmazeId: s.id, title: s.name, year: yearOf(s.premiered),
         synopsis: stripHtml(s.summary).slice(0, 1500),
-        airStatus: airStatusEs(s.status), runtime: Number(s.averageRuntime || s.runtime) || '', language: languageEs(s.language), score: scoreOf((s.rating || {}).average), officialUrl: cleanUrl(s.officialSite),
+        airStatus: airStatusEs(s.status), firstAired: isoDate(s.premiered), lastAired: isoDate(s.ended), runtime: Number(s.averageRuntime || s.runtime) || '', language: languageEs(s.language), score: scoreOf((s.rating || {}).average), officialUrl: cleanUrl(s.officialSite),
         platform: (s.webChannel && s.webChannel.name) || (s.network && s.network.name) || '',
         country: COUNTRY_ES[((s.network || s.webChannel || {}).country || {}).name] || ((s.network || s.webChannel || {}).country || {}).name || '',
         cover: httpsUrl((s.image || {}).medium), coverLarge: httpsUrl((s.image || {}).original || (s.image || {}).medium),
@@ -125,11 +134,17 @@ function seasonsFromSource(items) {
 /** /shows/{id}?embed[]=episodes&embed[]=cast */
 function parseTvmazeDetails(json) {
     const emb = json._embedded || {};
-    const eps = emb.episodes || [];
+    const all = emb.episodes || [];
+    // Los especiales (extras, recopilatorios…) no cuentan como episodios de la serie: se anotan aparte
+    const eps = all.filter(e => !e.type || e.type === 'regular');
+    const specials = all.length - eps.length;
+    const dates = eps.map(e => isoDate(e.airdate)).filter(Boolean).sort();
     const cast = (emb.cast || []).filter(c => c.person && c.person.name).slice(0, 10);
     const seasonsList = seasonsFromSource(eps);
     return {
         totalEpisodes: eps.length || 0,
+        ...(specials ? { specialsTotal: specials } : {}),
+        ...(dates.length ? { firstAired: dates[0], ...(dates.length > 1 ? { lastAired: dates[dates.length - 1] } : {}) } : {}),
         seasons: eps.length ? new Set(eps.map(e => e.season)).size : 0,
         ...(seasonsList.length > 1 ? { seasonsList } : {}),
         actors: cast.map(c => c.person.name).join(', '),
@@ -144,6 +159,9 @@ function parseTmdbInfo(json) {
     const net = (j.networks || [])[0];
     return {
         airStatus: airStatusEs(j.status), runtime: Number(run || j.runtime) || '', officialUrl: cleanUrl(j.homepage),
+        ...(isoDate(j.first_air_date || j.release_date) ? { firstAired: isoDate(j.first_air_date || j.release_date) } : {}),
+        // La última emisión solo se da por buena si la serie ya terminó
+        ...(isoDate(j.last_air_date) && ['Ended', 'Canceled'].includes(j.status) ? { lastAired: isoDate(j.last_air_date) } : {}),
         ...(net && net.name ? { platform: net.name } : {}),
         ...(j.original_language ? { language: languageEs(j.original_language) } : {})
     };
@@ -193,6 +211,7 @@ function parseTmdb(json) {
         synopsis: stripHtml(r.overview).slice(0, 1500),
         country: (r.origin_country || []).map(c => COUNTRY_ES[c] || c)[0] || '',
         seriesType: r.media_type === 'movie' ? 'Película' : 'Serie',
+        firstAired: isoDate(r.first_air_date || r.release_date),
         altTitle: (r.original_name || r.original_title) && (r.original_name || r.original_title) !== (r.name || r.title) ? (r.original_name || r.original_title) : '',
         language: languageEs(r.original_language), score: scoreOf(r.vote_average),
         cover: r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : '',
@@ -213,7 +232,8 @@ const ANILIST_QUERY = `query ($q: String, $type: MediaType) {
     media(search: $q, type: $type, sort: SEARCH_MATCH) {
       id format countryOfOrigin episodes chapters status duration source averageScore siteUrl
       title { romaji english native }
-      startDate { year }
+      startDate { year month day }
+      endDate { year month day }
       description(asHtml: false)
       genres
       tags { name rank isGeneralSpoiler }
@@ -242,6 +262,7 @@ function parseAniList(json, type) {
         return {
             source: 'anilist', sourceLabel: 'AniList', externalId: m.id, anilistId: m.id,
             title: m.title.english || m.title.romaji, altTitle: [m.title.english ? m.title.romaji : '', m.title.native].filter(Boolean).join(' · '),
+            firstAired: isoDate(m.startDate), lastAired: isoDate(m.endDate),
             airStatus: airStatusEs(m.status), runtime: type === 'anime' ? (Number(m.duration) || '') : '', basedOn: basedOnEs(m.source), score: scoreOf(m.averageScore, 100), officialUrl: cleanUrl(m.siteUrl),
             year: (m.startDate || {}).year || '',
             synopsis: stripHtml(m.description).slice(0, 1500),
@@ -260,6 +281,7 @@ function parseJikan(json) {
     return ((json || {}).data || []).map(a => ({
         source: 'jikan', sourceLabel: 'MyAnimeList', externalId: a.mal_id,
         title: a.title_english || a.title, altTitle: [a.title_english ? a.title : '', a.title_japanese].filter(Boolean).join(' · '),
+        firstAired: isoDate((a.aired || {}).from), lastAired: isoDate((a.aired || {}).to),
         airStatus: airStatusEs(a.status), runtime: minutesFrom(a.duration) || '', basedOn: basedOnEs(a.source), score: scoreOf(a.score), officialUrl: cleanUrl(a.url),
         year: a.year || ((((a.aired || {}).prop || {}).from || {}).year) || '',
         totalEpisodes: a.episodes || 0, synopsis: stripHtml(a.synopsis).replace(/\[Written by MAL Rewrite\]/i, '').trim().slice(0, 1500),
@@ -416,7 +438,7 @@ async function fetchSourceDetails(meta, { fetchFn = fetch, tmdbKey = '' } = {}) 
 
 /** Campos que se rellenarían: solo los que están vacíos en el formulario (lo que escribiste no se toca). */
 const META_FIELDS = ['anilistId', 'tvmazeId', 'title', 'author', 'studio', 'platform', 'country', 'genre', 'year', 'actors', 'directors', 'pages', 'totalEpisodes', 'totalChapters', 'seasons', 'tags', 'synopsis', 'seriesType',
-    'altTitle', 'airStatus', 'runtime', 'language', 'basedOn', 'score', 'officialUrl', 'publisher'];
+    'altTitle', 'airStatus', 'runtime', 'language', 'basedOn', 'score', 'officialUrl', 'publisher', 'firstAired', 'lastAired', 'specialsTotal'];
 function mergeMetadata(current, meta, { overwrite = false } = {}) {
     const patch = {};
     const empty = v => v === undefined || v === null || v === '' || v === 0 || (typeof v === 'number' && isNaN(v));
@@ -493,6 +515,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         parseAniListAiring, parseTvmazeNext, fetchNextEpisodes, parseAniListStatus, fetchAirStatuses,
         translateGenre, stripHtml, parseOpenLibrary, parseOpenLibraryWork, parseGoogleBooks, parseTvmaze, parseTvmazeDetails, parseTmdb,
-        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseJikanStaff, parseTmdbInfo, airStatusEs, languageEs, basedOnEs, minutesFrom, scoreOf, pickWikidataItem, wikidataClaimIds, wikidataLabels, fetchWikidataCredits, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
+        parseItunes, parseAniList, parseJikan, parseTmdbCredits, parseTmdbSeasons, seasonsFromSource, parseJikanCharacters, parseJikanStaff, parseTmdbInfo, isoDate, airStatusEs, languageEs, basedOnEs, minutesFrom, scoreOf, pickWikidataItem, wikidataClaimIds, wikidataLabels, fetchWikidataCredits, parseTmdbKeywords, joinTags, metadataSources, searchMetadata, fetchMetadataDetails, mergeMetadata, ANILIST_QUERY, COUNTRY_ES
     };
 }

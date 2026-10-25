@@ -10,7 +10,7 @@ const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep'
 const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const dateOf = s => new Date(String(s).slice(0, 10) + 'T12:00:00');
 const daysBetween = (a, b) => Math.round((dateOf(b) - dateOf(a)) / 86400000);
-const finished = works => works.filter(w => w.status === 'terminado' && w.endDate);
+const finished = works => works.filter(w => isDone(w) && w.endDate);
 const median = arr => {
     if (!arr.length) return 0;
     const s = arr.slice().sort((a, b) => a - b), m = Math.floor(s.length / 2);
@@ -96,7 +96,7 @@ function overallPace(works, now = Date.now()) {
         let units = 0, first = '';
         list.forEach(w => {
             if (!w.startDate || !(Number(w.progress) > 0)) return;
-            const end = w.status === 'terminado' && w.endDate ? w.endDate : dayKey(now);
+            const end = isDone(w) && w.endDate ? w.endDate : dayKey(now);
             if (end < from) return;
             const start = w.startDate < from ? from : w.startDate;
             const share = (Math.max(0, daysBetween(start, end)) + 1) / (Math.max(0, daysBetween(w.startDate, end)) + 1);

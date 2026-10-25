@@ -561,7 +561,7 @@ FEATURE_ACTIONS['note-filter'] = type => { noteFilter = type; renderDetail(); };
 const verbAgain = w => (w.type === 'book' || w.type === 'manhwa' ? 'leer' : 'ver');
 function rereadsSectionHtml(w, openState) {
     const passes = w.rereads || [];
-    if (w.status !== 'terminado' && !passes.length && !w.rereading) return '';
+    if (!isDone(w) && !passes.length && !w.rereading) return '';
     const word = w.type === 'book' || w.type === 'manhwa' ? 'Relecturas' : 'Re-visionados';
     return `<details class="expandable" data-key="rereads" ${openState ?? (passes.length || w.rereading) ? 'open' : ''}>
         <summary>🔁 ${word}${passes.length ? ' · ' + passes.length : ''}</summary>
@@ -586,6 +586,55 @@ function finishWork(w) {
     w.status = 'terminado';
     if (!w.endDate) w.endDate = todayISO();
 }
+// ---------- Fechas de la ficha y episodios especiales ----------
+const daysText = n => (n === null || n === undefined ? '' : n === 0 ? 'el mismo día' : n === 1 ? '1 día' : `${n} días`);
+/** Dos recuadros: cuándo salió (primer y último episodio) y mi recorrido (cuándo empecé y terminé). */
+function workDatesHtml(w) {
+    const a = airedSpan(w), m = myRun(w);
+    const aired = a ? `<div class="date-card"><div class="k">📅 Cuándo salió</div>
+        <div class="v">${a.from ? esc(fmtDate(a.from)) : '–'} <span class="arrow">→</span> ${a.to ? esc(fmtDate(a.to)) : a.ongoing ? '<em>sigue en emisión</em>' : '–'}</div>
+        <small>${a.weeks ? `${a.weeks} ${a.weeks === 1 ? 'semana' : 'semanas'} entre el primer y el último episodio` : 'Primer y último episodio'}</small></div>` : '';
+    const mine = `<div class="date-card"><div class="k">🎬 Mi recorrido</div>
+        ${m && (m.start || m.end) ? `<div class="v">${m.start ? 'Empecé ' + esc(fmtDate(m.start)) : 'Sin fecha de inicio'} <span class="arrow">→</span> ${m.end ? 'Terminé ' + esc(fmtDate(m.end)) : isDone(w) ? 'Sin fecha de fin' : '<em>en curso</em>'}</div>
+        <small>${[m.days !== null ? `La ${w.type === 'book' || w.type === 'manhwa' ? 'leí' : 'vi'} en ${daysText(m.days)}` : '', m.rereads ? `🔁 ${m.rereads} ${m.rereads === 1 ? 'vez más' : 'veces más'}` : ''].filter(Boolean).join(' · ') || ' '}</small>`
+        : `<div class="v muted">Sin apuntar</div><small>Edita la obra para poner cuándo la empezaste y la terminaste.</small>`}</div>`;
+    return `<div class="date-cards">${aired}${mine}</div>`;
+}
+/** Especiales: no cuentan en el porcentaje; aquí se lleva su cuenta aparte. */
+function specialsHtml(w) {
+    const total = Number(w.specialsTotal) || 0;
+    if (!total) return '';
+    const seen = Math.min(total, Number(w.specialsSeen) || 0);
+    return `<div class="specials-row"><span>✨ Especiales <small class="muted">(no cuentan en el %)</small></span>
+        <span class="stepper"><button class="icon-btn sm" data-act="special-minus" data-id="${w.id}" aria-label="Quitar un especial visto" ${seen ? '' : 'disabled'}>−</button>
+        <b>${seen} / ${total}</b>
+        <button class="icon-btn sm" data-act="special-plus" data-id="${w.id}" aria-label="Un especial más visto" ${seen >= total ? 'disabled' : ''}>＋</button></span></div>`;
+}
+FEATURE_ACTIONS['special-plus'] = id => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w)) return;
+    const total = Number(w.specialsTotal) || 0;
+    if ((Number(w.specialsSeen) || 0) >= total) return;
+    mutate(() => { w.specialsSeen = (Number(w.specialsSeen) || 0) + 1; w.updatedAt = Date.now(); bumpActivity(w); }, null, { label: `Especial visto de “${w.title}”` });
+};
+FEATURE_ACTIONS['special-minus'] = id => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !(Number(w.specialsSeen) > 0)) return;
+    mutate(() => { w.specialsSeen = Number(w.specialsSeen) - 1; if (!w.specialsSeen) delete w.specialsSeen; w.updatedAt = Date.now(); }, null, { label: `Especial de “${w.title}”` });
+};
+
+/** Marca una obra terminada como "Para rever/releer" (y la devuelve a Terminado si te arrepientes). Las estadísticas la siguen contando como terminada. */
+const rewatchStatusOf = w => (w.type === 'book' || w.type === 'manhwa' ? 'para releer' : 'para rever');
+FEATURE_ACTIONS['rewatch-mark'] = id => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || w.status !== 'terminado') return;
+    mutate(() => { w.status = rewatchStatusOf(w); w.updatedAt = Date.now(); }, `🔁 “${w.title}” quedó para ${verbAgain(w) === 'ver' ? 'rever' : 'releer'}`, { label: `Para rever “${w.title}”` });
+};
+FEATURE_ACTIONS['rewatch-unmark'] = id => {
+    const w = getWorkById(id);
+    if (!w || isLocked(w) || !isRewatchWish(w)) return;
+    mutate(() => { w.status = 'terminado'; w.updatedAt = Date.now(); }, '✓ Vuelve a Terminado', { label: `Quitar “para rever” de “${w.title}”` });
+};
 FEATURE_ACTIONS['reread-start'] = id => {
     const w = getWorkById(id);
     if (!w || isLocked(w)) return;

@@ -38,7 +38,7 @@ function activityByDay(works) {
     works.forEach(w => {
         Object.entries(w.activity || {}).forEach(([k, n]) => add(k, Number(n) || 0));
         if (w.createdAt && !w.sample) add(dayKey(w.createdAt));
-        if (w.endDate && w.status === 'terminado') add(w.endDate);
+        if (w.endDate && isDone(w)) add(w.endDate);
     });
     return map;
 }
@@ -75,7 +75,7 @@ function finishedByMonth(works, months = 12, now = Date.now()) {
     }
     const index = new Map(out.map((m, i) => [m.key, i]));
     works.forEach(w => {
-        if (w.status !== 'terminado' || !w.endDate) return;
+        if (!isDone(w) || !w.endDate) return;
         const i = index.get(String(w.endDate).slice(0, 7));
         if (i !== undefined && out[i].byType[w.type] !== undefined) out[i].byType[w.type]++;
     });
@@ -108,7 +108,7 @@ function statusSummary(works) {
     const out = { active: 0, done: 0, planned: 0, dropped: 0 };
     works.forEach(w => {
         if (w.status === 'leyendo' || w.status === 'viendo') out.active++;
-        else if (w.status === 'terminado') out.done++;
+        else if (isDone(w)) out.done++;
         else if (w.status === 'abandonado') out.dropped++;
         else out.planned++;
     });
@@ -134,7 +134,7 @@ function topValues(works, field, limit = 6) {
 }
 
 function finishedInYear(works, year) {
-    return works.filter(w => w.status === 'terminado' && w.endDate && String(w.endDate).startsWith(String(year))).length;
+    return works.filter(w => isDone(w) && w.endDate && String(w.endDate).startsWith(String(year))).length;
 }
 
 function lastTouchedOf(w) { return Math.max(Number(w.updatedAt) || 0, Number(w.createdAt) || 0); }
