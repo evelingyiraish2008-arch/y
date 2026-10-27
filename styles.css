@@ -2089,3 +2089,30 @@ a.btn { text-decoration: none; }
 .cal-item small { color: var(--text-muted); }
 .cal-item .when { color: var(--text-muted); font-size: 12px; flex: none; }
 @media (max-width: 520px) { .month-day { min-height: 48px; padding: 4px; } .month-day .dots i { width: 7px; height: 7px; } }
+
+/* Estantería: marcapáginas de progreso y portada al pasar */
+.spine-bar { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, rgba(255, 255, 255, .38), rgba(255, 255, 255, .12)); border-radius: 0; pointer-events: none; }
+.spine-ribbon { position: absolute; top: -6px; right: 3px; font-size: 12px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5)); }
+.spine-peek { position: fixed; z-index: 4000; display: flex; gap: 10px; width: 250px; padding: 8px; border-radius: var(--radius-lg); background: var(--bg-elevated); border: 1px solid var(--border-medium); box-shadow: var(--shadow-xl); cursor: pointer; }
+.spine-peek[hidden] { display: none; }
+.spine-peek .peek-cover { width: 70px; aspect-ratio: 2 / 3; border-radius: var(--radius-sm); overflow: hidden; flex: none; background: var(--bg-surface); }
+.spine-peek .peek-cover img { width: 100%; height: 100%; object-fit: cover; }
+.spine-peek .peek-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 13px; }
+.spine-peek .peek-info small { color: var(--text-muted); }
+
+/* Animación suave al avanzar */
+@keyframes bar-glow { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 50% { box-shadow: 0 0 16px 3px var(--accent-glow); } 100% { box-shadow: 0 0 12px var(--accent-glow); } }
+@keyframes bar-sweep { from { background-position: -120% 0; } to { background-position: 220% 0; } }
+.progress-fill { transition: width .9s cubic-bezier(.22, 1, .36, 1); }
+.progress-fill.bar-grow { animation: bar-glow 1s ease-out; }
+.progress-fill.bar-shine { background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .75) 50%, transparent 70%), var(--gradient-primary); background-size: 60% 100%, 100% 100%; background-repeat: no-repeat; animation: bar-glow 1s ease-out, bar-sweep 1s ease-out; }
+
+/* Tipo de letra y esquinas a tu gusto */
+:root[data-font="round"], :root[data-font="round"] body { font-family: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Quicksand, Nunito, 'Varela Round', 'Segoe UI', system-ui, sans-serif; }
+:root[data-font="serif"], :root[data-font="serif"] body { font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif; }
+:root[data-font="mono"], :root[data-font="mono"] body { font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace; }
+:root[data-font="hand"], :root[data-font="hand"] body { font-family: 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Neue', 'Comic Sans MS', cursive; }
+:root[data-font] button, :root[data-font] input, :root[data-font] select, :root[data-font] textarea { font-family: inherit; }
+.font-round { font-family: ui-rounded, 'SF Pro Rounded', Nunito, system-ui, sans-serif; } .font-serif { font-family: Georgia, serif; } .font-mono { font-family: ui-monospace, Menlo, monospace; } .font-hand { font-family: 'Segoe Print', 'Bradley Hand', cursive; }
+:root[data-corners="sharp"] { --radius-xs: 0; --radius-sm: 2px; --radius-md: 4px; --radius-lg: 6px; --radius-xl: 8px; --radius-2xl: 10px; }
+:root[data-corners="round"] { --radius-xs: 10px; --radius-sm: 14px; --radius-md: 20px; --radius-lg: 26px; --radius-xl: 32px; --radius-2xl: 38px; }

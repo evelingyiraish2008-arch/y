@@ -637,9 +637,11 @@ function navigateTo(page, { push = true } = {}) {
     translateIfNeeded();
 }
 function refreshView() {
+    const progressBefore = snapshotProgress();
     RENDERERS[currentPage]();
     renderSidebar();
     if (currentDetailId) renderDetail();
+    animateProgress(progressBefore);
     if ($('personDetailOverlay').classList.contains('active') && currentPersonId) renderPersonDetail();
     if ($('sheetModal').classList.contains('active') && sheetRefresh) sheetRefresh();
     translateIfNeeded();

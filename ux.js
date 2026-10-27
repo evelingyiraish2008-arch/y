@@ -225,12 +225,13 @@ function worksShelf(list) {
     const lomo = w => {
         const tag = splitList(w.tags).map(t => tagMeta(t).color).find(Boolean);
         const color = tag || TYPE_META[w.type].color;
-        const len = getTotal(w);
+        const len = getTotal(w), pct = getProgress(w);
         const h = 150 + Math.min(70, Math.round(Math.log10((len || 50) + 1) * 22));
         const wdt = 34 + Math.min(22, Math.round((len || 100) / (w.type === 'book' ? 60 : 12)));
         // Cada lomo con un tono un poco distinto para que la estantería no sea de un solo color
         const hash = [...String(w.id)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 997, 7);
         return `<button class="spine work-item${selection.has(w.id) ? ' is-selected' : ''}" data-open="${w.id}" data-id="${w.id}" style="--spine:${esc(color)};height:${h}px;width:${wdt}px;filter:hue-rotate(${(hash % 50) - 25}deg) brightness(${0.85 + (hash % 30) / 100})" title="${esc(w.title)}" aria-label="${esc(w.title)}">
+            ${pct > 0 && pct < 100 ? `<span class="spine-bar" style="height:${pct}%" aria-hidden="true"></span>` : ''}${isRewatchWish(w) ? '<span class="spine-ribbon" aria-hidden="true">🔁</span>' : ''}
             <span class="spine-title">${esc(w.title)}</span><span class="spine-icon">${w.favorite ? '♥' : TYPE_META[w.type].icon}</span></button>`;
     };
     const perShelf = Math.max(6, Math.floor((($('main') || {}).clientWidth || 900) / 52) - 2);
@@ -328,6 +329,8 @@ function applyPersonalization() {
     root.dataset.preset = THEME_PRESETS[s.preset] ? s.preset : 'default';
     root.dataset.bg = BACKGROUNDS[s.background] ? s.background : 'aurora';
     root.dataset.density = ['compact', 'spacious'].includes(s.density) ? s.density : 'comfortable';
+    root.dataset.font = FONT_CHOICES.some(([k]) => k === s.font) ? s.font : 'default';
+    root.dataset.corners = CORNER_CHOICES.some(([k]) => k === s.corners) ? s.corners : 'normal';
     root.classList.toggle('reduce-motion', !!s.reduceMotion);
     root.style.setProperty('--bg-opacity', String((s.bgOpacity ?? 35) / 100));
     const bgSrc = s.background === 'image' ? resolveImageSrc(s.bgImage) : '';
@@ -389,6 +392,12 @@ function renderPersonalizePanel() {
         </div>
         <div class="pz-group"><div class="pz-title">Densidad</div>
             <div class="seg-inline">${[['compact', 'Compacta'], ['comfortable', 'Cómoda'], ['spacious', 'Espaciosa']].map(([k, l]) => `<button class="btn btn-secondary btn-sm ${(s.density || 'comfortable') === k ? 'is-on' : ''}" data-act="density" data-id="${k}">${l}</button>`).join('')}</div>
+        </div>
+        <div class="pz-group"><div class="pz-title">Tipo de letra</div>
+            <div class="seg-inline wrap">${FONT_CHOICES.map(([k, l]) => `<button class="btn btn-secondary btn-sm font-${k} ${(s.font || 'default') === k ? 'is-on' : ''}" data-act="font" data-id="${k}">${l}</button>`).join('')}</div>
+        </div>
+        <div class="pz-group"><div class="pz-title">Esquinas</div>
+            <div class="seg-inline">${CORNER_CHOICES.map(([k, l]) => `<button class="btn btn-secondary btn-sm ${(s.corners || 'normal') === k ? 'is-on' : ''}" data-act="corners" data-id="${k}">${l}</button>`).join('')}</div>
         </div>
         <div class="pz-group"><div class="pz-title">Colores por tipo</div>
             <div class="type-colors">${TYPE_ORDER.map(t => `<label class="type-color"><span class="tag-color"><input type="color" data-type-color="${t}" value="${esc(TYPE_META[t].color)}"></span>${TYPE_META[t].icon} ${esc(TYPE_PLURAL[t])}</label>`).join('')}
@@ -494,3 +503,87 @@ document.addEventListener('drop', e => {
 });
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { levelInfo };
+
+// ============================================================
+// PORTADA AL PASAR POR UN LOMO (estantería)
+// ============================================================
+let peekFor = '';
+function hideSpinePeek() { const p = document.getElementById('spinePeek'); if (p) p.hidden = true; peekFor = ''; }
+function showSpinePeek(spine) {
+    const w = getWorkById(spine.dataset.id);
+    if (!w) return;
+    let p = document.getElementById('spinePeek');
+    if (!p) { p = document.createElement('div'); p.id = 'spinePeek'; p.className = 'spine-peek'; document.body.appendChild(p); }
+    peekFor = w.id;
+    p.dataset.open = w.id;
+    p.innerHTML = `<div class="peek-cover">${img(w.image, w.type, w.title)}</div>
+        <div class="peek-info"><b>${esc(w.title)}</b><small>${esc(getSubtitle(w))}</small>
+        ${w.rating ? `<span class="stars">${getStars(w.rating)}</span>` : ''}<small>${esc(getStatusLabel(w.status))}${getTotal(w) ? ' · ' + esc(getProgressText(w)) : ''}</small></div>`;
+    p.hidden = false;
+    const r = spine.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight;
+    const left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left + r.width / 2 - pw / 2));
+    const above = r.top - ph - 10 >= 8;
+    p.style.left = left + 'px';
+    p.style.top = (above ? r.top - ph - 10 : Math.min(window.innerHeight - ph - 8, r.bottom + 10)) + 'px';
+}
+const touchOnly = () => !!window.matchMedia && matchMedia('(hover: none)').matches;
+document.addEventListener('mouseover', e => {
+    if (touchOnly()) return; // en el móvil los toques simulan el ratón: lo gestiona el clic
+    const s = e.target.closest && e.target.closest('.spine');
+    if (s) showSpinePeek(s);
+    else if (peekFor && !(e.target.closest && e.target.closest('#spinePeek'))) hideSpinePeek();
+});
+document.addEventListener('focusin', e => { if (touchOnly()) return; const s = e.target.closest && e.target.closest('.spine'); if (s) showSpinePeek(s); else hideSpinePeek(); });
+document.addEventListener('scroll', hideSpinePeek, true);
+// En pantallas táctiles no hay "pasar por encima": el primer toque enseña la portada y el segundo abre la ficha
+document.addEventListener('click', e => {
+    const s = e.target.closest && e.target.closest('.spine');
+    if (!s) { if (peekFor && !(e.target.closest && e.target.closest('#spinePeek'))) hideSpinePeek(); return; }
+    if (!touchOnly() || document.body.classList.contains('is-selecting')) return;
+    if (peekFor === s.dataset.id) { hideSpinePeek(); return; }
+    e.preventDefault(); e.stopPropagation();
+    showSpinePeek(s);
+}, true);
+
+// ============================================================
+// ANIMACIÓN SUAVE AL MARCAR PROGRESO
+// ============================================================
+function progressFills() {
+    return [...document.querySelectorAll('.progress-fill')].map(el => {
+        const host = el.closest('#detailPanel') || el.closest('[data-id]') || el.closest('[data-open]');
+        const id = host ? (host.id === 'detailPanel' ? 'detail:' + currentDetailId : host.dataset.id || host.dataset.open) : '';
+        const idx = host ? [...host.querySelectorAll('.progress-fill')].indexOf(el) : 0;
+        return { el, key: id ? `${id}:${idx}` : '' };
+    });
+}
+const widthOf = el => parseFloat(el.style.width) || 0;
+/** Antes de repintar: cuánto llenaba cada barra. */
+function snapshotProgress() {
+    const snap = new Map();
+    progressFills().forEach(({ el, key }) => { if (key) snap.set(key, widthOf(el)); });
+    return snap;
+}
+/** Tras repintar: las barras que han subido arrancan donde estaban y se llenan despacio; al llegar a 100 % brillan. */
+function animateProgress(snap) {
+    if (!snap || reduceMotion()) return;
+    progressFills().forEach(({ el, key }) => {
+        const before = snap.get(key), after = widthOf(el);
+        if (before === undefined || !(after > before + 0.4)) return;
+        el.style.transition = 'none';
+        el.style.width = before + '%';
+        void el.offsetWidth;
+        el.style.transition = '';
+        requestAnimationFrame(() => { el.style.width = after + '%'; });
+        el.classList.add('bar-grow');
+        if (after >= 99.5 && before < 99.5) el.classList.add('bar-shine');
+        setTimeout(() => el.classList.remove('bar-grow', 'bar-shine'), 1100);
+    });
+}
+
+// ============================================================
+// LETRA Y ESQUINAS
+// ============================================================
+const FONT_CHOICES = [['default', 'Normal'], ['round', 'Redonda'], ['serif', 'Elegante'], ['mono', 'Máquina de escribir'], ['hand', 'A mano']];
+const CORNER_CHOICES = [['sharp', 'Rectas'], ['normal', 'Normales'], ['round', 'Muy redondas']];
+FEATURE_ACTIONS['font'] = k => { appData.settings.font = k; applySettings(); saveData(); renderSettings(); };
+FEATURE_ACTIONS['corners'] = k => { appData.settings.corners = k; applySettings(); saveData(); renderSettings(); };
