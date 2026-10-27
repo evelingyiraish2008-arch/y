@@ -139,9 +139,22 @@ function platformFromProvider(name) {
     return WATCH_BY_ID[alias[n]] || null;
 }
 
+// ---------- Mis plataformas: aviso cuando algo de tu cola llega a una que tienes ----------
+/**
+ * Dónde se puede ver con suscripción (flatrate de TMDB) y, de eso, lo que está en TUS plataformas.
+ * Devuelve { on: [nombres], mine: [nombres de las plataformas tuyas] }.
+ */
+function availabilityInfo(result, myIds) {
+    const on = ((result || {}).flatrate || []).filter(Boolean);
+    const mine = new Set(myIds || []);
+    return { on, mine: on.filter(n => { const p = platformFromProvider(n); return p && mine.has(p.id); }) };
+}
+/** Lo que no te habían avisado todavía (por nombre de plataforma). */
+const newArrivals = (mine, notified) => (mine || []).filter(n => !(notified || []).includes(n));
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         WATCH_PLATFORMS, WATCH_COUNTRIES, watchPlatformsFor, watchKindOf, normalizeWatchUrl, detectWatchPlatform, platformByName, watchLinkName, watchLinkIcon,
-        watchSearchUrl, watchPosition, buildWatchUrl, hasPlaceholders, makeWatchLink, addWatchLink, makePrimary, defaultWatchCountry, parseWatchProviders, platformFromProvider
+        watchSearchUrl, watchPosition, buildWatchUrl, hasPlaceholders, makeWatchLink, addWatchLink, makePrimary, defaultWatchCountry, parseWatchProviders, platformFromProvider, availabilityInfo, newArrivals
     };
 }

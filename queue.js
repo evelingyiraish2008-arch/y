@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const queueUi = { mood: 'cualquiera', type: 'all', bl: false, picked: '', hours: 3 };
+const queueUi = { mood: 'cualquiera', type: 'all', bl: false, available: false, picked: '', hours: 3 };
 const typeIcon = w => (TYPE_META[w.type] || {}).icon || '🎬';
 const remainingText = w => { const r = remaining(w); return r && r.minutes ? fmtMinutes(r.minutes) : ''; };
 
@@ -15,7 +15,7 @@ function queueRowHtml(w, i, total) {
         <span class="queue-num">${i + 1}</span>
         <button type="button" class="queue-main" data-open="${w.id}">
             <span class="thumb">${img(w.image, w.type, w.title)}</span>
-            <span class="info"><b>${esc(w.title)}</b><small>${typeIcon(w)} ${esc(getTypeLabel(w.type))}${rem ? ` · ${esc(rem)}` : ''}${w.bl ? ' · 💖 BL' : ''}</small></span>
+            <span class="info"><b>${esc(w.title)}</b><small>${typeIcon(w)} ${esc(getTypeLabel(w.type))}${rem ? ` · ${esc(rem)}` : ''}${w.bl ? ' · 💖 BL' : ''}</small>${availabilityChipHtml(w)}</span>
             <span class="pill ${statusClass(w.status)}">${esc(getStatusLabel(w.status))}</span>
         </button>
         <span class="queue-move">
@@ -35,6 +35,7 @@ function surpriseHtml() {
             <select class="filter-select" id="queueMood" aria-label="Ánimo">${opts(moods, queueUi.mood)}</select>
             <select class="filter-select" id="queueType" aria-label="Tipo">${opts(types, queueUi.type)}</select>
             <label class="checkbox-wrapper"><input type="checkbox" id="queueBl" ${queueUi.bl ? 'checked' : ''}> 💖 Solo BL</label>
+            <label class="checkbox-wrapper"><input type="checkbox" id="queueAvail" ${queueUi.available ? 'checked' : ''}> 📺 Solo lo que ya puedo ver</label>
             <button type="button" class="btn btn-primary" data-act="surprise">🎲 Sorpréndeme</button>
         </div>
         ${w ? `<div class="queue-pick"><button type="button" class="queue-main" data-open="${w.id}">
@@ -82,7 +83,7 @@ function reorderQueue(id, where) {
 }
 ['top', 'up', 'down'].forEach(where => { FEATURE_ACTIONS['queue-' + where] = id => reorderQueue(id, where); });
 FEATURE_ACTIONS.surprise = () => {
-    const w = pickSurprise(appData.works, { mood: queueUi.mood, type: queueUi.type, bl: queueUi.bl, skip: queueUi.picked });
+    const w = pickSurprise(appData.works, { mood: queueUi.mood, type: queueUi.type, bl: queueUi.bl, available: queueUi.available, skip: queueUi.picked });
     queueUi.picked = w ? w.id : '-';
     $('queueSurprise').innerHTML = surpriseHtml();
 };
@@ -91,6 +92,7 @@ document.addEventListener('change', e => {
     if (t.id === 'queueMood') queueUi.mood = t.value;
     else if (t.id === 'queueType') queueUi.type = t.value;
     else if (t.id === 'queueBl') queueUi.bl = t.checked;
+    else if (t.id === 'queueAvail') queueUi.available = t.checked;
 });
 document.addEventListener('input', e => {
     if (e.target.id !== 'marathonHours') return;

@@ -468,7 +468,7 @@ const SEEN_KEY = 'mi_mundo_avisos_vistos';
 function seenNotifications() {
     try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch (e) { return new Set(); }
 }
-function bellItems() { return [...reminderBellItems(), ...computeNotifications(appData.works, appData.settings), ...rateReminderItems()]; }
+function bellItems() { return [...platformBellItems(), ...reminderBellItems(), ...computeNotifications(appData.works, appData.settings), ...rateReminderItems()]; }
 function renderBell() {
     const list = bellItems();
     const seen = seenNotifications();
@@ -1352,7 +1352,7 @@ function renderDetail(fresh = false) {
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
         ${suggestionsHtml(w)}
-        ${(w.watchLinks || []).length ? `<div class="watch-quick">${watchPrimaryHtml(w)}<button type="button" class="link-btn" data-act="watch-open-section" data-id="${w.id}">Otros enlaces…</button></div>` : ''}
+        ${availabilityChipHtml(w) ? `<div class="watch-quick">${availabilityChipHtml(w)}</div>` : ''}${(w.watchLinks || []).length ? `<div class="watch-quick">${watchPrimaryHtml(w)}<button type="button" class="link-btn" data-act="watch-open-section" data-id="${w.id}">Otros enlaces…</button></div>` : ''}
         ${total ? `
         <div class="detail-progress">
           <div class="detail-progress-row"><span>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>
@@ -2049,6 +2049,7 @@ function renderSettings() {
     $('settingLang').value = s.lang || 'es';
     $('readOnlyToggle').setAttribute('aria-checked', String(!!s.readOnly));
     $('autoEnrichToggle').setAttribute('aria-checked', String(s.autoEnrich !== false));
+    renderMyPlatforms();
     $('clipperLink').href = clipperBookmarklet();
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
     $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
@@ -2697,6 +2698,7 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     cloud.init();
     maybeAutoEnrich();
     maybeRefreshAirStatus();
+    maybeCheckAvailability();
     checkNotifications().catch(() => {});
     if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-work' && getWorkById(e.data.id)) openDetail(e.data.id); });

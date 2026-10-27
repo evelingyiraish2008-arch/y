@@ -46,6 +46,7 @@ const APP_SHELL = [
     './couplekit.js',
     './queuekit.js',
     './queue.js',
+    './characters.js',
     './web.js',
     './extras.js',
     './i18n.js',

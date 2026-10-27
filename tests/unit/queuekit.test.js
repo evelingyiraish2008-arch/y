@@ -112,3 +112,13 @@ describe('calendario del mes', () => {
         assert.equal(q.platformHue('Viki'), q.platformHue(' VIKI '));
     });
 });
+
+describe('Sorpréndeme solo con lo que ya puedes ver', () => {
+    it('filtra por las plataformas tuyas', () => {
+        const works = [W('a', { availMine: ['Viki'] }), W('b', {}), W('c', { availOn: ['Netflix'], availMine: [] })];
+        assert.equal(q.pickSurprise(works, { available: true, rng: () => 0 }).id, 'a');
+        assert.equal(q.pickSurprise(works, { available: true, rng: () => 0.99 }).id, 'a');
+        assert.equal(q.pickSurprise([W('b')], { available: true }), null);
+        assert.equal(q.pickSurprise([W('b')], { rng: () => 0 }).id, 'b');
+    });
+});

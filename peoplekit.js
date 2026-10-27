@@ -184,10 +184,30 @@ function newCharacters(existing, metaPeople, persons, makeId) {
     return out;
 }
 
+// ---------- Parejas entre personajes ----------
+/** Con quién forma pareja un personaje dentro de su obra (en los dos sentidos: lo apuntado en él o en el otro). */
+function characterPairs(work, char) {
+    const mine = new Set(char.pairs || []);
+    return (work.characters || []).filter(o => o.id !== char.id && (mine.has(o.id) || (o.pairs || []).includes(char.id)));
+}
+/** Apunta (o quita) la pareja entre dos personajes de la obra. Al quitarla se borra en los dos lados. */
+function setCharacterPair(work, aId, bId, on) {
+    const a = (work.characters || []).find(c => c.id === aId), b = (work.characters || []).find(c => c.id === bId);
+    if (!a || !b || a === b) return false;
+    if (on) { if (!characterPairs(work, a).includes(b)) a.pairs = [...(a.pairs || []), b.id]; return true; }
+    [a, b].forEach(x => { x.pairs = (x.pairs || []).filter(id => id !== (x === a ? b.id : a.id)); if (!x.pairs.length) delete x.pairs; });
+    return true;
+}
+/** Parejas BL de la vida real de quienes interpretan a dos personajes (si las tienes en Parejas). */
+function couplesForCharacters(a, b, couples) {
+    if (!a || !b || !a.personId || !b.personId || a.personId === b.personId) return [];
+    return (couples || []).filter(c => (c.personA === a.personId && c.personB === b.personId) || (c.personA === b.personId && c.personB === a.personId));
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         PERSON_FIELDS, PERSON_ROLES, personNames, nameKey, personHasName, personRoles, namesSimilar, matchPersons, similarPersons, splitNames,
         personOtherNames, workHasPerson, worksOfPerson, linkPersonIds, castOf, renamePersonInWorks, removePersonFromWorks, orphanPersons, allCharacters, initials,
-        titleMatchesName, missingPersons, newCharacters
+        titleMatchesName, missingPersons, newCharacters, characterPairs, setCharacterPair, couplesForCharacters
     };
 }

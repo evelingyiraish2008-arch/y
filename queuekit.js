@@ -83,8 +83,8 @@ function fitsMood(w, mood) {
     return true;
 }
 /** Una obra de tu cola al azar que encaje (tipo, BL y ánimo). `rng` se puede cambiar para probar. `skip` evita repetir la anterior. */
-function pickSurprise(works, { mood = 'cualquiera', type = 'all', bl = false, skip = '', rng = Math.random } = {}) {
-    let pool = queueItems(works).filter(w => (type === 'all' || w.type === type) && (!bl || w.bl) && fitsMood(w, mood));
+function pickSurprise(works, { mood = 'cualquiera', type = 'all', bl = false, available = false, skip = '', rng = Math.random } = {}) {
+    let pool = queueItems(works).filter(w => (type === 'all' || w.type === type) && (!bl || w.bl) && (!available || (w.availMine || []).length) && fitsMood(w, mood));
     if (pool.length > 1 && skip) pool = pool.filter(w => w.id !== skip);
     if (!pool.length) return null;
     return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
