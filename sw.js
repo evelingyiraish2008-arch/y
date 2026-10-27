@@ -44,6 +44,8 @@ const APP_SHELL = [
     './watchkit.js',
     './watch.js',
     './couplekit.js',
+    './queuekit.js',
+    './queue.js',
     './web.js',
     './extras.js',
     './i18n.js',

@@ -619,7 +619,7 @@ function changeProgress(id, delta) {
 const RENDERERS = {
     home: renderHome, books: renderBooks, series: renderSeries, anime: renderAnime, manhwa: renderManhwa,
     bl: renderBL, persons: renderPersons, couples: renderCouples, emission: renderEmission, stats: renderStats,
-    collections: renderCollections, notes: renderNotes, settings: renderSettings, extras: renderExtras
+    collections: renderCollections, notes: renderNotes, settings: renderSettings, extras: renderExtras, queue: renderQueue
 };
 let currentPage = 'home';
 
@@ -716,7 +716,7 @@ function openSearchResult(i) {
 // ---------- Paleta de comandos (Ctrl K) ----------
 const PAGE_NAMES = {
     home: '🏠 Inicio', books: '📖 Libros', series: '🎬 Series y Películas', anime: '🎌 Anime', manhwa: '📕 Manhwas', bl: '💖 Solo BL',
-    persons: '👥 Personas', couples: '💕 Parejas BL', emission: '📡 Centro de Emisión', collections: '🗂️ Colecciones',
+    persons: '👥 Personas', couples: '💕 Parejas BL', queue: '🎲 Qué ver', emission: '📡 Centro de Emisión', collections: '🗂️ Colecciones',
     stats: '📊 Estadísticas', notes: '📝 Notas', extras: '✨ Extras', settings: '⚙️ Personalizar'
 };
 let paletteItems = [], paletteIndex = 0;
@@ -1808,6 +1808,7 @@ function renderEmission() {
         </div>`;
     }).join('');
     renderNextAiring();
+    renderMonthCalendar();
     maybeRefreshAiring();
     const unscheduled = active.filter(w => getAirDay(w) === null);
     $('unscheduledSection').hidden = !unscheduled.length;

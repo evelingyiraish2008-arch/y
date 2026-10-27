@@ -520,6 +520,7 @@ async function refreshAiring({ silent = false } = {}) {
     if (changed.length) mutate(() => changed.forEach(w => { if (info[w.id]) w.nextAiring = info[w.id]; else delete w.nextAiring; }), silent ? null : `🔄 Próximos episodios actualizados (${changed.length})`, { undo: false });
     else { saveData(); if (!silent) showToast('👌 Todo al día'); }
     renderNextAiring();
+    if (currentPage === 'emission') renderMonthCalendar();
 }
 function airingWhen(at, now = Date.now()) {
     const d = new Date(at);

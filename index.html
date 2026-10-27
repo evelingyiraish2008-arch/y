@@ -41,6 +41,7 @@
                 <button class="nav-item" data-nav="bl"><span class="icon">💖</span><span class="label">Solo BL</span><span class="nav-count" data-count="bl"></span></button>
                 <button class="nav-item" data-nav="persons"><span class="icon">👥</span><span class="label">Personas</span></button>
                 <button class="nav-item" data-nav="couples"><span class="icon">💕</span><span class="label">Parejas BL</span></button>
+                <button class="nav-item" data-nav="queue"><span class="icon">🎲</span><span class="label">Qué ver</span></button>
                 <button class="nav-item" data-nav="emission"><span class="icon">📡</span><span class="label">Centro de Emisión</span></button>
             </nav>
             <div class="nav-divider"></div>
@@ -390,10 +391,29 @@
                     <div class="section-header"><h3 class="section-title">📅 Calendario semanal</h3><span class="muted" style="font-size:12px;color:var(--text-muted)">Asigna el “Día de emisión” al editar una obra</span></div>
                     <div class="weekly-calendar" id="weeklyCalendar"></div>
                 </div>
+                <div class="section" id="monthSection">
+                    <div class="section-header"><h3 class="section-title">🗓️ Calendario del mes</h3>
+                        <div class="seg-inline"><button type="button" class="btn btn-secondary btn-sm" data-act="cal-prev" aria-label="Mes anterior">◀</button><b id="calTitle" style="min-width:130px;text-align:center"></b><button type="button" class="btn btn-secondary btn-sm" data-act="cal-next" aria-label="Mes siguiente">▶</button><button type="button" class="btn btn-secondary btn-sm" data-act="cal-today">Hoy</button></div></div>
+                    <div class="month-cal" id="monthCalendar"></div>
+                    <div id="calDay" style="margin-top:12px"></div>
+                </div>
                 <div class="section" id="unscheduledSection">
                     <div class="section-header"><h3 class="section-title">🕓 En curso sin día asignado</h3></div>
                     <div class="card-grid" id="unscheduledGrid"></div>
                 </div>
+            </section>
+
+            <!-- QUÉ VER -->
+            <section class="page-view" id="page-queue">
+                <div class="page-header">
+                    <div><h1 class="page-title">🎲 Qué ver</h1><p class="page-subtitle">Tu cola, ordenada a tu gusto. Y si no sabes qué elegir, que te sorprenda.</p></div>
+                </div>
+                <div class="section"><div class="section-header"><h3 class="section-title">🎲 Sorpréndeme</h3></div><div id="queueSurprise"></div></div>
+                <div class="section"><div class="section-header"><h3 class="section-title">📋 Mi cola <span class="muted" id="queueCount"></span></h3><span class="muted" style="font-size:12px;color:var(--text-muted)">Sube y baja para decidir qué va primero</span></div><div id="queueList"></div></div>
+                <div class="section"><div class="section-header"><h3 class="section-title">⏱️ Maratón</h3></div>
+                    <label class="field" style="max-width:260px"><span>¿Cuántas horas tienes?</span><input type="number" class="text-input" id="marathonHours" min="0.5" max="24" step="0.5" value="3"></label>
+                    <div id="marathonBody" style="margin-top:10px"></div></div>
+                <div class="section"><div class="section-header"><h3 class="section-title">💡 Parecidas a lo que te gustó</h3></div><div id="queueSimilar"></div></div>
             </section>
 
             <!-- ESTADÍSTICAS -->
@@ -1063,6 +1083,8 @@
     <script src="watchkit.js"></script>
     <script src="watch.js"></script>
     <script src="couplekit.js"></script>
+    <script src="queuekit.js"></script>
+    <script src="queue.js"></script>
     <script src="web.js"></script>
     <script src="play.js"></script>
     <script src="app.js"></script>

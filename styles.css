@@ -2048,3 +2048,44 @@ a.btn { text-decoration: none; }
 .date-card small { display: block; margin-top: 4px; color: var(--text-muted); }
 .specials-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: -6px 0 16px; padding: 8px 14px; border: 1px dashed var(--border-subtle); border-radius: var(--radius-lg); font-size: 13px; }
 .specials-row .stepper { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Qué ver */
+.queue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.queue-row { display: flex; align-items: center; gap: 8px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 6px 8px; min-width: 0; }
+.queue-num { width: 24px; text-align: center; font-weight: 700; color: var(--text-muted); flex: none; }
+.queue-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; padding: 2px; font: inherit; }
+.queue-main .thumb { width: 38px; height: 54px; flex: none; border-radius: 6px; overflow: hidden; background: var(--bg-elevated); display: grid; place-items: center; }
+.queue-main .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.queue-main .info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.queue-main .info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-main .info small { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-move { display: inline-flex; gap: 2px; flex: none; }
+.queue-move .icon-btn:disabled { opacity: .3; }
+.queue-surprise .queue-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.queue-pick { background: linear-gradient(135deg, rgba(139, 92, 246, .16), rgba(236, 72, 153, .12)); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 10px; }
+.queue-pick .queue-main .thumb { width: 54px; height: 78px; }
+.queue-pick .queue-main .info small { white-space: normal; }
+.queue-pick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+@media (max-width: 760px) { .queue-row { flex-wrap: wrap; } .queue-move { margin-left: auto; } }
+
+/* Calendario del mes */
+.month-cal { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 8px; }
+.month-head, .month-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.month-head span { text-align: center; font-size: 12px; color: var(--text-muted); padding: 4px 0; }
+.month-week { margin-bottom: 4px; }
+.month-day { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 58px; padding: 6px; border-radius: 10px; background: var(--bg-elevated); border: 1px solid transparent; color: inherit; cursor: pointer; font: inherit; min-width: 0; }
+.month-day.is-out { opacity: .4; }
+.month-day.is-today { border-color: var(--accent, #8b5cf6); }
+.month-day.is-picked { outline: 2px solid var(--accent, #8b5cf6); }
+.month-day .num { font-size: 12px; font-weight: 600; }
+.month-day .dots { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.month-day .dots i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.month-day .dots i.is-proj { opacity: .45; }
+.month-day .dots em { font-size: 10px; font-style: normal; color: var(--text-muted); }
+.cal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cal-item { display: flex; align-items: center; gap: 10px; width: 100%; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 8px 10px; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.cal-item i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.cal-item > span:nth-child(2) { flex: 1; min-width: 0; }
+.cal-item small { color: var(--text-muted); }
+.cal-item .when { color: var(--text-muted); font-size: 12px; flex: none; }
+@media (max-width: 520px) { .month-day { min-height: 48px; padding: 4px; } .month-day .dots i { width: 7px; height: 7px; } }
