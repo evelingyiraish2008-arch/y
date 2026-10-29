@@ -284,7 +284,7 @@ const wordCount = text => (String(text || '').trim().match(/\S+/g) || []).length
 // ============================================================
 /** Veces que se ha terminado (la primera + las repeticiones). */
 function timesCompleted(w) {
-    return (w.status === 'terminado' || (w.rereads || []).length ? 1 : 0) + (w.rereads || []).length;
+    return (isDone(w) || (w.rereads || []).length ? 1 : 0) + (w.rereads || []).length;
 }
 /** Etiqueta para la tarjeta: "🔁 2ª vez" mientras se repite, "🔁 ×3" si ya se terminó varias veces. */
 function rereadBadge(w) {
@@ -307,6 +307,30 @@ function mostRevisited(works, limit = 5) {
         .slice(0, limit);
 }
 
+// ============================================================
+// FECHAS: cuándo salió y mi recorrido
+// ============================================================
+const isoDayNumber = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : NaN; };
+/** Días entre dos fechas ISO (0 si es el mismo día); null si falta alguna o están al revés. */
+function isoDaysBetween(a, b) {
+    const d = isoDayNumber(b) - isoDayNumber(a);
+    return Number.isFinite(d) && d >= 0 ? Math.round(d) : null;
+}
+/** Cuándo salió: primer y último episodio. `ongoing` si sigue emitiéndose (sin último episodio). */
+function airedSpan(w) {
+    const from = w.firstAired || '', to = w.lastAired || '';
+    if (!from && !to) return null;
+    const days = isoDaysBetween(from, to);
+    return { from, to, days, weeks: days === null ? null : Math.max(1, Math.round(days / 7)), ongoing: !!from && !to && (w.airStatus === 'En emisión' || w.airStatus === 'En pausa') };
+}
+/** Mi recorrido: cuándo la empecé y cuándo la terminé, y cuántas veces. */
+function myRun(w) {
+    const start = w.startDate || '', end = w.endDate || '';
+    const rereads = (w.rereads || []).length;
+    if (!start && !end && !rereads) return null;
+    return { start, end, days: start && end ? isoDaysBetween(start, end) : null, rereads, rereading: !!w.rereading };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         tagKey, tagStats, dedupeTags, renameTag, removeTag, suggestTagFixes, suggestTagsFor,
@@ -314,6 +338,6 @@ if (typeof module !== 'undefined' && module.exports) {
         hasSeasons, totalField, seasonTotals, syncSeasonAggregates, advanceSeason, seasonStatus, seasonLabel,
         seasonProgress, seasonHint, seasonTimeLeft, formatMinutes, setSeasonProgress, distributeProgress,
         NOTE_TYPES, REVIEW_CRITERIA, noteType, reviewAverage, notesOfWork, wordCount,
-        timesCompleted, rereadBadge, addReread, mostRevisited
+        timesCompleted, rereadBadge, addReread, mostRevisited, isoDaysBetween, airedSpan, myRun
     };
 }

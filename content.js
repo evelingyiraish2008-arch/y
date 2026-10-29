@@ -57,7 +57,7 @@ function contentSectionHtml(w, openState) {
             <button class="btn btn-primary btn-sm" data-act="content-add" data-id="${w.id}">＋ Añadir personaje</button></div>
             <div class="content-list">${list.map(c => { const p = getPersonById(c.personId); return `<div class="pick-item character-item">
                 <div class="thumb round">${c.image ? img(c.image, 'person', c.name) : p ? img(p.image, 'person', p.name) : '🎭'}</div>
-                <span class="info"><b>${c.fav ? '♥ ' : ''}${esc(c.name)}</b><small>${esc(CHARACTER_ROLES[c.role] || '')}${p ? ` · <button class="link-btn" data-person="${p.id}">${esc(p.name)}</button>` : ''}${c.note ? ' · ' + esc(c.note) : ''}</small></span>
+                <span class="info"><button type="button" class="link-btn char-link" data-act="char-open" data-id="${w.id}" data-item="${c.id}"><b>${c.fav ? '♥ ' : ''}${esc(c.name)}</b></button><small>${esc(CHARACTER_ROLES[c.role] || '')}${p ? ` · <button class="link-btn" data-person="${p.id}">${esc(p.name)}</button>` : ''}${c.note ? ' · ' + esc(c.note) : ''}</small></span>
                 <button class="icon-btn sm" data-act="content-fav" data-id="${w.id}" data-item="${c.id}" data-kind="characters" aria-label="Favorito">${c.fav ? '♥' : '♡'}</button>
                 <button class="icon-btn sm" data-act="content-del" data-id="${w.id}" data-item="${c.id}" data-kind="characters" aria-label="Quitar">✕</button></div>`; }).join('')}</div>`;
     } else if (tab === 'soundtrack') {

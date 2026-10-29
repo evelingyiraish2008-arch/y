@@ -155,3 +155,104 @@ document.addEventListener('keydown', e => {
         if (w) FEATURE_ACTIONS['watch-add'](w.id);
     }
 }, true);
+
+// ============================================================
+// MIS PLATAFORMAS: AVISO CUANDO ALGO DE TU COLA LLEGA A UNA QUE TIENES (TMDB)
+// ============================================================
+const AVAIL_RECHECK_MS = 7 * 86400000;   // cada obra se consulta como mucho una vez por semana
+const AVAIL_RUN_MS = 12 * 3600000;       // la comprobación automática, como mucho cada 12 horas
+const AVAIL_BATCH = 8;
+let availRunning = false;
+const myPlatformIds = () => (appData.settings.myPlatforms || []).filter(id => WATCH_PLATFORMS.some(p => p.id === id));
+const wait2 = ms => new Promise(r => setTimeout(r, ms));
+function setAvailStatus(text) { const el = $('availStatus'); if (el) el.textContent = text || ''; }
+/** Consulta en TMDB dónde está cada obra de tu cola y avisa de las que llegan a tus plataformas. */
+async function checkAvailability({ auto = false } = {}) {
+    const key = appData.settings.tmdbKey;
+    if (availRunning || !key) { if (!auto && !key) showToast('🔑 Para esto necesitas tu clave gratuita de TMDB (Personalizar → Búsqueda de datos)', 'error', 6000); return; }
+    if (!navigator.onLine) { if (!auto) showToast('📶 Sin conexión', 'error'); return; }
+    availRunning = true;
+    const country = watchCountry(), mineIds = myPlatformIds(), now = Date.now();
+    const todo = queueItems(appData.works).filter(w => w.type !== 'book' && w.type !== 'manhwa' && !(w.availCheckedAt && now - w.availCheckedAt < AVAIL_RECHECK_MS && w.availCountry === country)).slice(0, auto ? AVAIL_BATCH : 40);
+    const found = [];
+    try {
+        let n = 0;
+        for (const w of todo) {
+            n++;
+            if (!auto) setAvailStatus(`Mirando ${n} de ${todo.length}…`);
+            try {
+                const kind = w.seriesType === 'Película' ? 'movie' : 'tv';
+                const search = await fetchJson(`https://api.themoviedb.org/3/search/${kind}?api_key=${encodeURIComponent(key)}&language=es-ES&query=${encodeURIComponent(w.title)}`);
+                const hit = pickBestMatch(w, parseTmdb({ results: (search.results || []).map(r => ({ ...r, media_type: kind })) }));
+                if (!hit) { found.push({ w, none: true }); continue; }
+                const json = await fetchJson(`https://api.themoviedb.org/3/${hit.externalId}/watch/providers?api_key=${encodeURIComponent(key)}`);
+                found.push({ w, ...availabilityInfo(parseWatchProviders(json, country), mineIds) });
+            } catch (e) { /* esa obra se intenta otro día */ }
+            await wait2(auto ? 700 : 300);
+        }
+        const arrivals = [];
+        if (found.length) {
+            mutate(() => found.forEach(f => {
+                f.w.availCheckedAt = now; f.w.availCountry = country;
+                if (f.none) { delete f.w.availOn; delete f.w.availMine; return; }
+                f.w.availOn = f.on; f.w.availMine = f.mine;
+                newArrivals(f.mine, f.w.availNotified).forEach(name => arrivals.push({ id: `plat:${f.w.id}:${name}`, workId: f.w.id, platform: name, at: now }));
+                f.w.availNotified = [...new Set([...(f.w.availNotified || []), ...f.mine])];
+            }), null, { undo: false });
+            if (arrivals.length && appData.settings.platformAlerts !== false) {
+                appData.settings.platformArrivals = [...(appData.settings.platformArrivals || []), ...arrivals].slice(-30);
+                saveData(); renderBell();
+                const first = getWorkById(arrivals[0].workId);
+                showToast(`📺 “${first.title}” ya está en ${arrivals[0].platform}${arrivals.length > 1 ? ` (y ${arrivals.length - 1} más)` : ''}`, 'success', 6000);
+            }
+        }
+        appData.settings.availRunAt = now; saveData();
+        if (!auto) setAvailStatus(found.length ? `Listo: ${found.filter(f => !f.none).length} de ${todo.length} encontradas en TMDB${arrivals.length ? ` · ${arrivals.length} ${arrivals.length === 1 ? 'nueva en tus plataformas' : 'nuevas en tus plataformas'}` : ''}.` : 'No hay nada nuevo que comprobar (se mira una vez por semana).');
+        if (currentPage === 'queue') renderQueue();
+    } finally { availRunning = false; }
+}
+function maybeCheckAvailability() {
+    const s = appData.settings;
+    if (!s.tmdbKey || s.platformAlerts === false || s.readOnly || navigator.webdriver || !navigator.onLine || !myPlatformIds().length) return;
+    if (Date.now() - (Number(s.availRunAt) || 0) < AVAIL_RUN_MS) return;
+    setTimeout(() => checkAvailability({ auto: true }).catch(() => { availRunning = false; }), 9000);
+}
+/** Avisos de la campana: lo que ha llegado a tus plataformas y sigue en tu cola. */
+function platformBellItems(now = Date.now()) {
+    return (appData.settings.platformArrivals || []).filter(a => now - a.at < 21 * 86400000).map(a => ({ a, w: getWorkById(a.workId) }))
+        .filter(({ w }) => w && (isPlanned(w) || isRewatchWish(w)))
+        .map(({ a, w }) => ({ id: a.id, icon: '📺', workId: w.id, title: `“${w.title}” ya está en ${a.platform}`, text: 'Está en tu cola: ya puedes verla.' }));
+}
+/** Texto corto "Disponible en Viki" para la ficha y la cola. */
+function availabilityChipHtml(w) {
+    if (!(w.availOn || []).length) return '';
+    const mine = w.availMine || [];
+    return `<span class="chip ${mine.length ? 'chip-pink' : 'chip-muted'} avail-chip" title="Según TMDB (${esc(w.availCountry || '')})">📺 ${mine.length ? `Ya en ${esc(mine.join(', '))}` : `Disponible en ${esc(w.availOn.slice(0, 3).join(', '))}`}</span>`;
+}
+function renderMyPlatforms() {
+    const box = $('myPlatformsBox');
+    if (!box) return;
+    const s = appData.settings, mine = new Set(myPlatformIds());
+    box.innerHTML = `<div class="pz-title" style="margin-top:12px">📺 Mis plataformas</div>
+        <p class="panel-desc" style="margin:0 0 8px">Marca las que tienes. Si pones tu clave de TMDB, te aviso cuando algo de tu cola (“Quiero ver” o “Para rever”) llegue a una de ellas.</p>
+        <div class="tag-list">${WATCH_PLATFORMS.filter(p => p.kind === 'v').map(p => `<button type="button" class="chip ${mine.has(p.id) ? '' : 'chip-muted'}" data-act="my-platform" data-id="${p.id}" aria-pressed="${mine.has(p.id)}">${p.icon} ${esc(p.name)}</button>`).join('')}</div>
+        <div class="seg-inline wrap" style="margin-top:10px"><label class="field" style="margin:0"><span>País</span><select class="filter-select" id="myCountry" aria-label="País para las plataformas">${WATCH_COUNTRIES.map(([k, l]) => `<option value="${k}" ${k === watchCountry() ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label></div>
+        <div class="setting-row" style="margin-top:10px"><span>🔔 Avisarme cuando llegue a mis plataformas</span><button class="toggle-switch" data-act="platform-alerts-toggle" id="platformAlertsToggle" role="switch" aria-checked="${s.platformAlerts !== false}" aria-label="Avisarme cuando llegue a mis plataformas"></button></div>
+        <button type="button" class="btn btn-secondary" data-act="avail-check" style="margin-top:8px">📺 Mirar mi cola ahora</button> <small class="hint" id="availStatus" role="status"></small>`;
+}
+FEATURE_ACTIONS['my-platform'] = id => {
+    const cur = new Set(myPlatformIds());
+    if (cur.has(id)) cur.delete(id); else cur.add(id);
+    appData.settings.myPlatforms = [...cur];
+    // Lo ya consultado se vuelve a mirar con tu nueva lista
+    appData.works.forEach(w => { delete w.availCheckedAt; });
+    saveData(); renderMyPlatforms();
+};
+FEATURE_ACTIONS['platform-alerts-toggle'] = () => { appData.settings.platformAlerts = appData.settings.platformAlerts === false; saveData(); renderMyPlatforms(); };
+FEATURE_ACTIONS['avail-check'] = () => {
+    if (appData.settings.readOnly) { showToast('👀 Estás en modo solo lectura', 'error'); return; }
+    checkAvailability().catch(e => { availRunning = false; setAvailStatus(String(e.message || 'No se pudo consultar ahora.')); });
+};
+document.addEventListener('change', e => {
+    if (e.target.id === 'myCountry') { appData.settings.watchCountry = e.target.value; appData.works.forEach(w => { delete w.availCheckedAt; }); saveData(); }
+});

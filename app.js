@@ -341,8 +341,9 @@ function renderSeries() {
     $('seriesCountViendo').textContent = all.filter(w => w.status === 'viendo').length;
     $('seriesCountTerminado').textContent = all.filter(w => w.status === 'terminado').length;
     $('seriesCountPlan').textContent = all.filter(w => w.status === 'quiero ver').length;
+    $('seriesCountRewatch').textContent = all.filter(w => w.status === 'para rever').length;
     document.querySelectorAll('#seriesTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.filter === seriesTab));
-    const titles = { all: '❤️ Todas', bl: '💕 BL', viendo: '▶️ Viendo', terminado: '✅ Terminadas', 'quiero ver': '⏳ Pendientes' };
+    const titles = { all: '❤️ Todas', bl: '💕 BL', viendo: '▶️ Viendo', terminado: '✅ Terminadas', 'para rever': '🔁 Para rever', 'quiero ver': '⏳ Pendientes' };
     $('seriesSectionTitle').innerHTML = `${titles[seriesTab]} <span class="muted">${list.length ? '· ' + list.length : ''}</span>`;
     list = filterByDate(list, val('seriesDateFilter'));
     renderSavedViews('series');
@@ -467,7 +468,7 @@ const SEEN_KEY = 'mi_mundo_avisos_vistos';
 function seenNotifications() {
     try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch (e) { return new Set(); }
 }
-function bellItems() { return [...reminderBellItems(), ...computeNotifications(appData.works, appData.settings), ...rateReminderItems()]; }
+function bellItems() { return [...platformBellItems(), ...reminderBellItems(), ...computeNotifications(appData.works, appData.settings), ...rateReminderItems()]; }
 function renderBell() {
     const list = bellItems();
     const seen = seenNotifications();
@@ -618,7 +619,7 @@ function changeProgress(id, delta) {
 const RENDERERS = {
     home: renderHome, books: renderBooks, series: renderSeries, anime: renderAnime, manhwa: renderManhwa,
     bl: renderBL, persons: renderPersons, couples: renderCouples, emission: renderEmission, stats: renderStats,
-    collections: renderCollections, notes: renderNotes, settings: renderSettings, extras: renderExtras
+    collections: renderCollections, notes: renderNotes, settings: renderSettings, extras: renderExtras, queue: renderQueue
 };
 let currentPage = 'home';
 
@@ -636,9 +637,11 @@ function navigateTo(page, { push = true } = {}) {
     translateIfNeeded();
 }
 function refreshView() {
+    const progressBefore = snapshotProgress();
     RENDERERS[currentPage]();
     renderSidebar();
     if (currentDetailId) renderDetail();
+    animateProgress(progressBefore);
     if ($('personDetailOverlay').classList.contains('active') && currentPersonId) renderPersonDetail();
     if ($('sheetModal').classList.contains('active') && sheetRefresh) sheetRefresh();
     translateIfNeeded();
@@ -715,7 +718,7 @@ function openSearchResult(i) {
 // ---------- Paleta de comandos (Ctrl K) ----------
 const PAGE_NAMES = {
     home: '🏠 Inicio', books: '📖 Libros', series: '🎬 Series y Películas', anime: '🎌 Anime', manhwa: '📕 Manhwas', bl: '💖 Solo BL',
-    persons: '👥 Personas', couples: '💕 Parejas BL', emission: '📡 Centro de Emisión', collections: '🗂️ Colecciones',
+    persons: '👥 Personas', couples: '💕 Parejas BL', queue: '🎲 Qué ver', emission: '📡 Centro de Emisión', collections: '🗂️ Colecciones',
     stats: '📊 Estadísticas', notes: '📝 Notas', extras: '✨ Extras', settings: '⚙️ Personalizar'
 };
 let paletteItems = [], paletteIndex = 0;
@@ -1076,7 +1079,7 @@ function collectWorkForm() {
     return data;
 }
 /** Campos opcionales de "Más detalles" (se guardan solo si tienen algo). */
-const WORK_DETAIL_FIELDS = ['altTitle', 'airStatus', 'runtime', 'language', 'basedOn', 'score', 'officialUrl', 'publisher'];
+const WORK_DETAIL_FIELDS = ['altTitle', 'airStatus', 'runtime', 'language', 'basedOn', 'score', 'officialUrl', 'publisher', 'firstAired', 'lastAired', 'specialsTotal', 'specialsSeen'];
 function saveWork() {
     const data = collectWorkForm();
     if (!data.title) { showToast('⚠️ El título es obligatorio', 'error'); $('f_title').focus(); return; }
@@ -1084,11 +1087,14 @@ function saveWork() {
     // "Más detalles": lo que se deja vacío no se guarda (así una obra editada sin cambios no apunta cambios raros) y se quita si lo vaciaste
     const clearedDetails = WORK_DETAIL_FIELDS.filter(f => !data[f]);
     clearedDetails.forEach(f => delete data[f]);
+    if (data.specialsSeen && data.specialsSeen > (data.specialsTotal || 0)) data.specialsSeen = data.specialsTotal || 0;
+    if (data.firstAired && data.lastAired && data.lastAired < data.firstAired) { showToast('⚠️ El último episodio es anterior al primero', 'error'); return; }
     if (data.officialUrl) {
         const url = normalizeWatchUrl(data.officialUrl);
         if (!url) { showToast('⚠️ La web oficial debe ser una dirección web (https://…)', 'error'); return; }
         data.officialUrl = url;
     }
+    if (isRewatchStatus(data.status) && total && data.progress < total) data.progress = total; // ya la terminaste una vez
     if (data.progress < 0) data.progress = 0;
     if (total && data.progress > total) data.progress = total;
     if (data.endDate && data.startDate && data.endDate < data.startDate) { showToast('⚠️ La fecha de fin es anterior a la de inicio', 'error'); return; }
@@ -1197,6 +1203,7 @@ function duplicatePersonById(id) {
 
 // ---------- Historial de versiones de una obra ----------
 const FIELD_LABELS = {
+    firstAired: 'Primer episodio', lastAired: 'Último episodio', specialsTotal: 'Especiales', specialsSeen: 'Especiales vistos',
     title: 'Título', status: 'Estado', progress: 'Progreso', rating: 'Valoración', favorite: 'Favorito', bl: 'BL', author: 'Autor',
     studio: 'Estudio', platform: 'Plataforma', country: 'País', genre: 'Género', year: 'Año', actors: 'Actores', directors: 'Directores',
     pages: 'Páginas', totalEpisodes: 'Episodios', totalChapters: 'Capítulos', seasons: 'Temporadas', season: 'Temporada',
@@ -1334,7 +1341,9 @@ function renderDetail(fresh = false) {
           <button class="btn btn-secondary btn-sm" data-act="collect" data-id="${w.id}">📂 Colecciones${inColls.length ? ' · ' + inColls.length : ''}</button>
           <button class="btn btn-secondary btn-sm" data-act="focus" data-id="${w.id}" title="Modo foco (F)">🎯 Foco</button>
           ${w.rereading ? `<button class="btn btn-primary btn-sm" data-act="reread-finish" data-id="${w.id}">✅ Terminar esta vez</button>`
-            : w.status === 'terminado' ? `<button class="btn btn-secondary btn-sm" data-act="reread-start" data-id="${w.id}" title="Empieza otra vez desde el principio y apunta las veces">🔁 Volver a ${verbAgain(w)}la</button>` : ''}
+            : isDone(w) ? `<button class="btn btn-secondary btn-sm" data-act="reread-start" data-id="${w.id}" title="Empieza otra vez desde el principio y apunta las veces">🔁 Volver a ${verbAgain(w)}la ya</button>` : ''}
+          ${w.status === 'terminado' ? `<button class="btn btn-secondary btn-sm" data-act="rewatch-mark" data-id="${w.id}" title="Para cuando no la recuerdas y quieres repetirla más adelante">🔁 Para ${verbAgain(w) === 'ver' ? 'rever' : 'releer'}</button>`
+            : isRewatchWish(w) ? `<button class="btn btn-secondary btn-sm is-on" data-act="rewatch-unmark" data-id="${w.id}" title="Vuelve a Terminado">✓ Para ${verbAgain(w) === 'ver' ? 'rever' : 'releer'}</button>` : ''}
           <button class="btn btn-secondary btn-sm ${w.reminder ? 'is-on' : ''}" data-act="reminder" data-id="${w.id}" title="${w.reminder ? 'Te lo recuerdo ' + esc(reminderText(w.reminder)) : 'Recordarme'}">${w.reminder ? '🔔 Recordatorio' : '🔔 Recordarme'}</button>
           <button class="btn btn-secondary btn-sm" data-act="duplicate" data-id="${w.id}" title="Duplicar (D)">⧉ Duplicar</button>
           <button class="btn btn-secondary btn-sm ${w.locked ? 'is-on' : ''}" data-act="lock" data-id="${w.id}" title="${w.locked ? 'Desbloquear' : 'Bloquear para no cambiarla sin querer'}">${w.locked ? '🔒 Bloqueada' : '🔓 Bloquear'}</button>
@@ -1343,7 +1352,7 @@ function renderDetail(fresh = false) {
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${w.id}" aria-label="Eliminar">🗑️</button>
         </div>
         ${suggestionsHtml(w)}
-        ${(w.watchLinks || []).length ? `<div class="watch-quick">${watchPrimaryHtml(w)}<button type="button" class="link-btn" data-act="watch-open-section" data-id="${w.id}">Otros enlaces…</button></div>` : ''}
+        ${availabilityChipHtml(w) ? `<div class="watch-quick">${availabilityChipHtml(w)}</div>` : ''}${(w.watchLinks || []).length ? `<div class="watch-quick">${watchPrimaryHtml(w)}<button type="button" class="link-btn" data-act="watch-open-section" data-id="${w.id}">Otros enlaces…</button></div>` : ''}
         ${total ? `
         <div class="detail-progress">
           <div class="detail-progress-row"><span>${esc(hasSeasons(w) ? seasonLabel(w) : getProgressText(w))}</span>
@@ -1354,15 +1363,14 @@ function renderDetail(fresh = false) {
           </div>
           ${hasSeasons(w) ? dualProgressHtml(w, 'detail') : `<div class="progress-bar"><div class="progress-fill" style="width:${p}%"></div></div>
           <div class="progress-text"><span>${p}% completado</span><span>${total - (Number(w.progress) || 0)} ${TYPE_META[w.type].unit} restantes</span></div>`}
-        </div>` : ''}
+        </div>${specialsHtml(w)}` : specialsHtml(w)}
         <div class="detail-stats">
           <div class="detail-stat detail-rating"><div class="k">Valoración ${w.rating ? '· ' + ratingText(w.rating) : ''}</div><div class="v">${starInput(w.id, w.rating)}</div></div>
           <div class="detail-stat"><div class="k">🌶️ Spicy</div><div class="v">${w.spicy || 0} / 5</div></div>
           <div class="detail-stat"><div class="k">💧 Tristeza</div><div class="v">${w.sadness || 0} / 5</div></div>
           <div class="detail-stat"><div class="k">Año</div><div class="v">${esc(w.year || '–')}</div></div>
-          <div class="detail-stat"><div class="k">Inicio</div><div class="v">${fmtDate(w.startDate)}</div></div>
-          <div class="detail-stat"><div class="k">Fin</div><div class="v">${fmtDate(w.endDate)}</div></div>
         </div>
+        ${workDatesHtml(w)}
         <div class="detail-section">
           <div class="detail-section-title">Sinopsis</div>
           <p class="detail-text">${esc(w.synopsis || 'Sin sinopsis todavía.')}</p>${w.synopsis && needsTranslation(w.synopsis) ? `<button type="button" class="link-btn" data-act="work-translate" data-id="${w.id}">🌐 Traducir al español</button>` : ''}
@@ -1802,6 +1810,7 @@ function renderEmission() {
         </div>`;
     }).join('');
     renderNextAiring();
+    renderMonthCalendar();
     maybeRefreshAiring();
     const unscheduled = active.filter(w => getAirDay(w) === null);
     $('unscheduledSection').hidden = !unscheduled.length;
@@ -1949,7 +1958,7 @@ function calculateAchievements() {
         return { id, icon, title, desc: x ? `“${x.title || x.name || x.workTitle}”` : 'Aún no desbloqueado', date: x ? fmtDate(x.createdAt) : '', unlocked: !!x };
     };
     const count = (n, id, icon, title, list, what) => ({ id, icon, title, desc: `${Math.min(list.length, n)} / ${n} ${what}`, date: '', unlocked: list.length >= n });
-    const done = w.filter(x => x.status === 'terminado');
+    const done = w.filter(x => isDone(x));
     return [
         first(w.filter(x => x.type === 'book'), 'first_book', '📖', 'Primer libro'),
         first(w.filter(x => x.type === 'series'), 'first_series', '🎬', 'Primera serie'),
@@ -2040,6 +2049,7 @@ function renderSettings() {
     $('settingLang').value = s.lang || 'es';
     $('readOnlyToggle').setAttribute('aria-checked', String(!!s.readOnly));
     $('autoEnrichToggle').setAttribute('aria-checked', String(s.autoEnrich !== false));
+    renderMyPlatforms();
     $('clipperLink').href = clipperBookmarklet();
     document.querySelectorAll('.color-option').forEach(o => o.classList.toggle('active', o.dataset.color.toLowerCase() === String(accentNow(s)).toLowerCase()));
     $('colorModeHint').textContent = isDarkNow(s) ? 'Para el modo oscuro' : 'Para el modo claro';
@@ -2688,6 +2698,7 @@ if (isWebOrigin && 'serviceWorker' in navigator) {
     cloud.init();
     maybeAutoEnrich();
     maybeRefreshAirStatus();
+    maybeCheckAvailability();
     checkNotifications().catch(() => {});
     if ((appData.settings.notify || {}).enabled) registerBackgroundCheck();
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-work' && getWorkById(e.data.id)) openDetail(e.data.id); });

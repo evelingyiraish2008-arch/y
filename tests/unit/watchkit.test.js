@@ -79,3 +79,17 @@ describe('enlaces para ver o leer', () => {
         assert.equal(k.defaultWatchCountry(''), 'ES');
     });
 });
+
+describe('mis plataformas', () => {
+  it('lo que está en las tuyas y lo que aún no se había avisado', () => {
+    const w = k;
+    const result = { flatrate: ['Netflix', 'Rakuten Viki', 'Amazon Prime Video', 'Algo Raro'], rent: ['Apple TV'], buy: [] };
+    assert.deepEqual(w.availabilityInfo(result, ['viki', 'disney']), { on: ['Netflix', 'Rakuten Viki', 'Amazon Prime Video', 'Algo Raro'], mine: ['Rakuten Viki'] });
+    assert.deepEqual(w.availabilityInfo(result, []).mine, []);
+    assert.deepEqual(w.availabilityInfo(null, ['viki']), { on: [], mine: [] });
+    assert.deepEqual(w.availabilityInfo(result, ['netflix', 'prime']).mine, ['Netflix', 'Amazon Prime Video']);
+    assert.deepEqual(w.newArrivals(['Netflix', 'Viki'], ['Netflix']), ['Viki']);
+    assert.deepEqual(w.newArrivals(['Netflix'], undefined), ['Netflix']);
+    assert.deepEqual(w.newArrivals([], ['Netflix']), []);
+  });
+});

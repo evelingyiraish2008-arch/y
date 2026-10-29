@@ -206,7 +206,7 @@ function parseAniListCollection(json, mediaType) {
         const status = { CURRENT: 'activo', REPEATING: 'activo', COMPLETED: 'terminado', DROPPED: 'abandonado', PLANNING: 'plan', PAUSED: 'plan' }[e.status] || 'plan';
         const w = {
             type, title: (m.title || {}).english || (m.title || {}).romaji,
-            status: status === 'activo' ? STATUS_BY_TYPE[type][0] : status === 'plan' ? STATUS_BY_TYPE[type][2] : status
+            status: status === 'activo' ? STATUS_BY_TYPE[type][0] : status === 'plan' ? plannedStatusOf(type) : status
         };
         if (!w.title) return;
         const total = type === 'anime' ? m.episodes : type === 'book' ? 0 : m.chapters;

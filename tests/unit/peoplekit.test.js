@@ -136,3 +136,20 @@ test('personajes que trae la fuente: unidos a su intérprete y sin repetir', () 
     assert.deepEqual(out, [{ id: 'id1', name: 'Wei Wuxian', role: 'protagonista', personId: 'p1' }, { id: 'id2', name: 'Lan Zhan', role: 'protagonista' }]);
     assert.deepEqual(k.newCharacters([{ name: 'Wei Wuxian' }], meta.slice(0, 1), persons(), () => 'x'), []);
 });
+
+test('personajes: parejas entre ellos (en los dos sentidos) y la pareja real de quienes los interpretan', () => {
+    const w = { characters: [{ id: 'a', name: 'Wei Wuxian', personId: 'p1' }, { id: 'b', name: 'Lan Wangji', personId: 'p2' }, { id: 'c', name: 'Jiang Cheng' }] };
+    assert.deepEqual(k.characterPairs(w, w.characters[0]), []);
+    assert.equal(k.setCharacterPair(w, 'a', 'b', true), true);
+    assert.deepEqual(k.characterPairs(w, w.characters[0]).map(x => x.id), ['b']);
+    assert.deepEqual(k.characterPairs(w, w.characters[1]).map(x => x.id), ['a']); // también desde el otro lado
+    k.setCharacterPair(w, 'a', 'b', true);
+    assert.deepEqual(w.characters[0].pairs, ['b']); // sin repetir
+    assert.equal(k.setCharacterPair(w, 'a', 'a', true), false);
+    assert.equal(k.setCharacterPair(w, 'a', 'zzz', true), false);
+    k.setCharacterPair(w, 'b', 'a', false);
+    assert.deepEqual([k.characterPairs(w, w.characters[0]), w.characters[0].pairs, w.characters[1].pairs], [[], undefined, undefined]);
+    const couples = [{ id: 'k', personA: 'p2', personB: 'p1' }, { id: 'z', personA: 'p1', personB: 'p9' }];
+    assert.deepEqual(k.couplesForCharacters(w.characters[0], w.characters[1], couples).map(c => c.id), ['k']);
+    assert.deepEqual(k.couplesForCharacters(w.characters[0], w.characters[2], couples), []);
+});

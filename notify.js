@@ -78,7 +78,7 @@ function dueNotifications(data, now = Date.now(), sent = {}) {
         let sessions = 0;
         for (let i = 0; i < 7; i++) sessions += byDay.get(dayKey(addDays(now, -i))) || 0;
         const weekAgo = dayKey(addDays(now, -6));
-        const doneWeek = works.filter(w => w.status === 'terminado' && w.endDate >= weekAgo && w.endDate <= today).length;
+        const doneWeek = works.filter(w => isDone(w) && w.endDate >= weekAgo && w.endDate <= today).length;
         push(`weekly:${today}`, '🗓️ Tu semana en Mi Mundo', `${sessions} ${sessions === 1 ? 'sesión' : 'sesiones'}, ${doneWeek} ${doneWeek === 1 ? 'obra terminada' : 'obras terminadas'}. ¡Sigue así!`);
     }
     if (ns.inactivity.on && works.length) {
@@ -119,7 +119,7 @@ function discoveries(works) {
     const avgAll = avgOf(rated.map(w => Number(w.rating)));
     // Día de la semana en que más terminas
     const doneDays = Array(7).fill(0);
-    works.forEach(w => { if (w.status === 'terminado' && w.endDate) doneDays[new Date(w.endDate + 'T12:00:00').getDay()]++; });
+    works.forEach(w => { if (isDone(w) && w.endDate) doneDays[new Date(w.endDate + 'T12:00:00').getDay()]++; });
     const totalDone = doneDays.reduce((a, b) => a + b, 0);
     const bestDay = doneDays.indexOf(Math.max(...doneDays));
     const DAYS = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
@@ -155,7 +155,7 @@ function discoveries(works) {
         .map(x => ({ ...x, avg: avgOf(x.list.map(w => Number(w.rating))) })).sort((a, b) => b.avg - a.avg);
     if (types.length >= 2 && types[0].avg - types[types.length - 1].avg >= 0.3) out.push({ id: `type:${types[0].t}`, icon: TYPE_META[types[0].t].icon, text: `Tu tipo mejor valorado: ${TYPE_META[types[0].t].label.toLowerCase()} (★ ${fmt1(types[0].avg)}).` });
     // Rapidez
-    const durations = works.filter(w => w.status === 'terminado' && w.startDate && w.endDate && w.endDate >= w.startDate)
+    const durations = works.filter(w => isDone(w) && w.startDate && w.endDate && w.endDate >= w.startDate)
         .map(w => Math.round((new Date(w.endDate) - new Date(w.startDate)) / 86400000) + 1);
     if (durations.length >= 3) out.push({ id: 'speed', icon: '⏱️', text: `Tardas una media de ${Math.round(avgOf(durations))} días en terminar una obra.` });
     return out;
